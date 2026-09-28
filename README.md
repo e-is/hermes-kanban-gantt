@@ -107,8 +107,8 @@ from `.env` (gitignored, `KG_*` variables — environment variables always win).
 
 ## Screenshots
 
-![](docs/screenshot-fr-01.png)
-![](docs/screenshot-fr-02-details.png)
+![](docs/screenshot-en-01.png)
+![](docs/screenshot-en-02-details.png)
 
 
 ## License
