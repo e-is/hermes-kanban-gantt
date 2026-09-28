@@ -1361,7 +1361,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
         data?.task?.body ? jsxs2("div", { className: "flex flex-col gap-1", children: [
           jsx2("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.description }),
           jsx2("div", {
-            className: "text-[11px] prose prose-sm max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
+            className: "text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
             children: jsx2(Streamdown, { children: data.task.body })
           })
         ] }) : null,
@@ -1369,7 +1369,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
         data?.task?.result ? jsxs2("div", { className: "flex flex-col gap-1", children: [
           jsx2("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.result }),
           jsx2("div", {
-            className: "text-[11px] prose prose-sm max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
+            className: "text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
             children: jsx2(Streamdown, { children: data.task.result })
           })
         ] }) : null,
@@ -1378,7 +1378,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
           jsx2("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.latestSummary }),
           jsx2("div", {
             className: cn2(
-              "text-[11px] prose prose-sm max-w-none rounded p-2.5 transition-colors",
+              "text-[11px] prose prose-sm kg-prose max-w-none rounded p-2.5 transition-colors",
               data?.task?.status === "blocked" ? "border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300" : data?.task?.status === "done" || data?.task?.status === "archived" ? "border border-emerald-500/35 bg-emerald-500/10" : "border border-(--ui-stroke-tertiary) bg-(--ui-bg-subtle, transparent)"
             ),
             children: jsx2(Streamdown, { children: data.task.latest_summary })
@@ -1426,7 +1426,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                   durationStr ? jsx2("span", { className: "text-(--ui-text-tertiary)", children: `⏱ ${durationStr}` }) : null,
                   dateStr ? jsx2("span", { className: "text-(--ui-text-quaternary) ml-auto text-[9.5px]", children: dateStr }) : null
                 ] }),
-                r.summary ? jsx2("div", { className: "prose prose-sm max-w-none text-[11px] mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50", children: jsx2(Streamdown, { children: r.summary }) }) : null
+                r.summary ? jsx2("div", { className: "prose prose-sm kg-prose max-w-none text-[11px] mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50", children: jsx2(Streamdown, { children: r.summary }) }) : null
               ]
             });
           }) }) : null
@@ -1472,7 +1472,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                       jsx2("span", { className: "font-medium text-(--ui-text-secondary)", children: c.author || "?" }),
                       dateStr ? jsx2("span", { className: "ml-auto text-(--ui-text-quaternary)", children: dateStr }) : null
                     ] }),
-                    jsx2("div", { className: "prose prose-sm max-w-none text-[11px]", children: jsx2(Streamdown, { children: c.body || "" }) })
+                    jsx2("div", { className: "prose prose-sm kg-prose max-w-none text-[11px]", children: jsx2(Streamdown, { children: c.body || "" }) })
                   ]
                 });
               }),
@@ -1948,6 +1948,41 @@ var plugin = {
   animation: kg-arc-spin 2.2s linear infinite;
 }
 @keyframes kg-arc-spin { to { --kg-arc-angle: 360deg; } }
+/* Readability: ticket bodies, results, summaries and comments render agent
+   markdown through Streamdown into Tailwind typography containers (prose),
+   whose palette defaults to light-background ink (#374151) and is illegible
+   on the app's dark surfaces. Typography reads every colour from a
+   --tw-prose-* custom property, so map those onto the app's own theme tokens
+   (which flip with :root.dark) instead of pinning literals: one block that is
+   readable in BOTH themes, scoped to .kg-prose so drawer chrome, cards and
+   controls are untouched. */
+.kg-prose {
+  --tw-prose-body: var(--ui-text-primary);
+  --tw-prose-headings: var(--ui-text-primary);
+  --tw-prose-lead: var(--ui-text-secondary);
+  --tw-prose-links: var(--ui-accent);
+  --tw-prose-bold: var(--ui-text-primary);
+  --tw-prose-counters: var(--ui-text-secondary);
+  --tw-prose-bullets: var(--ui-text-tertiary);
+  --tw-prose-hr: var(--ui-stroke-tertiary);
+  --tw-prose-quotes: var(--ui-text-primary);
+  --tw-prose-quote-borders: var(--ui-stroke-tertiary);
+  --tw-prose-captions: var(--ui-text-tertiary);
+  --tw-prose-code: var(--ui-text-primary);
+  --tw-prose-pre-code: var(--ui-text-primary);
+  --tw-prose-pre-bg: var(--ui-bg-tertiary);
+  --tw-prose-th-borders: var(--ui-stroke-secondary);
+  --tw-prose-td-borders: var(--ui-stroke-tertiary);
+  color: var(--tw-prose-body);
+}
+/* Typography paints code/pre from its own dark palette; keep them on the app's
+   surfaces. Link decoration and list indent are the two typography choices
+   worth keeping explicit at this size. */
+.kg-prose :where(code) { background: var(--ui-bg-tertiary); padding: .08em .32em; border-radius: 3px; }
+.kg-prose :where(pre) { background: var(--ui-bg-tertiary); padding: .5em .6em; border-radius: 4px; }
+.kg-prose :where(pre code) { background: transparent; padding: 0; }
+.kg-prose a { text-decoration: underline; }
+.kg-prose :where(ul, ol) { padding-left: 1.1em; }
 `;
       document.head.appendChild(style);
     }
