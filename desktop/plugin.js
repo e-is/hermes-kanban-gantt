@@ -354,6 +354,20 @@ var STATUS_TONE = {
 function statusTone(status) {
   return STATUS_TONE[status] || "var(--ui-text-secondary)";
 }
+var STATUS_ICON = {
+  triage: "question",
+  todo: "circle-large-outline",
+  scheduled: "clock",
+  ready: "play-circle",
+  running: "pulse",
+  blocked: "warning",
+  review: "eye",
+  done: "check",
+  archived: "archive"
+};
+function statusIcon(status) {
+  return STATUS_ICON[status] || "circle-large-outline";
+}
 function barRange(task, now, minBarSec) {
   const min = minBarSec || MIN_BAR;
   const rs = task.run_started_at;
@@ -680,18 +694,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     }
   }) : null;
   const dotColor = (bars.length > 0 ? bars[bars.length - 1]?.tone : null) || statusTone(task.status);
-  const STATUS_ICON = {
-    triage: "question",
-    todo: "circle-large-outline",
-    scheduled: "clock",
-    ready: "play-circle",
-    running: "pulse",
-    blocked: "warning",
-    review: "eye",
-    done: "check",
-    archived: "archive"
-  };
-  const statusIcon = STATUS_ICON[task.status] || "circle-large-outline";
+  const icon = statusIcon(task.status);
   const statusTitle = i18n.col?.[task.status] || task.status;
   return jsxs2("div", {
     className: cn2(
@@ -742,9 +745,9 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               className: "relative inline-flex items-center justify-center",
               children: [
                 jsx2("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }),
-                jsx2(Codicon2, { name: statusIcon, size: "0.85rem" })
+                jsx2(Codicon2, { name: icon, size: "0.85rem" })
               ]
-            }) : jsx2(Codicon2, { name: statusIcon, size: "0.85rem" })
+            }) : jsx2(Codicon2, { name: icon, size: "0.85rem" })
           }),
           showBoardBadge && task.board ? jsx2(Badge, {
             size: "xs",

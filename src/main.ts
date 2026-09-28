@@ -78,7 +78,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, DAY, MIN_BAR } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, DAY, MIN_BAR } from './core/gantt-core.ts'
 
 
 /** Apply a new backend base URL and refetch everything. */
@@ -281,20 +281,10 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     : null
 
   const dotColor = (bars.length > 0 ? bars[bars.length - 1]?.tone : null) || statusTone(task.status)
-  // Representative Codicon per status, colored with the status tone — replaces
-  // the tiny status dot (kept from the blocked warning icon it already used).
-  const STATUS_ICON = {
-    triage: 'question',
-    todo: 'circle-large-outline',
-    scheduled: 'clock',
-    ready: 'play-circle',
-    running: 'pulse',
-    blocked: 'warning',
-    review: 'eye',
-    done: 'check',
-    archived: 'archive'
-  }
-  const statusIcon = STATUS_ICON[task.status] || 'circle-large-outline'
+  // Representative Codicon per status, coloured with the status tone — replaces
+  // the tiny status dot (the map lives in the core, shared with every list that
+  // renders a task).
+  const icon = statusIcon(task.status)
   const statusTitle = i18n.col?.[task.status] || task.status
 
   // 2-col grid (label | timeline): the label cell is position:sticky left so
@@ -362,10 +352,10 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
                   className: 'relative inline-flex items-center justify-center',
                   children: [
                     jsx('div', { className: 'kg-arc', style: { '--kanban-tone': dotColor } }),
-                    jsx(Codicon, { name: statusIcon, size: '0.85rem' })
+                    jsx(Codicon, { name: icon, size: '0.85rem' })
                   ]
                 })
-              : jsx(Codicon, { name: statusIcon, size: '0.85rem' })
+              : jsx(Codicon, { name: icon, size: '0.85rem' })
           }),
           showBoardBadge && task.board
             ? jsx(Badge, {
