@@ -5,8 +5,13 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { loadEnv } from './env.mjs'
+// .env (machine-local, gitignored — see .env.example) before any env use.
+await loadEnv()
+
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PLUGIN = join(HERE, '..', 'desktop')
+const DASHBOARD = join(HERE, '..', 'dashboard')
 const PY = process.env.KG_PYTHON || '/opt/hermes/.venv/bin/python'
 
 const args = process.argv.slice(2)
@@ -14,9 +19,11 @@ const show = args.includes('--show')
 const outIdx = args.indexOf('--out')
 const OUT = outIdx >= 0 ? args[outIdx + 1] : join(HERE, 'demo-shots')
 
-// playwright is installed globally (npm -g); resolve it from its lib dir.
-const { chromium } = await import('/usr/local/lib/node_modules/playwright/index.mjs')
-    .catch(() => import('/usr/local/lib/node_modules/playwright/index.js'))
+// playwright resolution is machine-dependent — see .env.example:
+// KG_PLAYWRIGHT_MODULE wins, then the container global path, then bare import.
+const { chromium } = await import(process.env.KG_PLAYWRIGHT_MODULE || '/usr/local/lib/node_modules/playwright/index.mjs')
+    .catch(() => import(process.env.KG_PLAYWRIGHT_MODULE || '/usr/local/lib/node_modules/playwright/index.js'))
+    .catch(() => import('playwright'))
 
 function freePort() {
   return new Promise(resolve => {
@@ -32,9 +39,16 @@ function freePort() {
 const tmp = await mkdtemp(join(tmpdir(), 'kg-demo-'))
 process.env.KANBAN_GANTT_BOARDS = join(tmp, 'kanban', 'boards')
 process.env.HERMES_KANBAN_HOME = tmp
-process.env.PLAYWRIGHT_BROWSERS_PATH = '/opt/data/tmp/pw-browsers'
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = join(process.env.HOME || '~', '.cache', 'ms-playwright')
+}
 
 const env = { ...process.env }
+// Optional checkout containing hermes_cli/ (see .env.example KG_AGENT_HOME) —
+// prepended to PYTHONPATH for the seed script and the standalone backend.
+if (process.env.KG_AGENT_HOME) {
+  env.PYTHONPATH = process.env.KG_AGENT_HOME + (env.PYTHONPATH ? ':' + env.PYTHONPATH : '')
+}
 delete env.HERMES_DELEGATED_CHILD_CONTEXT
 delete env.HERMES_KANBAN_TASK
 delete env.HERMES_KANBAN_DB
@@ -99,7 +113,7 @@ execFileSync(PY, [seedFile], { env: { ...env, HERMES_KANBAN_HOME: tmp, KANBAN_GA
 // ── standalone backend ───────────────────────────────────────────────────────
 const apiPort = await freePort()
 const backend = spawn(PY, [
-  join(PLUGIN, 'dashboard', 'plugin_api.py'),
+  DASHBOARD + '/plugin_api.py',
   '--host', '127.0.0.1', '--port', String(apiPort)
 ], { env: { ...env, HERMES_KANBAN_HOME: tmp, KANBAN_GANTT_BOARDS: join(tmp, 'kanban', 'boards') }, stdio: 'ignore' })
 
@@ -140,7 +154,7 @@ const errors = []
 try {
   const browser = await chromium.launch({
     headless: !show,
-    executablePath: '/opt/data/tmp/pw-browsers/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell'
+    executablePath: process.env.KG_CHROMIUM_PATH || undefined
   })
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()) })

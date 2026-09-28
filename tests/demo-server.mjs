@@ -22,8 +22,13 @@ import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { loadEnv } from './env.mjs'
+// .env (machine-local, gitignored — see .env.example) before any env use.
+await loadEnv()
+
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PLUGIN = join(HERE, '..', 'desktop')
+const DASHBOARD = join(HERE, '..', 'dashboard')
 const PY = process.env.KG_PYTHON || '/opt/hermes/.venv/bin/python'
 
 const args = process.argv.slice(2)
@@ -49,7 +54,7 @@ function freePort(pref) {
 
 // ── auto-spawn the standalone backend (the plugin's real backend code) ──────
 const backend = spawn(PY, [
-  join(PLUGIN, 'dashboard', 'plugin_api.py'),
+  DASHBOARD + '/plugin_api.py',
   '--host', '127.0.0.1', '--port', String(API_PORT)
 ], { env: process.env, stdio: 'inherit' })
 process.on('exit', () => backend.kill())
