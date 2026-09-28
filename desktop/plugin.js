@@ -134,6 +134,12 @@ var GANTT_LOCALES = {
     unassignAction: "Unassign",
     delete: "Delete",
     confirmDelete: (id) => `Permanently delete task ${id}?`,
+    taskDetail: "Task detail",
+    actionsMenu: "Actions menu",
+    close: "Close",
+    selectAll: "Select all",
+    selectTask: (name) => `Select ${name}`,
+    tasksColumn: "Tasks",
     col: {
       triage: "Triage",
       todo: "Todo",
@@ -214,6 +220,12 @@ var GANTT_LOCALES = {
     unassignAction: "Désassigner",
     delete: "Supprimer",
     confirmDelete: (id) => `Supprimer définitivement la tâche ${id} ?`,
+    taskDetail: "Détail de la tâche",
+    actionsMenu: "Menu actions",
+    close: "Fermer",
+    selectAll: "Tout sélectionner",
+    selectTask: (name) => `Sélectionner ${name}`,
+    tasksColumn: "Tâches",
     col: {
       triage: "Triage",
       todo: "Todo",
@@ -628,6 +640,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
   });
 }
 function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge }) {
+  const i18n = useGanttI18n();
   const labelW = useValue2($labelW);
   const bars = taskBars(task, now);
   const label = task.label ? `[${task.label}]` : "";
@@ -660,17 +673,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     archived: "archive"
   };
   const statusIcon = STATUS_ICON[task.status] || "circle-large-outline";
-  const statusTitle = {
-    triage: "Triage",
-    todo: "Todo",
-    scheduled: "Planifiée",
-    ready: "Prête",
-    running: "En cours",
-    blocked: "Tâche bloquée",
-    review: "En revue",
-    done: "Terminée",
-    archived: "Archivée"
-  }[task.status] || task.status;
+  const statusTitle = i18n.col?.[task.status] || task.status;
   return jsxs2("div", {
     className: cn2(
       "group grid items-center border-b border-(--ui-stroke-tertiary)/40 transition-colors cursor-pointer",
@@ -709,12 +712,13 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             onChange: (e) => onToggleCheck(task.id, e.target.checked, e.nativeEvent),
             onClick: (e) => e.stopPropagation(),
             className: "shrink-0 rounded cursor-pointer mr-1",
-            "aria-label": `Sélectionner ${name}`
+            "aria-label": i18n.selectTask(name)
           }),
           jsx2("span", {
             className: "inline-flex items-center justify-center shrink-0 self-center",
             style: { color: dotColor },
             title: statusTitle,
+            "aria-label": statusTitle,
             children: task.status === "running" ? jsxs2("span", {
               className: "relative inline-flex items-center justify-center",
               children: [
@@ -727,7 +731,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             size: "xs",
             variant: "outline",
             className: "shrink-0 font-mono text-[9px] px-1 py-0 h-3.5 max-w-[80px] truncate leading-tight",
-            title: `Board : ${task.board}`,
+            title: `${i18n.board} ${task.board}`,
             children: task.board
           }) : null,
           jsxs2("span", {
@@ -930,19 +934,6 @@ var ACTION_MATRIX = {
   review: { primary: ["done", "reopen"], more: ["blocked"] },
   done: { primary: ["archive"], more: ["ready"] },
   archived: { primary: ["done"], more: [] }
-};
-var ACTION_LABELS = {
-  done: "Terminer",
-  blocked: "Bloquer",
-  unblock: "Débloquer",
-  review: "Demander review",
-  reopen: "Réouvrir",
-  archive: "Archiver",
-  ready: "Mettre à Ready",
-  todo: "Mettre à Todo",
-  triage: "Renvoyer en triage",
-  delete: "Supprimer",
-  restore: "Restaurer"
 };
 function AssigneeBadge({ assignee, assignees = [], onAssign, disabled }) {
   const i18n = useGanttI18n();
@@ -1233,12 +1224,12 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
   const st = data?.task?.status || "todo";
   const matrix = ACTION_MATRIX[st] || { primary: [], more: [] };
   const more = matrix.more || [];
-  const actionLabel = (a) => i18n.actions?.[a] || ACTION_LABELS[a] || a;
+  const actionLabel = (a) => i18n.actions?.[a] || a;
   return jsxs2("div", {
     className: docked ? "relative flex flex-col h-full min-h-0 border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) pt-3.5 px-4" : "absolute inset-y-0 right-0 z-50 max-w-full border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) shadow-xl flex flex-col pt-3.5 px-4",
     "data-glass-opaque": true,
     role: "dialog",
-    "aria-label": "Détail de la tâche",
+    "aria-label": i18n.taskDetail,
     style: { width: `${drawerW}px` },
     children: [
       jsx2(ResizeHandle, {
@@ -1287,7 +1278,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                     children: jsx2("button", {
                       type: "button",
                       className: "inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent",
-                      "aria-label": "Menu actions",
+                      "aria-label": i18n.actionsMenu,
                       children: jsx2(Codicon2, { name: "ellipsis", size: "0.9rem" })
                     })
                   }),
@@ -1328,7 +1319,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                     ]
                   })
                 ] }),
-                jsx2(Button2, { size: "icon-xs", variant: "ghost", onClick: onClose, "aria-label": "Fermer", children: "✕" })
+                jsx2(Button2, { size: "icon-xs", variant: "ghost", onClick: onClose, "aria-label": i18n.close, children: "✕" })
               ] })
             ]
           }),
@@ -1349,9 +1340,9 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
       }),
       actionError ? jsx2("div", { className: "text-[10px] text-red-500 bg-red-500/10 border border-red-500/20 rounded p-1.5 shrink-0", children: actionError }) : null,
       // Scrollable content underneath the pinned header + title
-      isLoading ? jsx2("div", { className: "py-8 flex justify-center", children: jsx2(Loader, {}) }) : isError ? jsx2(ErrorState, { title: "Tâche illisible", description: "Le backend n’a pas répondu." }) : jsxs2("div", { ref: scrollContainerRef, className: "flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pt-1", children: [
+      isLoading ? jsx2("div", { className: "py-8 flex justify-center", children: jsx2(Loader, {}) }) : isError ? jsx2(ErrorState, { title: i18n.taskUnreadable, description: i18n.taskUnreadableDesc }) : jsxs2("div", { ref: scrollContainerRef, className: "flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pt-1", children: [
         (data?.task?.dependencies || []).length ? jsxs2("div", { className: "text-[11px]", children: [
-          jsx2("span", { className: "text-[10px] uppercase text-(--ui-text-tertiary)", children: "Dépendances : " }),
+          jsx2("span", { className: "text-[10px] uppercase text-(--ui-text-tertiary)", children: i18n.dependencies }),
           ...(data.task.dependencies || []).map((d, i) => jsxs2("span", { title: d.id, children: [
             i > 0 ? " · " : null,
             jsx2("span", { className: "text-(--ui-text-secondary)", children: `${d.relation === "parent" ? "⬅" : "➡"} ${d.title}` })
@@ -1867,9 +1858,9 @@ function KanbanGanttPage() {
                               }
                             },
                             className: "rounded cursor-pointer",
-                            "aria-label": "Tout sélectionner"
+                            "aria-label": i18n.selectAll
                           }),
-                          jsx2("span", { className: "text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", children: "Tâches" }),
+                          jsx2("span", { className: "text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", children: i18n.tasksColumn }),
                           jsx2(ResizeHandle, {
                             get: () => $labelW.get(),
                             set: (w) => $labelW.set(w),

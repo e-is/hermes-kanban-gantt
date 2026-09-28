@@ -255,6 +255,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
 }
 
 function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge }) {
+  const i18n = useGanttI18n()
   const labelW = useValue($labelW)
   const bars = taskBars(task, now)
   const label = task.label ? `[${task.label}]` : ''
@@ -293,11 +294,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     archived: 'archive'
   }
   const statusIcon = STATUS_ICON[task.status] || 'circle-large-outline'
-  const statusTitle = ({
-    triage: 'Triage', todo: 'Todo', scheduled: 'Planifiée', ready: 'Prête',
-    running: 'En cours', blocked: 'Tâche bloquée', review: 'En revue',
-    done: 'Terminée', archived: 'Archivée'
-  })[task.status] || task.status
+  const statusTitle = i18n.col?.[task.status] || task.status
 
   // 2-col grid (label | timeline): the label cell is position:sticky left so
   // names stay visible while the timeline scrolls horizontally.
@@ -352,12 +349,13 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             onChange: e => onToggleCheck(task.id, e.target.checked, e.nativeEvent),
             onClick: e => e.stopPropagation(),
             className: 'shrink-0 rounded cursor-pointer mr-1',
-            'aria-label': `Sélectionner ${name}`
+            'aria-label': i18n.selectTask(name)
           }),
           jsx('span', {
             className: 'inline-flex items-center justify-center shrink-0 self-center',
             style: { color: dotColor },
             title: statusTitle,
+            'aria-label': statusTitle,
             children: task.status === 'running'
               ? jsxs('span', {
                   className: 'relative inline-flex items-center justify-center',
@@ -373,7 +371,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
                 size: 'xs',
                 variant: 'outline',
                 className: 'shrink-0 font-mono text-[9px] px-1 py-0 h-3.5 max-w-[80px] truncate leading-tight',
-                title: `Board : ${task.board}`,
+                title: `${i18n.board} ${task.board}`,
                 children: task.board
               })
             : null,
@@ -596,12 +594,6 @@ const ACTION_MATRIX = {
   review:   { primary: ['done', 'reopen'], more: ['blocked'] },
   done:     { primary: ['archive'], more: ['ready'] },
   archived: { primary: ['done'], more: [] }
-}
-const ACTION_LABELS = {
-  done: 'Terminer', blocked: 'Bloquer', unblock: 'Débloquer',
-  review: 'Demander review', reopen: 'Réouvrir', archive: 'Archiver',
-  ready: 'Mettre à Ready', todo: 'Mettre à Todo', triage: 'Renvoyer en triage',
-  delete: 'Supprimer', restore: 'Restaurer'
 }
 
 function AssigneeBadge({ assignee, assignees = [], onAssign, disabled }) {
@@ -893,7 +885,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
   const st = data?.task?.status || 'todo'
   const matrix = ACTION_MATRIX[st] || { primary: [], more: [] }
   const more = matrix.more || []
-  const actionLabel = a => i18n.actions?.[a] || ACTION_LABELS[a] || a
+  const actionLabel = a => i18n.actions?.[a] || a
 
   return jsxs('div', {
     className: docked
@@ -901,7 +893,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
       : 'absolute inset-y-0 right-0 z-50 max-w-full border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) shadow-xl flex flex-col pt-3.5 px-4',
     'data-glass-opaque': true,
     role: 'dialog',
-    'aria-label': 'Détail de la tâche',
+    'aria-label': i18n.taskDetail,
     style: { width: `${drawerW}px` },
     children: [
       jsx(ResizeHandle, {
@@ -957,7 +949,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                     children: jsx('button', {
                       type: 'button',
                       className: 'inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent',
-                      'aria-label': 'Menu actions',
+                      'aria-label': i18n.actionsMenu,
                       children: jsx(Codicon, { name: 'ellipsis', size: '0.9rem' })
                     })
                   }),
@@ -996,7 +988,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                     ]
                   })
                 ] }),
-                jsx(Button, { size: 'icon-xs', variant: 'ghost', onClick: onClose, 'aria-label': 'Fermer', children: '✕' })
+                jsx(Button, { size: 'icon-xs', variant: 'ghost', onClick: onClose, 'aria-label': i18n.close, children: '✕' })
               ] })
             ]
           }),
@@ -1028,11 +1020,11 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
       isLoading
         ? jsx('div', { className: 'py-8 flex justify-center', children: jsx(Loader, {}) })
         : isError
-          ? jsx(ErrorState, { title: 'Tâche illisible', description: 'Le backend n\u2019a pas répondu.' })
+          ? jsx(ErrorState, { title: i18n.taskUnreadable, description: i18n.taskUnreadableDesc })
           : jsxs('div', { ref: scrollContainerRef, className: 'flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pt-1', children: [
               (data?.task?.dependencies || []).length
                 ? jsxs('div', { className: 'text-[11px]', children: [
-                    jsx('span', { className: 'text-[10px] uppercase text-(--ui-text-tertiary)', children: 'Dépendances : ' }),
+                    jsx('span', { className: 'text-[10px] uppercase text-(--ui-text-tertiary)', children: i18n.dependencies }),
                     ...(data.task.dependencies || []).map((d, i) => jsxs('span', { title: d.id, children: [
                       i > 0 ? ' · ' : null,
                       jsx('span', { className: 'text-(--ui-text-secondary)', children: `${d.relation === 'parent' ? '⬅' : '➡'} ${d.title}` })
@@ -1617,9 +1609,9 @@ export function KanbanGanttPage() {
                               }
                             },
                             className: 'rounded cursor-pointer',
-                            'aria-label': 'Tout sélectionner'
+                            'aria-label': i18n.selectAll
                           }),
-                          jsx('span', { className: 'text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none', children: 'Tâches' }),
+                          jsx('span', { className: 'text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none', children: i18n.tasksColumn }),
                           jsx(ResizeHandle, {
                             get: () => $labelW.get(),
                             set: w => $labelW.set(w),
