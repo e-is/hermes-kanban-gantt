@@ -26,6 +26,7 @@ import {
   Button,
   cn,
   Codicon,
+  ConfirmDialog,
   Contribute,
   DropdownMenu,
   DropdownMenuContent,
@@ -57,11 +58,12 @@ import {
   setPluginDoors,
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
   $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $openTaskId,
-  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, applyBase
+  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, setParent, removeParent, applyBase
 } from './state'
 import { getStorage } from './state'
 import { GANTT_LOCALES, useGanttI18n } from './i18n'
 import { TitlebarBoardSwitcher } from './ui/TitlebarBoardSwitcher'
+import { TaskRelations } from './ui/TaskRelations'
 
 const ID = 'kanban-gantt'
 
@@ -78,7 +80,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, DAY, MIN_BAR } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, DAY, MIN_BAR } from './core/gantt-core.ts'
 
 
 /** Apply a new backend base URL and refetch everything. */
@@ -815,9 +817,10 @@ function StatusBadge({ status, onPick, disabled }) {
   ] })
 }
 
-function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, onToggleDock }) {
+function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked = false, onToggleDock }) {
   const drawerW = useValue($drawerW)
   const i18n = useGanttI18n()
+  const queryClient = useQueryClient()
   const scrollContainerRef = useRef(null)
   const prevTaskIdRef = useRef(null)
 
@@ -842,6 +845,12 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
   const [runsOpen, setRunsOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(true)
   const [showAllComments, setShowAllComments] = useState(false)
+  // Parent link awaiting confirmation (the click that asked to remove it).
+  const [pendingUnlink, setPendingUnlink] = useState(null)
+
+  // Parents/children come from the WHOLE board snapshot, not the filtered rows,
+  // so a relation hidden by the current filter still shows up here.
+  const relations = useMemo(() => relationsOf(tasks, taskId), [tasks, taskId])
 
   const statusMutation = useMutation({
     mutationFn: payload => apiFetch(
@@ -865,6 +874,18 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
     mutationFn: profile => apiFetch(
       `/tasks/${encodeURIComponent(taskId)}/assignee${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'PATCH', body: { profile } }),
+    onSuccess: () => {
+      setActionError(null)
+      void refetch()
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
+    },
+    onError: error => setActionError(String(error?.message || error))
+  })
+
+  // Dropping one parent link. The domain also re-evaluates the task's gate, so
+  // a task freed by the removal can come back to `ready` — hence the refetch.
+  const unlinkMutation = useMutation({
+    mutationFn: parentId => removeParent(taskId, parentId, board),
     onSuccess: () => {
       setActionError(null)
       void refetch()
@@ -1013,15 +1034,30 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
         : isError
           ? jsx(ErrorState, { title: i18n.taskUnreadable, description: i18n.taskUnreadableDesc })
           : jsxs('div', { ref: scrollContainerRef, className: 'flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pt-1', children: [
-              (data?.task?.dependencies || []).length
-                ? jsxs('div', { className: 'text-[11px]', children: [
-                    jsx('span', { className: 'text-[10px] uppercase text-(--ui-text-tertiary)', children: i18n.dependencies }),
-                    ...(data.task.dependencies || []).map((d, i) => jsxs('span', { title: d.id, children: [
-                      i > 0 ? ' · ' : null,
-                      jsx('span', { className: 'text-(--ui-text-secondary)', children: `${d.relation === 'parent' ? '⬅' : '➡'} ${d.title}` })
-                    ] }, i))
-                  ] })
-                : null,
+              // 0. Relations — parents (removable, behind a confirmation) and
+              //    children (read-only for now: removing that link means
+              //    re-parenting the child itself). Clicking a name opens that
+              //    task's detail, which also selects its row in the gantt.
+              jsx(TaskRelations, {
+                heading: i18n.parents,
+                tasks: relations.parents,
+                emptyLabel: relations.parents.length === 0 ? i18n.noParents : undefined,
+                onOpen: id => $openTaskId.set(id),
+                onRemove: id => {
+                  const parent = relations.parents.find(t => t.id === id)
+                  setPendingUnlink({ id, title: parent ? parent.title : id })
+                },
+                removeLabel: i18n.removeParentLink,
+                openLabel: i18n.openTask,
+                disabled: unlinkMutation.isPending
+              }),
+              jsx(TaskRelations, {
+                heading: i18n.children,
+                tasks: relations.children,
+                emptyLabel: relations.children.length === 0 ? i18n.noChildren : undefined,
+                onOpen: id => $openTaskId.set(id),
+                openLabel: i18n.openTask
+              }),
               // 1. Description (no max-h clamp)
               data?.task?.body
                 ? jsxs('div', { className: 'flex flex-col gap-1', children: [
@@ -1199,7 +1235,19 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                     }, i)) })
                   ] })
                 : null
-            ] })
+            ] }),
+      // Drops a parent link — behind a confirmation, so a stray click on the
+      // row's ✕ never silently rewires the tree.
+      jsx(ConfirmDialog, {
+        open: Boolean(pendingUnlink),
+        onClose: () => setPendingUnlink(null),
+        onConfirm: () => unlinkMutation.mutateAsync(pendingUnlink.id),
+        title: i18n.removeParentConfirmTitle(pendingUnlink ? pendingUnlink.title : ''),
+        description: i18n.removeParentConfirmDesc,
+        confirmLabel: i18n.removeParentLink(pendingUnlink ? pendingUnlink.title : ''),
+        cancelLabel: i18n.cancel,
+        destructive: true
+      })
     ]
   })
 }
@@ -1643,6 +1691,9 @@ export function KanbanGanttPage() {
             taskId: openTaskId,
             board,
             assignees: derived.allAssignees || [],
+            // Unfiltered snapshot: a parent hidden by the current filter must
+            // still be listed in the drawer's relations.
+            tasks: data?.tasks || [],
             onClose: () => $openTaskId.set(null),
             docked: dockDrawer,
             onToggleDock: () => {

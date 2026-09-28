@@ -53,6 +53,18 @@ const fetchGantt = board =>
 const fetchTask = (id, board) =>
   apiFetch(`/tasks/${encodeURIComponent(id)}${board ? `?board=${encodeURIComponent(board)}` : ''}`)
 
+/** Link `parentId -> id` (mode 'replace' drops the task's other parents first). */
+const setParent = (id, parentId, mode, board) =>
+  apiFetch(
+    `/tasks/${encodeURIComponent(id)}/parent${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+    { method: 'POST', body: { parentId, mode: mode || 'add' } })
+
+const removeParent = (id, parentId, board) =>
+  apiFetch(
+    `/tasks/${encodeURIComponent(id)}/parent/${encodeURIComponent(parentId)}` +
+    `${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+    { method: 'DELETE' })
+
 export function setPluginDoors(restFn, storageObj) {
   rest = restFn
   storage = storageObj
@@ -60,5 +72,5 @@ export function setPluginDoors(restFn, storageObj) {
 export const getStorage = () => storage
 
 export {
-  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, applyBase
+  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, setParent, removeParent, applyBase
 }
