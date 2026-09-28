@@ -283,3 +283,133 @@ def test_gantt_all_boards(client):
     r_bulk = http.post("/tasks/bulk?board=all", json={"ids": [board["solo"]], "action": "blocked", "reason": "all block"})
     assert r_bulk.status_code == 200
     assert r_bulk.json()["results"][0]["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# Parent links (re-parenting)
+#
+# The domain owns the invariants; these tests pin that the ROUTES surface them
+# (status codes + payload) instead of swallowing or re-deriving them.
+# ---------------------------------------------------------------------------
+
+def _mk(slug, title, **kw):
+    conn = kanban_db.connect(board=slug)
+    try:
+        return kanban_db.create_task(conn, title=title, created_by="test", **kw)
+    finally:
+        conn.close()
+
+
+def _parents(http, task_id, slug):
+    return http.get(f"/tasks/{task_id}?board={slug}").json()["task"]["parents"]
+
+
+def test_parent_link_add(client):
+    http, board = client
+    parent = _mk(board["slug"], "[TEST] new parent")
+    r = http.post(f"/tasks/{board['solo']}/parent?board={board['slug']}",
+                  json={"parentId": parent})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["parents"] == [parent]
+    assert data["mode"] == "add"
+    assert _parents(http, board["solo"], board["slug"]) == [parent]
+
+
+def test_parent_link_replace_swaps_parents(client):
+    http, board = client
+    # `child` starts linked to `parent`; re-parent it onto `solo` and expect the
+    # old link (and only it) to be dropped.
+    r = http.post(f"/tasks/{board['child']}/parent?board={board['slug']}",
+                  json={"parentId": board["solo"], "mode": "replace"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["parents"] == [board["solo"]]
+    assert data["unlinked"] == [board["parent"]]
+    assert _parents(http, board["child"], board["slug"]) == [board["solo"]]
+
+
+def test_parent_link_gates_ready_child(client):
+    """A `ready` child re-parented under a non-terminal parent goes back to todo."""
+    http, board = client
+    # `solo` is a fresh todo task -> non-terminal, so linking must gate.
+    conn = kanban_db.connect(board=board["slug"])
+    conn.execute("UPDATE tasks SET status = 'ready' WHERE id = ?", (board["child"],))
+    conn.commit()
+    conn.close()
+
+    r = http.post(f"/tasks/{board['child']}/parent?board={board['slug']}",
+                  json={"parentId": board["solo"], "mode": "replace"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["gated"] is True
+    assert data["status_before"] == "ready"
+    assert data["status_after"] == "todo"
+
+
+def test_parent_link_self_refused(client):
+    http, board = client
+    r = http.post(f"/tasks/{board['solo']}/parent?board={board['slug']}",
+                  json={"parentId": board["solo"]})
+    assert r.status_code == 400
+
+
+def test_parent_link_cycle_refused(client):
+    http, board = client
+    # child is already a descendant of parent -> linking parent under child cycles
+    r = http.post(f"/tasks/{board['parent']}/parent?board={board['slug']}",
+                  json={"parentId": board["child"]})
+    assert r.status_code == 409
+    assert "cycle" in r.json()["detail"]
+
+
+def test_parent_link_running_child_refused(client):
+    http, board = client
+    # create_task refuses to leave a task 'running' without a run, so force the
+    # state the domain's guard is about: status + a current run.
+    running = _mk(board["slug"], "[TEST] running task")
+    conn = kanban_db.connect(board=board["slug"])
+    conn.execute("UPDATE tasks SET status = 'running', current_run_id = 1 WHERE id = ?",
+                 (running,))
+    conn.commit()
+    conn.close()
+    r = http.post(f"/tasks/{running}/parent?board={board['slug']}",
+                  json={"parentId": board["solo"]})
+    assert r.status_code == 409
+    assert "running" in r.json()["detail"]
+
+
+def test_parent_link_cross_board_refused(client):
+    http, board = client
+    other = _mk("kanban-gantt-test-other", "[TEST] other-board task")
+    r = http.post(f"/tasks/{board['solo']}/parent?board={board['slug']}",
+                  json={"parentId": other})
+    assert r.status_code == 409
+    assert "not on board" in r.json()["detail"]
+
+
+def test_parent_link_unknown_task(client):
+    http, board = client
+    r = http.post(f"/tasks/t_missing/parent?board={board['slug']}",
+                  json={"parentId": board["solo"]})
+    assert r.status_code == 404
+    r2 = http.post(f"/tasks/{board['solo']}/parent?board={board['slug']}",
+                   json={"parentId": ""})
+    assert r2.status_code == 400
+    r3 = http.post(f"/tasks/{board['solo']}/parent?board={board['slug']}",
+                   json={"parentId": board["parent"], "mode": "nonsense"})
+    assert r3.status_code == 400
+
+
+def test_parent_unlink(client):
+    http, board = client
+    r = http.delete(f"/tasks/{board['child']}/parent/{board['parent']}?board={board['slug']}")
+    assert r.status_code == 200
+    assert r.json()["parents"] == []
+    assert _parents(http, board["child"], board["slug"]) == []
+
+
+def test_parent_unlink_missing_link(client):
+    http, board = client
+    r = http.delete(f"/tasks/{board['child']}/parent/t_missing?board={board['slug']}")
+    assert r.status_code == 404
