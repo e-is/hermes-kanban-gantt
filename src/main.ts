@@ -48,7 +48,8 @@ import {
   PALETTE_AREA,
   ROUTES_AREA,
   SIDEBAR_NAV_AREA,
-  TITLEBAR_AREAS
+  TITLEBAR_AREAS,
+  WORKSPACE_PAGE_HEADER_AREA
 } from '@hermes/plugin-sdk'
 import { useMemo, useRef, useEffect, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
@@ -258,13 +259,13 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     ? jsx('span', {
         className: 'absolute',
         style: {
-          // Drawn BEFORE the checkbox (visually left of it).
+          // Drawn BEFORE the checkbox (visually left of it) and sized so its
+          // right edge lands exactly on the checkbox's left edge: with the
+          // label padding-left of `depth * 12 + 8`, the connector spans
+          // [depth*12+2, depth*12+8] — 6px wide, no overlap with the box.
           left: `${depth * 12 + 2}px`,
-          // Box sits ABOVE the row's vertical center so the bottom border
-          // (the horizontal segment) lands exactly on the center line, next
-          // to the status dot — no stray border above/left of it.
           top: 'calc(50% - 12px)',
-          width: '10px',
+          width: '6px',
           height: '12px',
           borderLeft: '1px solid var(--ui-stroke-secondary)',
           borderBottom: '1px solid var(--ui-stroke-secondary)'
@@ -1439,10 +1440,11 @@ export function KanbanGanttPage() {
     // demo adds its own body padding (tests/demo.html).
     className: cn('relative h-full flex', dockDrawer ? 'flex-row gap-3' : 'flex-col'),
     children: [
-      // Desktop titlebar chrome: exists exactly while this page is mounted —
-      // the board switcher lives in the titlebar band (titleBar.center), like
-      // the official kanban plugin's switcher.
-      jsx(Contribute, { area: TITLEBAR_AREAS.center, id: 'kanban-gantt:board-switcher', children: jsx(TitlebarBoardSwitcher, {}) }),
+      // Page-header chrome: exists exactly while this page is mounted — the
+      // board switcher is projected into the workspace page-header band (the
+      // tab row above the page), like the official kanban plugin's switcher
+      // (WORKSPACE_PAGE_HEADER_AREA, NOT titleBar.center).
+      jsx(Contribute, { area: WORKSPACE_PAGE_HEADER_AREA, id: 'kanban-gantt:board-switcher', children: jsx(TitlebarBoardSwitcher, {}) }),
 
       // Main column (header + chart + legend). When the drawer is docked it
       // becomes a flex sibling of this column, so the gantt shrinks to make

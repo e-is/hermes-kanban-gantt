@@ -15,7 +15,7 @@ import {
   DropdownMenu as DropdownMenu2,
   DropdownMenuContent as DropdownMenuContent2,
   DropdownMenuItem as DropdownMenuItem2,
-  DropdownMenuSeparator,
+  DropdownMenuSeparator as DropdownMenuSeparator2,
   DropdownMenuTrigger as DropdownMenuTrigger2,
   EmptyState,
   ErrorState,
@@ -31,7 +31,7 @@ import {
   PALETTE_AREA,
   ROUTES_AREA,
   SIDEBAR_NAV_AREA,
-  TITLEBAR_AREAS
+  WORKSPACE_PAGE_HEADER_AREA
 } from "@hermes/plugin-sdk";
 import { useMemo as useMemo2, useRef, useEffect, useState } from "react";
 import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
@@ -277,42 +277,31 @@ function TitlebarBoardSwitcher() {
     /* @__PURE__ */ jsx(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx(
       Button,
       {
-        className: "h-7 max-w-56 gap-1.5 px-2 [-webkit-app-region:no-drag]",
+        className: "h-full min-w-0 max-w-full gap-1.5 px-2 [-webkit-app-region:no-drag]",
         size: "sm",
         variant: "ghost",
         children: /* @__PURE__ */ jsxs("span", { className: "flex min-w-0 items-center gap-1.5", children: [
+          /* @__PURE__ */ jsx(Codicon, { className: "shrink-0 text-(--ui-text-tertiary)", name: "project", size: "0.8125rem" }),
+          /* @__PURE__ */ jsx("span", { className: "shrink-0 text-[0.6875rem] font-medium text-(--ui-text-tertiary)", children: i18n.board.replace(/[:：]\s*$/, "") }),
           /* @__PURE__ */ jsx("span", { className: "min-w-0 flex-1 truncate text-[0.75rem] font-medium leading-none", children: current?.label || "—" }),
-          current && typeof current.total === "number" && /* @__PURE__ */ jsx("span", { className: "text-[0.6875rem] tabular-nums text-(--ui-text-quaternary)", children: current.total }),
-          /* @__PURE__ */ jsx("span", { className: "text-[9px] opacity-60", children: "▾" })
+          current && !isAllBoards && typeof current.total === "number" && /* @__PURE__ */ jsx("span", { className: "text-[0.6875rem] tabular-nums text-(--ui-text-quaternary)", children: current.total }),
+          /* @__PURE__ */ jsx(Codicon, { className: "shrink-0 text-(--ui-text-tertiary)", name: "chevron-down", size: "0.8125rem" })
         ] })
       }
     ) }),
-    /* @__PURE__ */ jsxs(DropdownMenuContent, { align: "center", className: "min-w-[12rem] p-1", children: [
-      /* @__PURE__ */ jsxs(
-        DropdownMenuItem,
-        {
-          onClick: () => setBoard("all"),
-          className: "flex items-center justify-between text-xs py-1.5 cursor-pointer font-medium border-b border-(--ui-stroke-tertiary) mb-1",
-          children: [
-            /* @__PURE__ */ jsx("span", { className: cn("flex-1 truncate", isAllBoards && "font-semibold text-(--ui-accent)"), children: i18n.allBoards }),
-            isAllBoards && /* @__PURE__ */ jsx(Codicon, { name: "check", size: "0.8rem", className: "ml-2" })
-          ]
-        }
-      ),
+    /* @__PURE__ */ jsxs(DropdownMenuContent, { align: "center", children: [
+      /* @__PURE__ */ jsxs(DropdownMenuItem, { onSelect: () => setBoard("all"), children: [
+        /* @__PURE__ */ jsx("span", { className: cn("min-w-0 flex-1 truncate", isAllBoards && "font-semibold text-(--ui-accent)"), children: i18n.allBoards }),
+        isAllBoards && /* @__PURE__ */ jsx(Codicon, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
+      ] }),
+      boards.length > 0 && /* @__PURE__ */ jsx(DropdownMenuSeparator, {}),
       boards.map((b) => {
         const isCurrent = !isAllBoards && b.slug === (board || data?.current);
-        return /* @__PURE__ */ jsxs(
-          DropdownMenuItem,
-          {
-            onClick: () => setBoard(b.slug),
-            className: "flex items-center justify-between text-xs py-1.5 cursor-pointer",
-            children: [
-              /* @__PURE__ */ jsx("span", { className: cn("flex-1 truncate", isCurrent && "font-semibold text-(--ui-accent)"), children: b.label || b.slug }),
-              isCurrent && /* @__PURE__ */ jsx(Codicon, { name: "check", size: "0.8rem", className: "ml-2" })
-            ]
-          },
-          b.slug
-        );
+        return /* @__PURE__ */ jsxs(DropdownMenuItem, { onSelect: () => setBoard(b.slug), children: [
+          /* @__PURE__ */ jsx("span", { className: "min-w-0 flex-1 truncate", children: b.label || b.slug }),
+          typeof b.total === "number" && /* @__PURE__ */ jsx("span", { className: "text-[0.625rem] tabular-nums text-(--ui-text-quaternary)", children: b.total }),
+          isCurrent && /* @__PURE__ */ jsx(Codicon, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
+        ] }, b.slug);
       })
     ] })
   ] });
@@ -618,13 +607,13 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
   const connector = isChild ? jsx2("span", {
     className: "absolute",
     style: {
-      // Drawn BEFORE the checkbox (visually left of it).
+      // Drawn BEFORE the checkbox (visually left of it) and sized so its
+      // right edge lands exactly on the checkbox's left edge: with the
+      // label padding-left of `depth * 12 + 8`, the connector spans
+      // [depth*12+2, depth*12+8] — 6px wide, no overlap with the box.
       left: `${depth * 12 + 2}px`,
-      // Box sits ABOVE the row's vertical center so the bottom border
-      // (the horizontal segment) lands exactly on the center line, next
-      // to the status dot — no stray border above/left of it.
       top: "calc(50% - 12px)",
-      width: "10px",
+      width: "6px",
       height: "12px",
       borderLeft: "1px solid var(--ui-stroke-secondary)",
       borderBottom: "1px solid var(--ui-stroke-secondary)"
@@ -774,7 +763,7 @@ function FilterDropdown({
               ]
             });
           }),
-          jsx2(DropdownMenuSeparator, {}),
+          jsx2(DropdownMenuSeparator2, {}),
           jsx2("div", { className: "px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)", children: i18n.statuses }),
           ALL_STATUS_KEYS.map((s) => {
             const isVisible = !disabledStatuses.has(s);
@@ -791,7 +780,7 @@ function FilterDropdown({
               ]
             });
           }),
-          jsx2(DropdownMenuSeparator, {}),
+          jsx2(DropdownMenuSeparator2, {}),
           jsxs2(DropdownMenuItem2, {
             onClick: () => onToggleArchived(!showArchived),
             className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
@@ -1037,7 +1026,7 @@ function SelectionBar({
                     jsx2("span", { className: "flex-1", children: name })
                   ]
                 })),
-                assignees.length > 0 ? jsx2(DropdownMenuSeparator, {}) : null,
+                assignees.length > 0 ? jsx2(DropdownMenuSeparator2, {}) : null,
                 jsx2(DropdownMenuItem2, {
                   onClick: () => {
                     setMenu(null);
@@ -1260,14 +1249,14 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                         },
                         children: i18n.copyTitle
                       }),
-                      more.length ? jsx2(DropdownMenuSeparator, {}) : null,
+                      more.length ? jsx2(DropdownMenuSeparator2, {}) : null,
                       more.map((a) => jsx2(DropdownMenuItem2, {
                         key: a,
                         className: "flex items-center gap-2 px-3 py-1.5",
                         onClick: () => statusMutation.mutate({ action: a }),
                         children: actionLabel(a)
                       })),
-                      jsx2(DropdownMenuSeparator, {}),
+                      jsx2(DropdownMenuSeparator2, {}),
                       jsx2(DropdownMenuItem2, {
                         className: "flex items-center gap-2 px-3 py-1.5 text-red-500 hover:bg-red-500/10",
                         onClick: () => {
@@ -1683,10 +1672,11 @@ function KanbanGanttPage() {
     // demo adds its own body padding (tests/demo.html).
     className: cn2("relative h-full flex", dockDrawer ? "flex-row gap-3" : "flex-col"),
     children: [
-      // Desktop titlebar chrome: exists exactly while this page is mounted —
-      // the board switcher lives in the titlebar band (titleBar.center), like
-      // the official kanban plugin's switcher.
-      jsx2(Contribute, { area: TITLEBAR_AREAS.center, id: "kanban-gantt:board-switcher", children: jsx2(TitlebarBoardSwitcher, {}) }),
+      // Page-header chrome: exists exactly while this page is mounted — the
+      // board switcher is projected into the workspace page-header band (the
+      // tab row above the page), like the official kanban plugin's switcher
+      // (WORKSPACE_PAGE_HEADER_AREA, NOT titleBar.center).
+      jsx2(Contribute, { area: WORKSPACE_PAGE_HEADER_AREA, id: "kanban-gantt:board-switcher", children: jsx2(TitlebarBoardSwitcher, {}) }),
       // Main column (header + chart + legend). When the drawer is docked it
       // becomes a flex sibling of this column, so the gantt shrinks to make
       // room instead of being covered. Carries the view padding (the desktop
