@@ -26,6 +26,9 @@ export const DRAWER_W_MAX = 720
 /** Open task id in the drawer (null = closed). */
 export const $openTaskId = atom(null)
 
+/** Task whose "move under…" picker is open (the page owns the dialog). */
+export const $moveUnderId = atom(null)
+
 const apiBase = () => ($baseUrl.get() || '').trim().replace(/\/+$/, '')
 
 /** GET/POST/PATCH through the plugin namespace, or an absolute custom base. */

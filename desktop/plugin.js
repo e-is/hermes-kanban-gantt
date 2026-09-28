@@ -52,6 +52,7 @@ var LABEL_W_MAX = 640;
 var DRAWER_W_MIN = 320;
 var DRAWER_W_MAX = 720;
 var $openTaskId = atom(null);
+var $moveUnderId = atom(null);
 var apiBase = () => ($baseUrl.get() || "").trim().replace(/\/+$/, "");
 var apiFetch = (path, init) => {
   const base = apiBase();
@@ -765,6 +766,52 @@ function reasonLabel(reason, i18n) {
     default:
       return i18n.errReparent;
   }
+}
+function MoveUnderDialog({
+  open,
+  draggedTitle,
+  candidates,
+  onPick,
+  onClose,
+  i18n,
+  busy = false
+}) {
+  const [query, setQuery] = useState("");
+  if (!open) return null;
+  const visible = candidates.filter((c) => matchesSearch(c.task, query));
+  const disabledIds = new Set(visible.filter((c) => !c.allowed).map((c) => c.task.id));
+  const byId = new Map(candidates.map((c) => [c.task.id, c]));
+  return /* @__PURE__ */ jsx3(Dialog, { open: true, onOpenChange: (next) => {
+    if (!next) onClose();
+  }, children: /* @__PURE__ */ jsxs3(DialogContent, { className: "max-w-lg", children: [
+    /* @__PURE__ */ jsx3(DialogHeader, { children: /* @__PURE__ */ jsx3(DialogTitle, { children: i18n.moveUnderTitle(draggedTitle) }) }),
+    /* @__PURE__ */ jsx3(
+      Input,
+      {
+        autoFocus: true,
+        value: query,
+        placeholder: i18n.moveUnderSearch,
+        onChange: (event) => setQuery(event.target.value)
+      }
+    ),
+    /* @__PURE__ */ jsx3("div", { className: "max-h-72 overflow-y-auto", children: visible.length === 0 ? /* @__PURE__ */ jsx3("div", { className: "px-1 py-2 text-[11px] italic text-(--ui-text-quaternary)", children: i18n.moveUnderEmpty }) : /* @__PURE__ */ jsx3(
+      TaskRelations,
+      {
+        heading: "",
+        tasks: visible.map((c) => c.task),
+        disabledIds,
+        reasonOf: (id) => {
+          const c = byId.get(id);
+          return c && c.reason ? reasonLabel(c.reason, i18n) : null;
+        },
+        onOpen: (id) => {
+          if (!disabledIds.has(id)) onPick(id);
+        },
+        openLabel: i18n.openTask,
+        disabled: busy
+      }
+    ) })
+  ] }) });
 }
 
 // src/main.ts
@@ -1603,6 +1650,17 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                         },
                         children: i18n.copyTitle
                       }),
+                      jsx4(DropdownMenuSeparator2, {}),
+                      // Keyboard-reachable twin of the drag & drop: opens the
+                      // page's task picker for this task.
+                      jsx4(DropdownMenuItem2, {
+                        className: "flex items-center gap-2 px-3 py-1.5",
+                        onClick: () => $moveUnderId.set(taskId),
+                        children: jsxs4("span", { className: "flex items-center gap-2", children: [
+                          jsx4(Codicon3, { name: "move", size: "0.85rem" }),
+                          i18n.moveUnder
+                        ] })
+                      }),
                       more.length ? jsx4(DropdownMenuSeparator2, {}) : null,
                       more.map((a) => jsx4(DropdownMenuItem2, {
                         key: a,
@@ -1847,6 +1905,7 @@ function KanbanGanttPage() {
   const base = useValue2($baseUrl);
   const board = useValue2($boardSlug);
   const openTaskId = useValue2($openTaskId);
+  const moveUnderId = useValue2($moveUnderId);
   const labelW = useValue2($labelW);
   const drawerW = useValue2($drawerW);
   const drawerDocked = useValue2($drawerDocked);
@@ -1975,6 +2034,22 @@ function KanbanGanttPage() {
       return;
     }
     reparentMutation.mutate({ childId, parentId: targetId, mode: "add" });
+  };
+  const handlePickParent = (parentId) => {
+    const childId = moveUnderId;
+    $moveUnderId.set(null);
+    if (!childId || childId === parentId) return;
+    const candidate = dropCandidates(allTasks, childId, boardOf(childId)).find((c) => c.task.id === parentId);
+    if (candidate && !candidate.allowed) {
+      setReparentError(reasonLabel(candidate.reason, i18n));
+      return;
+    }
+    const child = allTasks.find((t) => t.id === childId);
+    if ((child && child.parents || []).length > 0) {
+      setPendingReparent({ childId, parentId });
+      return;
+    }
+    reparentMutation.mutate({ childId, parentId, mode: "add" });
   };
   const handleToggleCheck = (id, checked, nativeEvent) => {
     setSelectedIds((prev) => {
@@ -2344,6 +2419,20 @@ function KanbanGanttPage() {
         onReplace: () => reparentMutation.mutate({ ...pendingReparent, mode: "replace" }),
         onRemoveParent: (parentId) => unlinkMutation.mutate({ childId: pendingReparent.childId, parentId }),
         onClose: () => setPendingReparent(null),
+        i18n
+      }),
+      // "Move under…" picker (drawer action menu): the whole board, refusals
+      // greyed with their reason rather than hidden.
+      jsx4(MoveUnderDialog, {
+        open: Boolean(moveUnderId),
+        draggedTitle: (() => {
+          const task = moveUnderId ? allTasks.find((t) => t.id === moveUnderId) : null;
+          return task ? task.title : moveUnderId || "";
+        })(),
+        candidates: moveUnderId ? dropCandidates(allTasks, moveUnderId, boardOf(moveUnderId)) : [],
+        busy: reparentMutation.isPending,
+        onPick: handlePickParent,
+        onClose: () => $moveUnderId.set(null),
         i18n
       })
     ]

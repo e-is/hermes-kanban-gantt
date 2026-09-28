@@ -57,14 +57,14 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 import {
   setPluginDoors,
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
-  $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $openTaskId,
+  $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $openTaskId, $moveUnderId,
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, setParent, removeParent, applyBase
 } from './state'
 import { getStorage } from './state'
 import { GANTT_LOCALES, useGanttI18n } from './i18n'
 import { TitlebarBoardSwitcher } from './ui/TitlebarBoardSwitcher'
 import { TaskRelations } from './ui/TaskRelations'
-import { ReparentChoiceDialog, reasonLabel } from './ui/ReparentChooser'
+import { ReparentChoiceDialog, MoveUnderDialog, reasonLabel } from './ui/ReparentChooser'
 
 const ID = 'kanban-gantt'
 
@@ -1017,6 +1017,17 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                         onClick: () => { if (data?.task?.title) void navigator.clipboard.writeText(data.task.title) },
                         children: i18n.copyTitle
                       }),
+                      jsx(DropdownMenuSeparator, {}),
+                      // Keyboard-reachable twin of the drag & drop: opens the
+                      // page's task picker for this task.
+                      jsx(DropdownMenuItem, {
+                        className: 'flex items-center gap-2 px-3 py-1.5',
+                        onClick: () => $moveUnderId.set(taskId),
+                        children: jsxs('span', { className: 'flex items-center gap-2', children: [
+                          jsx(Codicon, { name: 'move', size: '0.85rem' }),
+                          i18n.moveUnder
+                        ] })
+                      }),
                       more.length ? jsx(DropdownMenuSeparator, {}) : null,
                       more.map(a => jsx(DropdownMenuItem, {
                         key: a,
@@ -1298,6 +1309,7 @@ export function KanbanGanttPage() {
   const base = useValue($baseUrl)
   const board = useValue($boardSlug)
   const openTaskId = useValue($openTaskId)
+  const moveUnderId = useValue($moveUnderId)
   const labelW = useValue($labelW)
   const drawerW = useValue($drawerW)
   const drawerDocked = useValue($drawerDocked)
@@ -1443,6 +1455,24 @@ export function KanbanGanttPage() {
       return
     }
     reparentMutation.mutate({ childId, parentId: targetId, mode: 'add' })
+  }
+
+  // Same decision path as a drop, reached from the drawer's "move under…" item.
+  const handlePickParent = parentId => {
+    const childId = moveUnderId
+    $moveUnderId.set(null)
+    if (!childId || childId === parentId) return
+    const candidate = dropCandidates(allTasks, childId, boardOf(childId)).find(c => c.task.id === parentId)
+    if (candidate && !candidate.allowed) {
+      setReparentError(reasonLabel(candidate.reason, i18n))
+      return
+    }
+    const child = allTasks.find(t => t.id === childId)
+    if (((child && child.parents) || []).length > 0) {
+      setPendingReparent({ childId, parentId })
+      return
+    }
+    reparentMutation.mutate({ childId, parentId, mode: 'add' })
   }
 
   const handleToggleCheck = (id, checked, nativeEvent) => {
@@ -1857,6 +1887,20 @@ export function KanbanGanttPage() {
         onReplace: () => reparentMutation.mutate({ ...pendingReparent, mode: 'replace' }),
         onRemoveParent: parentId => unlinkMutation.mutate({ childId: pendingReparent.childId, parentId }),
         onClose: () => setPendingReparent(null),
+        i18n
+      }),
+      // "Move under…" picker (drawer action menu): the whole board, refusals
+      // greyed with their reason rather than hidden.
+      jsx(MoveUnderDialog, {
+        open: Boolean(moveUnderId),
+        draggedTitle: (() => {
+          const task = moveUnderId ? allTasks.find(t => t.id === moveUnderId) : null
+          return task ? task.title : (moveUnderId || '')
+        })(),
+        candidates: moveUnderId ? dropCandidates(allTasks, moveUnderId, boardOf(moveUnderId)) : [],
+        busy: reparentMutation.isPending,
+        onPick: handlePickParent,
+        onClose: () => $moveUnderId.set(null),
         i18n
       })
     ]
