@@ -351,6 +351,31 @@ function taskBars(task, now, minBarSec) {
   const min = minBarSec || MIN_BAR;
   const runs = Array.isArray(task.runs) ? task.runs : [];
   const validRuns = runs.filter((r) => r && r.started_at != null);
+  if (task.status === "blocked") {
+    const bars = [];
+    for (const r of validRuns) {
+      const s = r.started_at;
+      const e = r.ended_at;
+      if (e == null || e <= s) continue;
+      bars.push({
+        t0: s,
+        t1: Math.max(s + min, e),
+        kind: "done",
+        tone: statusTone("blocked"),
+        runId: r.id,
+        profile: r.profile,
+        outcome: r.outcome || r.status
+      });
+    }
+    const waitStart = bars.length ? bars[bars.length - 1].t1 : task.created_at ?? task.started_at ?? now;
+    bars.push({
+      t0: waitStart,
+      t1: Math.max(waitStart + min, now),
+      kind: "blocked-wait",
+      tone: statusTone("blocked")
+    });
+    return bars;
+  }
   if (validRuns.length > 1) {
     const bars = [];
     for (const r of validRuns) {
@@ -512,6 +537,10 @@ function Bar({ task, bar, pxPerSec, min, onOpen }) {
     style.background = `color-mix(in srgb, ${tone} 22%, transparent)`;
     style.border = `1px solid ${tone}`;
     title = `${task.title} · en cours`;
+  } else if (bar.kind === "blocked-wait") {
+    style.border = `1px dashed ${tone}`;
+    style.background = `color-mix(in srgb, ${tone} 10%, transparent)`;
+    title = `${task.title} · bloquée — en attente d'action`;
   } else {
     style.border = `1px dashed ${tone}`;
     style.background = "transparent";
@@ -603,7 +632,6 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
   const bars = taskBars(task, now);
   const label = task.label ? `[${task.label}]` : "";
   const name = cleanTitle(task.title, task.label);
-  const isBlocked = task.status === "blocked";
   const connector = isChild ? jsx2("span", {
     className: "absolute",
     style: {
@@ -620,6 +648,29 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     }
   }) : null;
   const dotColor = (bars.length > 0 ? bars[bars.length - 1]?.tone : null) || statusTone(task.status);
+  const STATUS_ICON = {
+    triage: "question",
+    todo: "circle-large-outline",
+    scheduled: "clock",
+    ready: "play-circle",
+    running: "pulse",
+    blocked: "warning",
+    review: "eye",
+    done: "check",
+    archived: "archive"
+  };
+  const statusIcon = STATUS_ICON[task.status] || "circle-large-outline";
+  const statusTitle = {
+    triage: "Triage",
+    todo: "Todo",
+    scheduled: "Planifiée",
+    ready: "Prête",
+    running: "En cours",
+    blocked: "Tâche bloquée",
+    review: "En revue",
+    done: "Terminée",
+    archived: "Archivée"
+  }[task.status] || task.status;
   return jsxs2("div", {
     className: cn2(
       "group grid items-center border-b border-(--ui-stroke-tertiary)/40 transition-colors cursor-pointer",
@@ -660,11 +711,18 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             className: "shrink-0 rounded cursor-pointer mr-1",
             "aria-label": `Sélectionner ${name}`
           }),
-          isBlocked ? jsx2("span", {
-            className: "inline-flex items-center justify-center shrink-0 text-[#f87171]",
-            title: "Tâche bloquée",
-            children: jsx2(Codicon2, { name: "warning", size: "0.85rem" })
-          }) : jsx2("span", { className: "h-1.5 w-1.5 rounded-full shrink-0 self-center ml-0.5", style: { backgroundColor: dotColor } }),
+          jsx2("span", {
+            className: "inline-flex items-center justify-center shrink-0 self-center",
+            style: { color: dotColor },
+            title: statusTitle,
+            children: task.status === "running" ? jsxs2("span", {
+              className: "relative inline-flex items-center justify-center",
+              children: [
+                jsx2("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }),
+                jsx2(Codicon2, { name: statusIcon, size: "0.85rem" })
+              ]
+            }) : jsx2(Codicon2, { name: statusIcon, size: "0.85rem" })
+          }),
           showBoardBadge && task.board ? jsx2(Badge, {
             size: "xs",
             variant: "outline",

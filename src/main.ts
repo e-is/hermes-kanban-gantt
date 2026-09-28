@@ -149,6 +149,12 @@ function Bar({ task, bar, pxPerSec, min, onOpen }) {
     style.background = `color-mix(in srgb, ${tone} 22%, transparent)`
     style.border = `1px solid ${tone}`
     title = `${task.title} · en cours`
+  } else if (bar.kind === 'blocked-wait') {
+    // Blocked waiting bar: dashed red outline + light red tint — reads as
+    // "waiting for action" (like todo dashes) without looking like a run.
+    style.border = `1px dashed ${tone}`
+    style.background = `color-mix(in srgb, ${tone} 10%, transparent)`
+    title = `${task.title} · bloquée — en attente d'action`
   } else {
     // todo/queued: minimal dashed bar bordered in the STATUS tone (blue for
     // ready, etc.) so queued tasks are distinguishable at a glance
@@ -253,7 +259,6 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
   const bars = taskBars(task, now)
   const label = task.label ? `[${task.label}]` : ''
   const name = cleanTitle(task.title, task.label)
-  const isBlocked = task.status === 'blocked'
 
   const connector = isChild
     ? jsx('span', {
@@ -274,6 +279,25 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     : null
 
   const dotColor = (bars.length > 0 ? bars[bars.length - 1]?.tone : null) || statusTone(task.status)
+  // Representative Codicon per status, colored with the status tone — replaces
+  // the tiny status dot (kept from the blocked warning icon it already used).
+  const STATUS_ICON = {
+    triage: 'question',
+    todo: 'circle-large-outline',
+    scheduled: 'clock',
+    ready: 'play-circle',
+    running: 'pulse',
+    blocked: 'warning',
+    review: 'eye',
+    done: 'check',
+    archived: 'archive'
+  }
+  const statusIcon = STATUS_ICON[task.status] || 'circle-large-outline'
+  const statusTitle = ({
+    triage: 'Triage', todo: 'Todo', scheduled: 'Planifiée', ready: 'Prête',
+    running: 'En cours', blocked: 'Tâche bloquée', review: 'En revue',
+    done: 'Terminée', archived: 'Archivée'
+  })[task.status] || task.status
 
   // 2-col grid (label | timeline): the label cell is position:sticky left so
   // names stay visible while the timeline scrolls horizontally.
@@ -330,13 +354,20 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             className: 'shrink-0 rounded cursor-pointer mr-1',
             'aria-label': `Sélectionner ${name}`
           }),
-          isBlocked
-            ? jsx('span', {
-                className: 'inline-flex items-center justify-center shrink-0 text-[#f87171]',
-                title: 'Tâche bloquée',
-                children: jsx(Codicon, { name: 'warning', size: '0.85rem' })
-              })
-            : jsx('span', { className: 'h-1.5 w-1.5 rounded-full shrink-0 self-center ml-0.5', style: { backgroundColor: dotColor } }),
+          jsx('span', {
+            className: 'inline-flex items-center justify-center shrink-0 self-center',
+            style: { color: dotColor },
+            title: statusTitle,
+            children: task.status === 'running'
+              ? jsxs('span', {
+                  className: 'relative inline-flex items-center justify-center',
+                  children: [
+                    jsx('div', { className: 'kg-arc', style: { '--kanban-tone': dotColor } }),
+                    jsx(Codicon, { name: statusIcon, size: '0.85rem' })
+                  ]
+                })
+              : jsx(Codicon, { name: statusIcon, size: '0.85rem' })
+          }),
           showBoardBadge && task.board
             ? jsx(Badge, {
                 size: 'xs',

@@ -55,6 +55,36 @@ export function taskBars(task, now, minBarSec) {
   const runs = Array.isArray(task.runs) ? task.runs : [];
   const validRuns = runs.filter(r => r && r.started_at != null);
 
+  // BLOCKED: solid red bars for each FAILED run window only, then a dashed
+  // red "waiting for action" bar from the last run end (or creation) to now —
+  // same waiting grammar as todo bars, so a blocked task no longer reads as
+  // "running today".
+  if (task.status === 'blocked') {
+    const bars = [];
+    for (const r of validRuns) {
+      const s = r.started_at;
+      const e = r.ended_at;
+      if (e == null || e <= s) continue; // unfinished run: no completed window
+      bars.push({
+        t0: s,
+        t1: Math.max(s + min, e),
+        kind: 'done',
+        tone: statusTone('blocked'),
+        runId: r.id,
+        profile: r.profile,
+        outcome: r.outcome || r.status
+      });
+    }
+    const waitStart = bars.length ? bars[bars.length - 1].t1 : (task.created_at ?? task.started_at ?? now);
+    bars.push({
+      t0: waitStart,
+      t1: Math.max(waitStart + min, now),
+      kind: 'blocked-wait',
+      tone: statusTone('blocked')
+    });
+    return bars;
+  }
+
   if (validRuns.length > 1) {
     const bars = [];
     for (const r of validRuns) {

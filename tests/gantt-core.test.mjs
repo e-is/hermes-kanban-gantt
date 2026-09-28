@@ -18,7 +18,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 // ESM export statements.
 const core = await import(join(HERE, '..', 'desktop', 'gantt-core.js'))
 
-const { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, DAY, MIN_BAR } = core
+const { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, DAY, MIN_BAR } = core
 const NOW = 1_800_000_000
 const H = 3600
 
@@ -114,6 +114,57 @@ test('taskBars returns distinct bars for multiple successive runs', () => {
   assert.equal(bars[1].outcome, 'completed')
   assert.equal(bars[2].kind, 'progress')
   assert.equal(bars[2].t1, NOW)
+})
+
+// ── blocked tasks: failed run bars + dashed waiting bar ───────────────────────
+
+test('blocked with failed runs: solid run bars then dashed wait to now', () => {
+  const t = {
+    id: 't_blk',
+    status: 'blocked',
+    created_at: NOW - 6 * DAY,
+    runs: [
+      { id: 1, profile: 'w', started_at: NOW - 5 * DAY, ended_at: NOW - 5 * DAY + 2 * H, outcome: 'failed' },
+      { id: 2, profile: 'w', started_at: NOW - 2 * DAY, ended_at: NOW - 2 * DAY + 1 * H, outcome: 'timed_out' }
+    ]
+  }
+  const bars = taskBars(t, NOW)
+  assert.equal(bars.length, 3)
+  assert.equal(bars[0].kind, 'done')
+  assert.equal(bars[0].tone, statusTone('blocked'))
+  assert.equal(bars[1].kind, 'done')
+  // run ended after 1h but the min-bar floor (2h) extends it
+  assert.equal(bars[1].t1, NOW - 2 * DAY + 2 * H)
+  // waiting bar starts at the LAST run bar end and extends to now
+  assert.equal(bars[2].kind, 'blocked-wait')
+  assert.equal(bars[2].t0, NOW - 2 * DAY + 2 * H)
+  assert.equal(bars[2].t1, NOW)
+  assert.equal(bars[2].tone, statusTone('blocked'))
+})
+
+test('blocked with a single run: wait bar starts at that run end', () => {
+  const t = {
+    id: 't_blk1',
+    status: 'blocked',
+    created_at: NOW - 4 * DAY,
+    runs: [{ id: 1, started_at: NOW - 3 * DAY, ended_at: NOW - 3 * DAY + 30 * 60, outcome: 'failed' }]
+  }
+  const bars = taskBars(t, NOW)
+  assert.equal(bars.length, 2)
+  assert.equal(bars[0].kind, 'done')
+  assert.equal(bars[1].kind, 'blocked-wait')
+  // 30min run extended by the min-bar floor (2h); wait starts there
+  assert.equal(bars[1].t0, NOW - 3 * DAY + 2 * H)
+  assert.equal(bars[1].t1, NOW)
+})
+
+test('blocked without runs: single dashed bar from creation to now', () => {
+  const t = { id: 't_blk0', status: 'blocked', created_at: NOW - 30 * H }
+  const bars = taskBars(t, NOW)
+  assert.equal(bars.length, 1)
+  assert.equal(bars[0].kind, 'blocked-wait')
+  assert.equal(bars[0].t0, NOW - 30 * H)
+  assert.equal(bars[0].t1, NOW)
 })
 
 // ── search filter ─────────────────────────────────────────────────────────────
