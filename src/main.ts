@@ -125,6 +125,7 @@ function Ruler({ min, max, pxPerSec }) {
 }
 
 function Bar({ task, bar, pxPerSec, min, onOpen }) {
+  const i18n = useGanttI18n()
   const left = Math.round((bar.t0 - min) * pxPerSec)
   const top = Math.round((ROW_H - BAR_H) / 2)
   const tone = bar.tone || statusTone(task.status)
@@ -135,32 +136,32 @@ function Bar({ task, bar, pxPerSec, min, onOpen }) {
   if (bar.kind === 'done') {
     style.background = tone === 'var(--ui-text-tertiary)' ? '#60a5fa' : tone
     style.opacity = '0.85'
-    title = `${task.title} · terminée (durée réelle)`
+    title = i18n.barDoneReal(task.title)
   } else if (bar.kind === 'done-instant') {
     style.background = tone === 'var(--ui-text-tertiary)' ? '#60a5fa' : tone
     style.opacity = '0.55'
     style.width = style.width || '4px'
     style.borderRadius = '999px'
-    title = `${task.title} · terminée (durée inconnue)`
+    title = i18n.barDoneUnknown(task.title)
   } else if (bar.kind === 'progress') {
     // Gauge (option a): full track [start->now] with a pale tone + fill that
     // grows over time; running cards get the machine-activity arc animation
     // (same visual vocabulary as the official kanban plugin's kanban-arc).
     style.background = `color-mix(in srgb, ${tone} 22%, transparent)`
     style.border = `1px solid ${tone}`
-    title = `${task.title} · en cours`
+    title = i18n.barRunning(task.title)
   } else if (bar.kind === 'blocked-wait') {
     // Blocked waiting bar: dashed red outline + light red tint — reads as
     // "waiting for action" (like todo dashes) without looking like a run.
     style.border = `1px dashed ${tone}`
     style.background = `color-mix(in srgb, ${tone} 10%, transparent)`
-    title = `${task.title} · bloquée — en attente d'action`
+    title = i18n.barBlockedWaiting(task.title)
   } else {
     // todo/queued: minimal dashed bar bordered in the STATUS tone (blue for
     // ready, etc.) so queued tasks are distinguishable at a glance
     style.border = `1px dashed ${tone}`
     style.background = 'transparent'
-    title = `${task.title} · non démarrée`
+    title = i18n.barNotStarted(task.title)
   }
 
   if (bar.t1 != null) {
@@ -381,7 +382,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               task.status === 'running' && 'font-medium',
               isSelected ? 'font-bold text-(--ui-accent)' : ''
             ),
-            title: `${showBoardBadge && task.board ? `[${task.board}] ` : ''}${name} (${task.id}) — cliquer pour le détail`,
+            title: `${showBoardBadge && task.board ? `[${task.board}] ` : ''}${name} (${task.id}) — ${i18n.clickForDetail}`,
             children: [
               task.status === 'running'
                 ? jsx('div', { className: 'kg-arc', style: { '--kanban-tone': dotColor } })
@@ -517,7 +518,7 @@ function Legend({ disabledStatuses, onToggleStatus }) {
         'inline-flex items-center gap-1.5 text-[10px] cursor-pointer bg-transparent border-0 p-0 select-none transition-opacity hover:opacity-100',
         isExcluded ? 'opacity-40 line-through text-(--ui-text-quaternary)' : 'text-(--ui-text-tertiary)'
       ),
-      title: isExcluded ? `Cliquer pour réafficher ${label}` : `Cliquer pour masquer ${label}`,
+      title: isExcluded ? i18n.legendShow(label) : i18n.legendHide(label),
       children: [
         jsx('div', {
           className: 'h-2 w-3 rounded-xs shrink-0',
@@ -938,7 +939,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                 }),
                 jsx('span', {
                   className: 'text-[11px] font-mono text-(--ui-text-quaternary) hover:text-(--ui-text-secondary) cursor-help select-all',
-                  title: `${taskId} — cliquer sur [...] pour copier`,
+                  title: i18n.copyHint(taskId),
                   children: shortId(taskId)
                 })
               ] }),
@@ -1200,7 +1201,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
               // 6. Activité (Derniers événements)
               (data?.task?.events || []).length
                 ? jsxs('div', { className: 'border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1', children: [
-                    jsx('div', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: `Activité (${data.task.events.length})` }),
+                    jsx('div', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: i18n.activity(data.task.events.length) }),
                     jsx('div', { className: 'flex flex-col gap-0.5 max-h-32 overflow-auto', children: data.task.events.slice(-12).reverse().map((e, i) => jsx('div', {
                       key: i,
                       className: 'text-[10px] text-(--ui-text-tertiary)',
@@ -1668,7 +1669,10 @@ export function KanbanGanttPage() {
 const plugin = {
   id: ID,
   name: 'Kanban Gantt',
-  description: 'Vue Gantt (avancement dans le temps) du board kanban — recherche, zoom, détail + actions de la tâche.',
+  // Read by the host from the module itself (contrib/plugins.ts), before
+  // `register` runs and before any locale bundle exists — so this descriptor
+  // cannot follow the app locale: it stays in the bundles' fallback language.
+  description: 'Gantt view (progress over time) of the kanban board — search, zoom, task detail + actions.',
   register(ctx) {
     setPluginDoors(ctx.rest, ctx.storage)
     $baseUrl.set((ctx.storage.get('baseUrl', '') || '').replace(/\/+$/, ''))
@@ -1680,6 +1684,12 @@ const plugin = {
     if (ctx.i18n && typeof ctx.i18n.register === 'function') {
       ctx.i18n.register(GANTT_LOCALES)
     }
+
+    // Registration-time copy (palette entry, pane title) is read once, before
+    // React exists — the SDK's `ctx.i18n.t` is the module-level translator for
+    // exactly those places.
+    const tNow = key =>
+      ctx.i18n && typeof ctx.i18n.t === 'function' ? ctx.i18n.t(key) : GANTT_LOCALES.en[key]
 
     // Inject the machine-activity arc CSS (same visual vocabulary as the
     // official kanban plugin's kanban-arc) once per page load.
@@ -1756,7 +1766,7 @@ const plugin = {
         area: PALETTE_AREA,
         data: {
           id: 'kanbanGantt.open',
-          label: 'Kanban Gantt : ouvrir la vue',
+          label: tNow('openCommand'),
           keywords: ['kanban', 'gantt', 'timeline'],
           run: () => host.navigate('/kanban-gantt')
         }

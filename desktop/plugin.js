@@ -140,6 +140,15 @@ var GANTT_LOCALES = {
     selectAll: "Select all",
     selectTask: (name) => `Select ${name}`,
     tasksColumn: "Tasks",
+    clickForDetail: "click for details",
+    legendShow: (label) => `Click to show ${label}`,
+    legendHide: (label) => `Click to hide ${label}`,
+    barDoneReal: (name) => `${name} · done (actual duration)`,
+    barDoneUnknown: (name) => `${name} · done (duration unknown)`,
+    barRunning: (name) => `${name} · running`,
+    barBlockedWaiting: (name) => `${name} · blocked — waiting for action`,
+    barNotStarted: (name) => `${name} · not started`,
+    copyHint: (id) => `${id} — click [...] to copy`,
     col: {
       triage: "Triage",
       todo: "Todo",
@@ -226,6 +235,15 @@ var GANTT_LOCALES = {
     selectAll: "Tout sélectionner",
     selectTask: (name) => `Sélectionner ${name}`,
     tasksColumn: "Tâches",
+    clickForDetail: "cliquer pour le détail",
+    legendShow: (label) => `Cliquer pour réafficher ${label}`,
+    legendHide: (label) => `Cliquer pour masquer ${label}`,
+    barDoneReal: (name) => `${name} · terminée (durée réelle)`,
+    barDoneUnknown: (name) => `${name} · terminée (durée inconnue)`,
+    barRunning: (name) => `${name} · en cours`,
+    barBlockedWaiting: (name) => `${name} · bloquée — en attente d’action`,
+    barNotStarted: (name) => `${name} · non démarrée`,
+    copyHint: (id) => `${id} — cliquer sur [...] pour copier`,
     col: {
       triage: "Triage",
       todo: "Todo",
@@ -530,6 +548,7 @@ function Ruler({ min, max, pxPerSec }) {
   });
 }
 function Bar({ task, bar, pxPerSec, min, onOpen }) {
+  const i18n = useGanttI18n();
   const left = Math.round((bar.t0 - min) * pxPerSec);
   const top = Math.round((ROW_H - BAR_H) / 2);
   const tone = bar.tone || statusTone(task.status);
@@ -538,25 +557,25 @@ function Bar({ task, bar, pxPerSec, min, onOpen }) {
   if (bar.kind === "done") {
     style.background = tone === "var(--ui-text-tertiary)" ? "#60a5fa" : tone;
     style.opacity = "0.85";
-    title = `${task.title} · terminée (durée réelle)`;
+    title = i18n.barDoneReal(task.title);
   } else if (bar.kind === "done-instant") {
     style.background = tone === "var(--ui-text-tertiary)" ? "#60a5fa" : tone;
     style.opacity = "0.55";
     style.width = style.width || "4px";
     style.borderRadius = "999px";
-    title = `${task.title} · terminée (durée inconnue)`;
+    title = i18n.barDoneUnknown(task.title);
   } else if (bar.kind === "progress") {
     style.background = `color-mix(in srgb, ${tone} 22%, transparent)`;
     style.border = `1px solid ${tone}`;
-    title = `${task.title} · en cours`;
+    title = i18n.barRunning(task.title);
   } else if (bar.kind === "blocked-wait") {
     style.border = `1px dashed ${tone}`;
     style.background = `color-mix(in srgb, ${tone} 10%, transparent)`;
-    title = `${task.title} · bloquée — en attente d'action`;
+    title = i18n.barBlockedWaiting(task.title);
   } else {
     style.border = `1px dashed ${tone}`;
     style.background = "transparent";
-    title = `${task.title} · non démarrée`;
+    title = i18n.barNotStarted(task.title);
   }
   if (bar.t1 != null) {
     style.width = `${Math.max(Math.round((bar.t1 - bar.t0) * pxPerSec), 2)}px`;
@@ -740,7 +759,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               task.status === "running" && "font-medium",
               isSelected ? "font-bold text-(--ui-accent)" : ""
             ),
-            title: `${showBoardBadge && task.board ? `[${task.board}] ` : ""}${name} (${task.id}) — cliquer pour le détail`,
+            title: `${showBoardBadge && task.board ? `[${task.board}] ` : ""}${name} (${task.id}) — ${i18n.clickForDetail}`,
             children: [
               task.status === "running" ? jsx2("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }) : null,
               name
@@ -868,7 +887,7 @@ function Legend({ disabledStatuses, onToggleStatus }) {
         "inline-flex items-center gap-1.5 text-[10px] cursor-pointer bg-transparent border-0 p-0 select-none transition-opacity hover:opacity-100",
         isExcluded ? "opacity-40 line-through text-(--ui-text-quaternary)" : "text-(--ui-text-tertiary)"
       ),
-      title: isExcluded ? `Cliquer pour réafficher ${label}` : `Cliquer pour masquer ${label}`,
+      title: isExcluded ? i18n.legendShow(label) : i18n.legendHide(label),
       children: [
         jsx2("div", {
           className: "h-2 w-3 rounded-xs shrink-0",
@@ -1267,7 +1286,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                 }),
                 jsx2("span", {
                   className: "text-[11px] font-mono text-(--ui-text-quaternary) hover:text-(--ui-text-secondary) cursor-help select-all",
-                  title: `${taskId} — cliquer sur [...] pour copier`,
+                  title: i18n.copyHint(taskId),
                   children: shortId(taskId)
                 })
               ] }),
@@ -1496,7 +1515,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
         })(),
         // 6. Activité (Derniers événements)
         (data?.task?.events || []).length ? jsxs2("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1", children: [
-          jsx2("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: `Activité (${data.task.events.length})` }),
+          jsx2("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.activity(data.task.events.length) }),
           jsx2("div", { className: "flex flex-col gap-0.5 max-h-32 overflow-auto", children: data.task.events.slice(-12).reverse().map((e, i) => jsx2("div", {
             key: i,
             className: "text-[10px] text-(--ui-text-tertiary)",
@@ -1912,7 +1931,10 @@ function KanbanGanttPage() {
 var plugin = {
   id: ID2,
   name: "Kanban Gantt",
-  description: "Vue Gantt (avancement dans le temps) du board kanban — recherche, zoom, détail + actions de la tâche.",
+  // Read by the host from the module itself (contrib/plugins.ts), before
+  // `register` runs and before any locale bundle exists — so this descriptor
+  // cannot follow the app locale: it stays in the bundles' fallback language.
+  description: "Gantt view (progress over time) of the kanban board — search, zoom, task detail + actions.",
   register(ctx) {
     setPluginDoors(ctx.rest, ctx.storage);
     $baseUrl.set((ctx.storage.get("baseUrl", "") || "").replace(/\/+$/, ""));
@@ -1923,6 +1945,7 @@ var plugin = {
     if (ctx.i18n && typeof ctx.i18n.register === "function") {
       ctx.i18n.register(GANTT_LOCALES);
     }
+    const tNow = (key) => ctx.i18n && typeof ctx.i18n.t === "function" ? ctx.i18n.t(key) : GANTT_LOCALES.en[key];
     if (!document.getElementById("kg-arc-style")) {
       const style = document.createElement("style");
       style.id = "kg-arc-style";
@@ -1995,7 +2018,7 @@ var plugin = {
         area: PALETTE_AREA,
         data: {
           id: "kanbanGantt.open",
-          label: "Kanban Gantt : ouvrir la vue",
+          label: tNow("openCommand"),
           keywords: ["kanban", "gantt", "timeline"],
           run: () => host.navigate("/kanban-gantt")
         }
