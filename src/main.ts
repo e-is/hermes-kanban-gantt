@@ -64,6 +64,7 @@ import { getStorage } from './state'
 import { GANTT_LOCALES, useGanttI18n } from './i18n'
 import { TitlebarBoardSwitcher } from './ui/TitlebarBoardSwitcher'
 import { TaskRelations } from './ui/TaskRelations'
+import { ReparentChoiceDialog, reasonLabel } from './ui/ReparentChooser'
 
 const ID = 'kanban-gantt'
 
@@ -81,6 +82,19 @@ const ZOOM_STEP = 0.05
 
 
 import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, DAY, MIN_BAR } from './core/gantt-core.ts'
+
+
+/** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
+ *  status, so the domain's wording is matched when present and a generic
+ *  sentence covers the rest (the UI greys refused targets before the call). */
+function humanReparentError(error, i18n) {
+  const message = String((error && error.message) || error || '')
+  if (/cycle/i.test(message)) return i18n.errCycle
+  if (/running/i.test(message)) return i18n.errRunning
+  if (/not on board/i.test(message)) return i18n.errOtherBoard
+  if (/own parent|itself/i.test(message)) return i18n.errSelf
+  return i18n.errReparent
+}
 
 
 /** Apply a new backend base URL and refetch everything. */
@@ -257,7 +271,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
   })
 }
 
-function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge }) {
+function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
   const i18n = useGanttI18n()
   const labelW = useValue($labelW)
   const bars = taskBars(task, now)
@@ -372,9 +386,33 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             className: cn(
               'relative inline-flex items-center min-w-0 flex-1 whitespace-nowrap overflow-hidden text-ellipsis text-[11px] text-left select-none px-1 py-0.5 rounded',
               task.status === 'running' && 'font-medium',
-              isSelected ? 'font-bold text-(--ui-accent)' : ''
+              isSelected ? 'font-bold text-(--ui-accent)' : '',
+              // Drop feedback while another row is being dragged over this one.
+              dragState === 'ok' && 'ring-1 ring-inset ring-(--ui-accent) bg-(--ui-accent)/10',
+              dragState === 'no' && 'ring-1 ring-inset ring-red-500/60 bg-red-500/10'
             ),
             title: `${showBoardBadge && task.board ? `[${task.board}] ` : ''}${name} (${task.id}) — ${i18n.clickForDetail}`,
+            // Drag handle = the name cell only: the checkbox, the bars and the
+            // width handles keep their own gestures, and a plain click still
+            // opens the detail (native DnD needs actual movement to start).
+            draggable: true,
+            onDragStart: event => {
+              event.dataTransfer.setData('text/plain', task.id)
+              event.dataTransfer.effectAllowed = 'move'
+              onDragStartTask(task.id)
+            },
+            onDragEnd: () => onDragEndTask(),
+            onDragOver: event => {
+              if (!onDropOn) return
+              event.preventDefault()
+              event.dataTransfer.dropEffect = dragState === 'ok' ? 'move' : 'none'
+            },
+            onDrop: event => {
+              if (!onDropOn) return
+              event.preventDefault()
+              event.stopPropagation()
+              onDropOn(task.id)
+            },
             children: [
               task.status === 'running'
                 ? jsx('div', { className: 'kg-arc', style: { '--kanban-tone': dotColor } })
@@ -1276,6 +1314,12 @@ export function KanbanGanttPage() {
   })
 
   const [showArchived, setShowArchived] = useState(false)
+  // ── re-parenting: drag & drop plus the keyboard-reachable picker ───────────
+  const [dragId, setDragId] = useState(null)
+  const [pendingReparent, setPendingReparent] = useState(null)   // { childId, parentId }
+  const [reparentNote, setReparentNote] = useState(null)
+  const [reparentError, setReparentError] = useState(null)
+  const allTasks = data?.tasks || []
   const [selectedAssignees, setSelectedAssignees] = useState(() => new Set())
   const [disabledStatuses, setDisabledStatuses] = useState(() => {
     const saved = getStorage() ? getStorage().get('disabledStatuses', null) : null
@@ -1333,6 +1377,73 @@ export function KanbanGanttPage() {
     const allAssignees = Array.from(new Set(data.tasks.map(t => t.assignee).filter(Boolean))).sort()
     return { rows, domain, total: visible.length, tasks: visible, allAssignees }
   }, [data, showArchived, disabledStatuses, selectedAssignees, search])
+
+  // ── re-parenting ──────────────────────────────────────────────────────────
+  // Candidacy comes from the core (node-tested), so a row only ever paints what
+  // the domain would accept: itself, its own subtree, another board, a finished
+  // task and an existing parent are all refused up front.
+  const boardOf = id => {
+    const task = allTasks.find(t => t.id === id)
+    if (task && task.board) return task.board
+    return board && board !== 'all' && board !== '*' ? board : undefined
+  }
+  const dropMap = useMemo(
+    () => (dragId ? new Map(dropCandidates(allTasks, dragId, boardOf(dragId)).map(c => [c.task.id, c])) : null),
+    [dragId, allTasks, board])
+
+  const reparentMutation = useMutation({
+    mutationFn: ({ childId, parentId, mode }) => setParent(childId, parentId, mode, board),
+    onSuccess: response => {
+      setPendingReparent(null)
+      setReparentError(null)
+      const child = allTasks.find(t => t.id === response.task_id)
+      const parent = allTasks.find(t => t.id === response.parent_id)
+      const childName = child ? child.title : response.task_id
+      const parentName = parent ? parent.title : response.parent_id
+      // A re-parent can GATE the task (ready -> todo) — say so rather than let
+      // the status change appear on its own.
+      setReparentNote(response.gated ? i18n.gatedNotice(childName) : i18n.movedUnder(childName, parentName))
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
+    },
+    onError: error => {
+      setPendingReparent(null)
+      setReparentNote(null)
+      setReparentError(humanReparentError(error, i18n))
+    }
+  })
+
+  const unlinkMutation = useMutation({
+    mutationFn: ({ childId, parentId }) => removeParent(childId, parentId, board),
+    onSuccess: () => {
+      setReparentError(null)
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
+    },
+    onError: error => setReparentError(humanReparentError(error, i18n))
+  })
+
+  const handleDragStart = id => {
+    setDragId(id)
+    setReparentError(null)
+  }
+
+  const handleDropOn = targetId => {
+    const childId = dragId
+    setDragId(null)
+    if (!childId || childId === targetId) return
+    const candidate = dropMap ? dropMap.get(targetId) : null
+    if (candidate && !candidate.allowed) {
+      setReparentError(reasonLabel(candidate.reason, i18n))
+      return
+    }
+    const child = allTasks.find(t => t.id === childId)
+    const parents = (child && child.parents) || []
+    // Already parented: ask (add vs replace) instead of guessing.
+    if (parents.length > 0) {
+      setPendingReparent({ childId, parentId: targetId })
+      return
+    }
+    reparentMutation.mutate({ childId, parentId: targetId, mode: 'add' })
+  }
 
   const handleToggleCheck = (id, checked, nativeEvent) => {
     setSelectedIds(prev => {
@@ -1478,7 +1589,14 @@ export function KanbanGanttPage() {
     isChecked: selectedIds.has(row.task.id),
     onToggleCheck: handleToggleCheck,
     isEven: idx % 2 === 0,
-    showBoardBadge: isAllBoards
+    showBoardBadge: isAllBoards,
+    // Drop feedback only for rows that are not the dragged one.
+    dragState: !dropMap || row.task.id === dragId
+      ? null
+      : (dropMap.get(row.task.id)?.allowed ? 'ok' : 'no'),
+    onDragStartTask: handleDragStart,
+    onDragEndTask: () => setDragId(null),
+    onDropOn: handleDropOn
   }, row.task.id))
 
   // Determine dominant status priority for the top task count badge:
@@ -1702,7 +1820,45 @@ export function KanbanGanttPage() {
               if (getStorage()) getStorage().set('drawerDocked', next ? '1' : '0')
             }
           })
-        : null
+        : null,
+      // Re-parent feedback: a drop that gated the task, or a refusal.
+      (reparentNote || reparentError)
+        ? jsx('div', {
+            className: cn(
+              'flex items-center gap-1.5 rounded border px-2 py-1 text-[11px]',
+              reparentError
+                ? 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300'
+                : 'border-(--ui-stroke-tertiary) bg-(--ui-bg-tertiary) text-(--ui-text-secondary)'
+            ),
+            children: [
+              jsx(Codicon, { name: reparentError ? 'error' : 'info', size: '0.8rem' }),
+              jsx('span', { className: 'min-w-0 flex-1', children: reparentError || reparentNote }),
+              jsx('button', {
+                type: 'button',
+                'aria-label': i18n.close,
+                className: 'shrink-0 cursor-pointer rounded border-0 bg-transparent p-0.5 text-(--ui-text-quaternary) hover:text-(--ui-text-primary)',
+                onClick: () => { setReparentNote(null); setReparentError(null) },
+                children: jsx(Codicon, { name: 'close', size: '0.75rem' })
+              })
+            ]
+          })
+        : null,
+      // Asked only when the dropped task already has parents: add vs replace.
+      jsx(ReparentChoiceDialog, {
+        open: Boolean(pendingReparent),
+        targetTitle: (() => {
+          if (!pendingReparent) return ''
+          const target = allTasks.find(t => t.id === pendingReparent.parentId)
+          return target ? target.title : pendingReparent.parentId
+        })(),
+        parents: pendingReparent ? relationsOf(allTasks, pendingReparent.childId).parents : [],
+        busy: reparentMutation.isPending || unlinkMutation.isPending,
+        onAdd: () => reparentMutation.mutate({ ...pendingReparent, mode: 'add' }),
+        onReplace: () => reparentMutation.mutate({ ...pendingReparent, mode: 'replace' }),
+        onRemoveParent: parentId => unlinkMutation.mutate({ childId: pendingReparent.childId, parentId }),
+        onClose: () => setPendingReparent(null),
+        i18n
+      })
     ]
   })
 }
