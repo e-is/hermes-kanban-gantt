@@ -1,4 +1,4 @@
-import { Button, cn, Codicon, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, useQuery, useQueryClient, useValue } from '@hermes/plugin-sdk'
+import { Button, cn, Codicon, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, useQuery, useQueryClient, useValue } from '@hermes/plugin-sdk'
 
 import { $boardSlug, apiBase, apiFetch, getStorage } from '../state'
 import { useGanttI18n } from '../i18n'

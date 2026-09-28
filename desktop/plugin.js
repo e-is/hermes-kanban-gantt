@@ -254,7 +254,7 @@ function useGanttI18n() {
 }
 
 // src/ui/TitlebarBoardSwitcher.tsx
-import { Button, cn, Codicon, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, useQuery, useQueryClient, useValue } from "@hermes/plugin-sdk";
+import { Button, cn, Codicon, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, useQuery, useQueryClient, useValue } from "@hermes/plugin-sdk";
 import { jsx, jsxs } from "react/jsx-runtime";
 function TitlebarBoardSwitcher() {
   const board = useValue($boardSlug);
