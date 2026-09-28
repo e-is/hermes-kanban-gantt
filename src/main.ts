@@ -27,6 +27,11 @@ import {
   cn,
   Codicon,
   Contribute,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -35,11 +40,19 @@ import {
   EmptyState,
   ErrorState,
   host,
+  Input,
   Loader,
   profileColor,
   profileColorSoft,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Streamdown,
   Switch,
+  Textarea,
+  Tip,
   useMutation,
   usePluginI18n,
   useQuery,
@@ -1214,6 +1227,169 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
   })
 }
 
+/* ───────────────────────────── new-task dialog ─────────────────────────────── */
+
+const $newTaskOpen = atom(false)
+
+/** Local Field wrapper mirroring the official kanban dialog's label+control
+ *  stack (the desktop's `Field` component is not SDK-exported). */
+function Field({ label, children }) {
+  return jsxs('label', {
+    className: 'flex flex-col gap-1.5',
+    children: [
+      jsx('span', { className: 'text-[0.6875rem] font-medium text-(--ui-text-tertiary)', children: label }),
+      children
+    ]
+  })
+}
+
+const NO_PARENT = '__none__'
+
+/**
+ * Create-task dialog — copied from the official kanban plugin's NewTaskDialog
+ * (board.tsx), trimmed to the fields a Gantt add needs: title, description,
+ * priority, assignee, parent and the triage escape hatch. Creation runs
+ * through the plugin backend POST /tasks → kanban_db.create_task, so every
+ * invariant (parent gating, workspace, event log) is kept.
+ */
+function NewTaskDialog({ open, onClose, assignees = [], parents = [] }) {
+  const i18n = useGanttI18n()
+  const queryClient = useQueryClient()
+  const board = useValue($boardSlug)
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [priority, setPriority] = useState('0')
+  const [assignee, setAssignee] = useState('')
+  const [parent, setParent] = useState(NO_PARENT)
+  const [triage, setTriage] = useState(false)
+  const [error, setError] = useState(null)
+
+  // Reset per open — the dialog is externally controlled.
+  useEffect(() => {
+    if (open) {
+      setTitle('')
+      setBody('')
+      setPriority('0')
+      setAssignee('')
+      setParent(NO_PARENT)
+      setTriage(false)
+      setError(null)
+    }
+  }, [open])
+
+  const mutation = useMutation({
+    mutationFn: payload =>
+      apiFetch(`/tasks${board ? `?board=${encodeURIComponent(board)}` : ''}`, { method: 'POST', body: payload }),
+    onSuccess: result => {
+      host.notify({ kind: 'success', message: i18n.taskCreated(result?.task_id || '') })
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+      onClose()
+    },
+    onError: err => setError(String(err?.message || err))
+  })
+
+  const submit = () => {
+    const trimmed = title.trim()
+    if (!trimmed || mutation.isPending) return
+    mutation.mutate({
+      title: trimmed,
+      body: body.trim() || undefined,
+      priority: Number(priority) || 0,
+      assignee: assignee || undefined,
+      parents: parent !== NO_PARENT ? [parent] : undefined,
+      triage
+    })
+  }
+
+  return jsx(Dialog, {
+    onOpenChange: o => !o && onClose(),
+    open,
+    children: jsx(DialogContent, {
+      className: 'w-[min(36rem,94vw)] max-w-none',
+      children: jsxs('div', {
+        className: 'flex flex-col gap-3',
+        children: [
+          jsxs(DialogHeader, { children: [jsx(DialogTitle, { children: i18n.newTask })] }),
+          jsx(Input, {
+            autoFocus: true,
+            placeholder: i18n.titlePlaceholder,
+            value: title,
+            onInput: e => setTitle(e.target.value),
+            onKeyDown: e => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                submit()
+              }
+            }
+          }),
+          jsx(Textarea, {
+            className: 'min-h-20',
+            placeholder: i18n.descPlaceholder,
+            value: body,
+            onInput: e => setBody(e.target.value)
+          }),
+          jsxs('div', {
+            className: 'grid grid-cols-2 gap-3',
+            children: [
+              jsx(Field, {
+                label: i18n.priority,
+                children: jsx(Input, {
+                  type: 'number',
+                  value: priority,
+                  onInput: e => setPriority(e.target.value)
+                })
+              }),
+              jsx(Field, {
+                label: i18n.assignee,
+                children: jsxs(Select, {
+                  onValueChange: setAssignee,
+                  value: assignee,
+                  children: [
+                    jsx(SelectTrigger, { children: jsx(SelectValue, { placeholder: i18n.unassigned }) }),
+                    jsxs(SelectContent, { children: [
+                      jsx(SelectItem, { value: '', children: i18n.unassigned }),
+                      ...assignees.filter(a => a !== assignee).map(a =>
+                        jsx(SelectItem, { key: a, value: a, children: a }, a))
+                    ] })
+                  ]
+                })
+              })
+            ]
+          }),
+          jsx(Field, {
+            label: i18n.parent,
+            children: jsxs(Select, {
+              onValueChange: setParent,
+              value: parent,
+              children: [
+                jsx(SelectTrigger, { children: jsx(SelectValue, { placeholder: i18n.noParent }) }),
+                jsxs(SelectContent, { children: [
+                  jsx(SelectItem, { value: NO_PARENT, children: i18n.noParent }),
+                  ...parents.filter(p => p.id !== parent).map(p =>
+                    jsx(SelectItem, { key: p.id, value: p.id, children: p.title || p.id }, p.id))
+                ] })
+              ]
+            })
+          }),
+          jsxs('label', {
+            className: 'flex cursor-pointer items-center gap-2 text-[0.75rem] text-(--ui-text-secondary)',
+            children: [
+              jsx(Switch, { 'aria-label': i18n.triageMode, checked: triage, onCheckedChange: setTriage, size: 'xs' }),
+              i18n.triageMode
+            ]
+          }),
+          error ? jsx('span', { className: 'text-[0.75rem] text-destructive', children: error }) : null,
+          jsxs(DialogFooter, { children: [
+            jsx(Button, { onClick: onClose, variant: 'ghost', size: 'sm', children: i18n.cancel }),
+            jsx(Button, { disabled: !title.trim() || mutation.isPending, onClick: submit, size: 'sm',
+              children: mutation.isPending ? i18n.creating : i18n.create })
+          ] })
+        ]
+      })
+    })
+  })
+}
+
 /* ───────────────────────────────────── page ───────────────────────────────── */
 
 export function KanbanGanttPage() {
@@ -1222,6 +1398,7 @@ export function KanbanGanttPage() {
   const base = useValue($baseUrl)
   const board = useValue($boardSlug)
   const openTaskId = useValue($openTaskId)
+  const isNewTaskOpen = useValue($newTaskOpen)
   const labelW = useValue($labelW)
   const drawerW = useValue($drawerW)
   const drawerDocked = useValue($drawerDocked)
@@ -1530,7 +1707,22 @@ export function KanbanGanttPage() {
                     onInput: event => setSearch(event.target.value)
                   })
                 ]
-              })
+              }),
+              // "+ New task" — opens the create-task dialog (official kanban
+              // modal, trimmed). Hidden in all-boards mode: creation needs a
+              // concrete board, which is resolved from the selection there.
+              board && !isAllBoards
+                ? jsxs(Button, {
+                    size: 'xs',
+                    variant: 'outline',
+                    className: 'gap-1 ml-1',
+                    onClick: () => $newTaskOpen.set(true),
+                    children: [
+                      jsx(Codicon, { name: 'add', size: '0.85rem' }),
+                      i18n.newTask
+                    ]
+                  })
+                : null
             ]
           }),
 
@@ -1661,7 +1853,14 @@ export function KanbanGanttPage() {
               if (getStorage()) getStorage().set('drawerDocked', next ? '1' : '0')
             }
           })
-        : null
+        : null,
+
+      jsx(NewTaskDialog, {
+        open: Boolean(isNewTaskOpen),
+        onClose: () => $newTaskOpen.set(false),
+        assignees: derived.allAssignees || [],
+        parents: (derived.rows || []).map(r => ({ id: r.task.id, title: r.task.title }))
+      })
     ]
   })
 }

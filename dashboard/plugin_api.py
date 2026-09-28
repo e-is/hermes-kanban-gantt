@@ -620,6 +620,50 @@ class CommentBody(BaseModel):
     author: Optional[str] = "gantt"
 
 
+class CreateTaskBody(BaseModel):
+    title: str
+    body: Optional[str] = None
+    priority: int = 0
+    assignee: Optional[str] = None
+    parents: list[str] = []
+    triage: bool = False
+    # scratch: no project workspace; None inherits the board's default
+    workspace_kind: Optional[str] = "scratch"
+
+
+@router.post("/tasks")
+def create_task(payload: CreateTaskBody, board: Optional[str] = Query(None)):
+    """Create a task through the domain layer (same create path as the CLI /
+    official kanban plugin). Returns the created task id."""
+    from hermes_cli import kanban_db
+
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+    slug = _resolve_board(board)
+    if slug in ("all", "*"):
+        slug = _resolve_board(None)
+        if slug in ("all", "*"):
+            slug = "default"
+    conn = _connect(slug, ro=False)
+    try:
+        parents = [p.strip() for p in payload.parents if p and p.strip()]
+        task_id = kanban_db.create_task(
+            conn,
+            title=title,
+            body=(payload.body or "").strip() or None,
+            assignee=(payload.assignee or "").strip() or None,
+            created_by="kanban-gantt",
+            priority=payload.priority,
+            parents=parents,
+            triage=payload.triage,
+            workspace_kind=payload.workspace_kind or "scratch",
+        )
+        return {"task_id": task_id, "board": slug}
+    finally:
+        conn.close()
+
+
 @router.post("/tasks/{task_id}/comments")
 def add_comment(task_id: str, payload: CommentBody, board: Optional[str] = Query(None)):
     from hermes_cli import kanban_db

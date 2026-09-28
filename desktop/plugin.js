@@ -7,11 +7,17 @@
 
 // src/main.ts
 import {
+  atom as atom2,
   Badge,
   Button as Button2,
   cn as cn2,
   Codicon as Codicon2,
   Contribute,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu as DropdownMenu2,
   DropdownMenuContent as DropdownMenuContent2,
   DropdownMenuItem as DropdownMenuItem2,
@@ -20,10 +26,18 @@ import {
   EmptyState,
   ErrorState,
   host,
+  Input,
   Loader,
   profileColor,
   profileColorSoft,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Streamdown,
+  Switch,
+  Textarea,
   useMutation,
   useQuery as useQuery2,
   useQueryClient as useQueryClient2,
@@ -84,6 +98,18 @@ var GANTT_LOCALES = {
     nav: "Kanban Gantt",
     openCommand: "Kanban Gantt: Open timeline view",
     refresh: "Refresh",
+    newTask: "New task",
+    titlePlaceholder: "Task title…",
+    descPlaceholder: "Description (markdown)…",
+    priority: "Priority",
+    assignee: "Assignee",
+    parent: "Parent task",
+    noParent: "No parent",
+    triageMode: "Send to Triage (do not dispatch)",
+    cancel: "Cancel",
+    create: "Create",
+    creating: "Creating…",
+    taskCreated: (id) => `Task ${id.slice(0, 8)} created`,
     backend: "Backend:",
     allBoards: "All boards",
     board: "Board:",
@@ -179,6 +205,18 @@ var GANTT_LOCALES = {
     nav: "Gantt Kanban",
     openCommand: "Gantt Kanban : ouvrir la vue chronologique",
     refresh: "Actualiser",
+    newTask: "Nouvelle tâche",
+    titlePlaceholder: "Titre de la tâche…",
+    descPlaceholder: "Description (markdown)…",
+    priority: "Priorité",
+    assignee: "Assignée à",
+    parent: "Tâche parente",
+    noParent: "Aucun parent",
+    triageMode: "Envoyer en triage (pas de dispatch)",
+    cancel: "Annuler",
+    create: "Créer",
+    creating: "Création…",
+    taskCreated: (id) => `Tâche ${id.slice(0, 8)} créée`,
     backend: "Backend :",
     allBoards: "Tous les boards",
     board: "Board :",
@@ -1526,12 +1564,157 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
     ]
   });
 }
+var $newTaskOpen = atom2(false);
+function Field({ label, children }) {
+  return jsxs2("label", {
+    className: "flex flex-col gap-1.5",
+    children: [
+      jsx2("span", { className: "text-[0.6875rem] font-medium text-(--ui-text-tertiary)", children: label }),
+      children
+    ]
+  });
+}
+var NO_PARENT = "__none__";
+function NewTaskDialog({ open, onClose, assignees = [], parents = [] }) {
+  const i18n = useGanttI18n();
+  const queryClient2 = useQueryClient2();
+  const board = useValue2($boardSlug);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [priority, setPriority] = useState("0");
+  const [assignee, setAssignee] = useState("");
+  const [parent, setParent] = useState(NO_PARENT);
+  const [triage, setTriage] = useState(false);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    if (open) {
+      setTitle("");
+      setBody("");
+      setPriority("0");
+      setAssignee("");
+      setParent(NO_PARENT);
+      setTriage(false);
+      setError(null);
+    }
+  }, [open]);
+  const mutation = useMutation({
+    mutationFn: (payload) => apiFetch(`/tasks${board ? `?board=${encodeURIComponent(board)}` : ""}`, { method: "POST", body: payload }),
+    onSuccess: (result) => {
+      host.notify({ kind: "success", message: i18n.taskCreated(result?.task_id || "") });
+      void queryClient2.invalidateQueries({ queryKey: ["kanban-gantt"] });
+      onClose();
+    },
+    onError: (err) => setError(String(err?.message || err))
+  });
+  const submit = () => {
+    const trimmed = title.trim();
+    if (!trimmed || mutation.isPending) return;
+    mutation.mutate({
+      title: trimmed,
+      body: body.trim() || void 0,
+      priority: Number(priority) || 0,
+      assignee: assignee || void 0,
+      parents: parent !== NO_PARENT ? [parent] : void 0,
+      triage
+    });
+  };
+  return jsx2(Dialog, {
+    onOpenChange: (o) => !o && onClose(),
+    open,
+    children: jsx2(DialogContent, {
+      className: "w-[min(36rem,94vw)] max-w-none",
+      children: jsxs2("div", {
+        className: "flex flex-col gap-3",
+        children: [
+          jsxs2(DialogHeader, { children: [jsx2(DialogTitle, { children: i18n.newTask })] }),
+          jsx2(Input, {
+            autoFocus: true,
+            placeholder: i18n.titlePlaceholder,
+            value: title,
+            onInput: (e) => setTitle(e.target.value),
+            onKeyDown: (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submit();
+              }
+            }
+          }),
+          jsx2(Textarea, {
+            className: "min-h-20",
+            placeholder: i18n.descPlaceholder,
+            value: body,
+            onInput: (e) => setBody(e.target.value)
+          }),
+          jsxs2("div", {
+            className: "grid grid-cols-2 gap-3",
+            children: [
+              jsx2(Field, {
+                label: i18n.priority,
+                children: jsx2(Input, {
+                  type: "number",
+                  value: priority,
+                  onInput: (e) => setPriority(e.target.value)
+                })
+              }),
+              jsx2(Field, {
+                label: i18n.assignee,
+                children: jsxs2(Select, {
+                  onValueChange: setAssignee,
+                  value: assignee,
+                  children: [
+                    jsx2(SelectTrigger, { children: jsx2(SelectValue, { placeholder: i18n.unassigned }) }),
+                    jsxs2(SelectContent, { children: [
+                      jsx2(SelectItem, { value: "", children: i18n.unassigned }),
+                      ...assignees.filter((a) => a !== assignee).map((a) => jsx2(SelectItem, { key: a, value: a, children: a }, a))
+                    ] })
+                  ]
+                })
+              })
+            ]
+          }),
+          jsx2(Field, {
+            label: i18n.parent,
+            children: jsxs2(Select, {
+              onValueChange: setParent,
+              value: parent,
+              children: [
+                jsx2(SelectTrigger, { children: jsx2(SelectValue, { placeholder: i18n.noParent }) }),
+                jsxs2(SelectContent, { children: [
+                  jsx2(SelectItem, { value: NO_PARENT, children: i18n.noParent }),
+                  ...parents.filter((p) => p.id !== parent).map((p) => jsx2(SelectItem, { key: p.id, value: p.id, children: p.title || p.id }, p.id))
+                ] })
+              ]
+            })
+          }),
+          jsxs2("label", {
+            className: "flex cursor-pointer items-center gap-2 text-[0.75rem] text-(--ui-text-secondary)",
+            children: [
+              jsx2(Switch, { "aria-label": i18n.triageMode, checked: triage, onCheckedChange: setTriage, size: "xs" }),
+              i18n.triageMode
+            ]
+          }),
+          error ? jsx2("span", { className: "text-[0.75rem] text-destructive", children: error }) : null,
+          jsxs2(DialogFooter, { children: [
+            jsx2(Button2, { onClick: onClose, variant: "ghost", size: "sm", children: i18n.cancel }),
+            jsx2(Button2, {
+              disabled: !title.trim() || mutation.isPending,
+              onClick: submit,
+              size: "sm",
+              children: mutation.isPending ? i18n.creating : i18n.create
+            })
+          ] })
+        ]
+      })
+    })
+  });
+}
 function KanbanGanttPage() {
   const i18n = useGanttI18n();
   const queryClient2 = useQueryClient2();
   const base = useValue2($baseUrl);
   const board = useValue2($boardSlug);
   const openTaskId = useValue2($openTaskId);
+  const isNewTaskOpen = useValue2($newTaskOpen);
   const labelW = useValue2($labelW);
   const drawerW = useValue2($drawerW);
   const drawerDocked = useValue2($drawerDocked);
@@ -1802,7 +1985,20 @@ function KanbanGanttPage() {
                         onInput: (event) => setSearch(event.target.value)
                       })
                     ]
-                  })
+                  }),
+                  // "+ New task" — opens the create-task dialog (official kanban
+                  // modal, trimmed). Hidden in all-boards mode: creation needs a
+                  // concrete board, which is resolved from the selection there.
+                  board && !isAllBoards ? jsxs2(Button2, {
+                    size: "xs",
+                    variant: "outline",
+                    className: "gap-1 ml-1",
+                    onClick: () => $newTaskOpen.set(true),
+                    children: [
+                      jsx2(Codicon2, { name: "add", size: "0.85rem" }),
+                      i18n.newTask
+                    ]
+                  }) : null
                 ]
               }),
               // Board switcher moved to the desktop titlebar band (titleBar.center)
@@ -1924,7 +2120,13 @@ function KanbanGanttPage() {
           $drawerDocked.set(next);
           if (getStorage()) getStorage().set("drawerDocked", next ? "1" : "0");
         }
-      }) : null
+      }) : null,
+      jsx2(NewTaskDialog, {
+        open: Boolean(isNewTaskOpen),
+        onClose: () => $newTaskOpen.set(false),
+        assignees: derived.allAssignees || [],
+        parents: (derived.rows || []).map((r) => ({ id: r.task.id, title: r.task.title }))
+      })
     ]
   });
 }
