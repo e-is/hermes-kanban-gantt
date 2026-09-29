@@ -378,3 +378,41 @@ def test_create_task_idempotency_key_prevents_duplicates(client):
     assert first.json()["task_id"] == second.json()["task_id"]
     snap = _gantt(http, board["slug"])
     assert len([t for t in snap.values() if t["title"] == "[TEST] once only"]) == 1
+
+
+def test_create_task_accepts_the_reference_form_fields(client):
+    """Workspace, skills, model override and goal mode reach the domain."""
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}", json={
+        "title": "[TEST] full form",
+        "body": "described",
+        "workspaceKind": "worktree",
+        "workspacePath": "/tmp/kg-ws",
+        "skills": ["alpha", " beta ", ""],
+        "modelOverride": "openrouter/test-model",
+        "goalMode": True,
+    })
+    assert r.status_code == 200
+    detail = http.get(f"/tasks/{r.json()['task_id']}?board={board['slug']}").json()["task"]
+    assert detail["body"] == "described"
+    assert detail["workspace_kind"] == "worktree"
+    assert detail["workspace_path"] == "/tmp/kg-ws"
+    # blank entries are dropped, the rest trimmed
+    assert [s.strip() for s in (detail.get("skills") or []) if s.strip()] == ["alpha", "beta"]
+    assert detail["model_override"] == "openrouter/test-model"
+
+
+def test_create_task_rejects_an_unknown_workspace_kind(client):
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}",
+                  json={"title": "[TEST] bad ws", "workspaceKind": "nonsense"})
+    assert r.status_code == 400
+    assert "workspaceKind" in r.json()["detail"]
+
+
+def test_projects_endpoint_never_breaks_the_dialog(client):
+    """Projects come from the profile's own projects.db; absent -> empty list."""
+    http, _ = client
+    r = http.get("/projects")
+    assert r.status_code == 200
+    assert isinstance(r.json()["projects"], list)

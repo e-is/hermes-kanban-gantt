@@ -681,9 +681,46 @@ class NewTaskBody(BaseModel):
     priority: Optional[int] = 0
     parentId: Optional[str] = None
     triage: Optional[bool] = False
+    # Full parity with the reference kanban creation form: the workspace the
+    # worker gets, the project it belongs to, the profile's skills, a model
+    # override and goal mode.
+    projectId: Optional[str] = None
+    workspaceKind: Optional[str] = None       # scratch | worktree | dir
+    workspacePath: Optional[str] = None
+    skills: Optional[list[str]] = None
+    modelOverride: Optional[str] = None
+    goalMode: Optional[bool] = False
     # Client-generated, so a double submit returns the SAME task instead of a
     # duplicate (create_task is not idempotent without it).
     idempotencyKey: Optional[str] = None
+
+
+@router.get("/projects")
+def list_projects():
+    """Projects a task can be linked to (read-only; empty when none exist).
+
+    Projects live in the profile's own projects.db, so a failure there must not
+    take the create dialog down — an empty list just means "no project to pick".
+    """
+    from hermes_cli import projects_db
+
+    try:
+        with projects_db.connect_closing() as conn:
+            rows = projects_db.list_projects(conn)
+    except Exception:
+        return {"projects": []}
+    return {
+        "projects": [
+            {
+                "id": p.id,
+                "slug": p.slug,
+                "name": p.name,
+                "path": getattr(p, "primary_path", None),
+                "board": getattr(p, "board_slug", None),
+            }
+            for p in rows
+        ]
+    }
 
 
 @router.post("/tasks")
@@ -699,6 +736,13 @@ def create_task(payload: NewTaskBody, board: Optional[str] = Query(None)):
     title = (payload.title or "").strip()
     if not title:
         raise HTTPException(status_code=400, detail="title is required")
+
+    workspace_kind = (payload.workspaceKind or "").strip() or None
+    if workspace_kind and workspace_kind not in kanban_db.VALID_WORKSPACE_KINDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"workspaceKind must be one of {sorted(kanban_db.VALID_WORKSPACE_KINDS)}",
+        )
 
     slug = _resolve_board(board)
     if slug in ("all", "*"):
@@ -717,17 +761,28 @@ def create_task(payload: NewTaskBody, board: Optional[str] = Query(None)):
                 status_code=409,
                 detail=f"parent {parent_id} is not on board {slug}",
             )
-        task_id = kanban_db.create_task(
-            conn,
-            title=title,
-            body=(payload.body or "").strip() or None,
-            assignee=(payload.assignee or "").strip() or None,
-            priority=int(payload.priority or 0),
-            parents=[parent_id] if parent_id else (),
-            triage=bool(payload.triage),
-            idempotency_key=(payload.idempotencyKey or "").strip() or None,
-            created_by="gantt",
-        )
+        skills = [s.strip() for s in (payload.skills or []) if s and s.strip()]
+        try:
+            task_id = kanban_db.create_task(
+                conn,
+                title=title,
+                body=(payload.body or "").strip() or None,
+                assignee=(payload.assignee or "").strip() or None,
+                priority=int(payload.priority or 0),
+                parents=[parent_id] if parent_id else (),
+                triage=bool(payload.triage),
+                project_id=(payload.projectId or "").strip() or None,
+                workspace_kind=workspace_kind or "scratch",
+                workspace_path=(payload.workspacePath or "").strip() or None,
+                skills=skills or None,
+                model_override=(payload.modelOverride or "").strip() or None,
+                goal_mode=bool(payload.goalMode),
+                idempotency_key=(payload.idempotencyKey or "").strip() or None,
+                created_by="gantt",
+            )
+        except ValueError as exc:
+            # Domain validation (workspace kind, model/provider pairing, …)
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         task = kanban_db.get_task(conn, task_id)
         return {
             "ok": True,
