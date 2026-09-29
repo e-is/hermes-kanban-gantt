@@ -280,10 +280,14 @@ function cleanTitle(title, label) {
  */
 function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection = 'right' }) {
   const drag = useRef(null)
+  const elRef = useRef(null)
   const onPointerDown = e => {
     e.preventDefault()
     e.stopPropagation()
     drag.current = { startPointer: e.clientX, startW: get() }
+    // Keep the pill lit while dragging: the pointer leaves the 10px strip as
+    // soon as the drag starts, so :hover alone would make it vanish mid-drag.
+    if (elRef.current) elRef.current.setAttribute('data-dragging', 'true')
     const onMove = ev => {
       const d = drag.current
       if (!d) return
@@ -296,6 +300,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
       drag.current = null
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      if (elRef.current) elRef.current.removeAttribute('data-dragging')
       if (getStorage()) getStorage().set(storageKey, String(get()))
     }
     window.addEventListener('pointermove', onMove)
@@ -309,18 +314,22 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
       set(resetTo)
       if (getStorage()) getStorage().set(storageKey, String(resetTo))
     },
-    className: cn(
-      'absolute z-40 touch-none transition-colors hover:bg-(--ui-accent)/30 active:bg-(--ui-accent)/50 cursor-col-resize'
-    ),
+    className: 'kg-resize-handle absolute z-40 touch-none cursor-col-resize',
     style: {
       touchAction: 'none',
       // Inline positioning: negative Tailwind offsets may be missing from the
       // desktop's compiled CSS, which shifts the drawer handle ~16px inward.
       top: 0, bottom: 0,
-      ...(growDirection === 'right' ? { right: -5, width: 10 } : { left: -4, width: 8 })
+      ...(growDirection === 'right' ? { right: -5, width: 10 } : { left: -5, width: 10 })
     },
     role: 'separator',
-    'aria-orientation': 'vertical'
+    'aria-orientation': 'vertical',
+    // The affordance itself: the shell's own resizers draw a 4px rounded pill
+    // inside a 10px hit strip, and it must be the SAME vocabulary here — a
+    // Tailwind arbitrary class the desktop never compiled (the old
+    // `hover:bg-(--ui-accent)/30`) painted nothing, which is why the handle
+    // stopped showing any hover feedback. Drawn from the injected stylesheet.
+    children: jsx('span', { className: 'kg-resize-pill' })
   })
 }
 
@@ -1831,7 +1840,7 @@ export function KanbanGanttPage() {
       // room instead of being covered. Carries the view padding (the desktop
       // shell already insets contributed pages; the demo adds its own).
       jsxs('div', {
-        className: 'flex flex-col flex-1 min-h-0 min-w-0 pl-3 py-2',
+        className: 'flex flex-col flex-1 min-h-0 min-w-0 pl-3 pr-3 py-2',
         children: [
 
       // Top header row: Left title + task count badge + blocked badge + filter + search, Center board switcher, Right zoom + new task
@@ -2140,6 +2149,29 @@ const plugin = {
 
     // Inject the machine-activity arc CSS (same visual vocabulary as the
     // official kanban plugin's kanban-arc) once per page load.
+    if (!document.getElementById('kg-handle-style')) {
+      const handleStyle = document.createElement('style')
+      handleStyle.id = 'kg-handle-style'
+      // The desktop's stylesheet is PRECOMPILED: it only carries the utilities the
+      // app itself uses, so an arbitrary class here (the old
+      // `hover:bg-(--ui-accent)/30`) silently paints nothing. The shell draws its
+      // resizers with a plain inline style / own CSS instead, so this plugin does
+      // the same — a 4px rounded pill inside the 10px hit strip, lit on hover and
+      // kept lit while dragging.
+      handleStyle.textContent = `
+.kg-resize-handle { display: flex; align-items: center; justify-content: center; }
+.kg-resize-pill {
+  pointer-events: none; border-radius: 9999px;
+  width: 4px; height: 2.5rem;
+  background: color-mix(in srgb, var(--ui-text-primary) 55%, transparent);
+  opacity: 0; transition: opacity 120ms ease;
+}
+.kg-resize-handle:hover .kg-resize-pill,
+.kg-resize-handle:focus-visible .kg-resize-pill,
+.kg-resize-handle[data-dragging='true'] .kg-resize-pill { opacity: 1; }
+`
+      document.head.appendChild(handleStyle)
+    }
     if (!document.getElementById('kg-arc-style')) {
       const style = document.createElement('style')
       style.id = 'kg-arc-style'

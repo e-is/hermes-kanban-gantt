@@ -45,6 +45,7 @@ var storage = null;
 var socket = null;
 var $baseUrl = atom("");
 var $boardSlug = atom("");
+var $connectionScope = atom("");
 var $labelW = atom(LABEL_W);
 var $drawerW = atom(416);
 var $drawerDocked = atom(false);
@@ -106,7 +107,6 @@ var GANTT_LOCALES = {
     title: "Kanban Gantt",
     nav: "Kanban Gantt",
     openCommand: "Kanban Gantt: Open timeline view",
-    refresh: "Refresh",
     backend: "Backend:",
     allBoards: "All boards",
     board: "Board:",
@@ -261,7 +261,6 @@ var GANTT_LOCALES = {
     title: "Gantt Kanban",
     nav: "Gantt Kanban",
     openCommand: "Gantt Kanban : ouvrir la vue chronologique",
-    refresh: "Actualiser",
     backend: "Backend :",
     allBoards: "Tous les boards",
     board: "Board :",
@@ -433,6 +432,7 @@ var WS_IDLE_MS = Math.round(WS_HEARTBEAT_MS * 2.5);
 var WS_BACKOFF_BASE_MS = 500;
 var WS_BACKOFF_MAX_MS = 1e4;
 var WS_MAX_ATTEMPTS = 1;
+var WS_REARM_MS = 5 * 6e4;
 var WS_STATE = {
   off: "off",
   // not attempted (flag off, oauth/2nd backend, no board)
@@ -487,6 +487,7 @@ function subscribeGantt(socketDoor, opts) {
   let firstTimer = null;
   let idleTimer = null;
   let retryTimer = null;
+  let rearmTimer = null;
   let live = false;
   const clearTimers = () => {
     if (firstTimer) {
@@ -500,6 +501,10 @@ function subscribeGantt(socketDoor, opts) {
     if (retryTimer) {
       clearTimeout(retryTimer);
       retryTimer = null;
+    }
+    if (rearmTimer) {
+      clearTimeout(rearmTimer);
+      rearmTimer = null;
     }
   };
   const drop = (why) => {
@@ -531,6 +536,13 @@ function subscribeGantt(socketDoor, opts) {
       retryTimer = setTimeout(start, delay);
     } else {
       onState && onState(WS_STATE.dead);
+      console.debug(LOG, "re-arming in " + WS_REARM_MS + "ms");
+      rearmTimer = setTimeout(() => {
+        rearmTimer = null;
+        if (disposed) return;
+        attempts = 0;
+        start();
+      }, WS_REARM_MS);
     }
   };
   function start() {
@@ -1054,7 +1066,7 @@ function NewTaskDialog({
   };
   return /* @__PURE__ */ jsx2(Dialog, { open, onOpenChange: (next) => {
     if (!next) onClose();
-  }, children: /* @__PURE__ */ jsxs2(DialogContent, { className: "w-[min(32rem,94vw)] max-w-none", children: [
+  }, children: /* @__PURE__ */ jsxs2(DialogContent, { className: "w-[min(42rem,94vw)] max-w-none overflow-visible", children: [
     /* @__PURE__ */ jsx2(DialogHeader, { children: /* @__PURE__ */ jsx2(DialogTitle, { children: i18n.newTask }) }),
     /* @__PURE__ */ jsxs2("div", { className: "flex max-h-[min(66vh,36rem)] flex-col gap-2.5 overflow-y-auto pr-0.5", children: [
       /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskTitle, children: /* @__PURE__ */ jsx2(
@@ -1517,10 +1529,12 @@ function cleanTitle(title, label) {
 }
 function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection = "right" }) {
   const drag = useRef2(null);
+  const elRef = useRef2(null);
   const onPointerDown = (e) => {
     e.preventDefault();
     e.stopPropagation();
     drag.current = { startPointer: e.clientX, startW: get() };
+    if (elRef.current) elRef.current.setAttribute("data-dragging", "true");
     const onMove = (ev) => {
       const d = drag.current;
       if (!d) return;
@@ -1531,6 +1545,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
       drag.current = null;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      if (elRef.current) elRef.current.removeAttribute("data-dragging");
       if (getStorage()) getStorage().set(storageKey, String(get()));
     };
     window.addEventListener("pointermove", onMove);
@@ -1544,19 +1559,23 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
       set(resetTo);
       if (getStorage()) getStorage().set(storageKey, String(resetTo));
     },
-    className: cn3(
-      "absolute z-40 touch-none transition-colors hover:bg-(--ui-accent)/30 active:bg-(--ui-accent)/50 cursor-col-resize"
-    ),
+    className: "kg-resize-handle absolute z-40 touch-none cursor-col-resize",
     style: {
       touchAction: "none",
       // Inline positioning: negative Tailwind offsets may be missing from the
       // desktop's compiled CSS, which shifts the drawer handle ~16px inward.
       top: 0,
       bottom: 0,
-      ...growDirection === "right" ? { right: -5, width: 10 } : { left: -4, width: 8 }
+      ...growDirection === "right" ? { right: -5, width: 10 } : { left: -5, width: 10 }
     },
     role: "separator",
-    "aria-orientation": "vertical"
+    "aria-orientation": "vertical",
+    // The affordance itself: the shell's own resizers draw a 4px rounded pill
+    // inside a 10px hit strip, and it must be the SAME vocabulary here — a
+    // Tailwind arbitrary class the desktop never compiled (the old
+    // `hover:bg-(--ui-accent)/30`) painted nothing, which is why the handle
+    // stopped showing any hover feedback. Drawn from the injected stylesheet.
+    children: jsx5("span", { className: "kg-resize-pill" })
   });
 }
 function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
@@ -2501,6 +2520,7 @@ function KanbanGanttPage() {
   const queryClient = useQueryClient2();
   const base = useValue2($baseUrl);
   const board = useValue2($boardSlug);
+  const scope = useValue2($connectionScope);
   const openTaskId = useValue2($openTaskId);
   const newTask = useValue2($newTask);
   const moveUnderId = useValue2($moveUnderId);
@@ -2556,7 +2576,7 @@ function KanbanGanttPage() {
         void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt", apiBase(), wsBoard] });
       }
     });
-  }, [wsBoard, socketDoor, queryClient]);
+  }, [wsBoard, socketDoor, queryClient, scope]);
   const [nowTick, setNowTick] = useState3(0);
   useEffect2(() => {
     if (wsState !== WS_STATE.live) return void 0;
@@ -2870,9 +2890,9 @@ function KanbanGanttPage() {
       // room instead of being covered. Carries the view padding (the desktop
       // shell already insets contributed pages; the demo adds its own).
       jsxs5("div", {
-        className: "flex flex-col flex-1 min-h-0 min-w-0 pl-3 py-2",
+        className: "flex flex-col flex-1 min-h-0 min-w-0 pl-3 pr-3 py-2",
         children: [
-          // Top header row: Left title + task count badge + blocked badge + filter + search, Center board switcher, Right refresh
+          // Top header row: Left title + task count badge + blocked badge + filter + search, Center board switcher, Right zoom + new task
           jsxs5("div", {
             className: "flex flex-wrap items-center justify-between gap-2 mb-2",
             children: [
@@ -2944,7 +2964,11 @@ function KanbanGanttPage() {
                     }),
                     jsx5("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${Math.round(zoom * 100)}%` })
                   ] }),
-                  jsx5(Button4, { size: "xs", onClick: () => void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] }), children: i18n.refresh }),
+                  // No Refresh button by design: the update path is the /events push
+                  // (verified live: an out-of-UI write reached the page in ~1 s with
+                  // zero /gantt requests). The 60 s poll remains the safety net for a
+                  // gateway with the push disabled, a client that opted out, or a dead
+                  // socket — so nobody needs a manual reload any more.
                   // Far right: the board's only creation verb.
                   jsx5(Button4, {
                     size: "xs",
@@ -3119,7 +3143,19 @@ var plugin = {
     setPluginDoors(ctx.rest, ctx.storage, ctx.socket);
     $baseUrl.set((ctx.storage.get("baseUrl", "") || "").replace(/\/+$/, ""));
     $boardSlug.set(readStoredBoard(ctx.storage));
-    $wsEnabled.set(ctx.storage.get("ws", "1") === "1");
+    $connectionScope.set(connectionScope());
+    try {
+      const conn = host && host.state && host.state.connectionId;
+      if (conn && typeof conn.listen === "function" && typeof ctx.onDispose === "function") {
+        ctx.onDispose(conn.listen(() => {
+          $connectionScope.set(connectionScope());
+          $boardSlug.set(readStoredBoard(ctx.storage));
+        }));
+      }
+    } catch {
+    }
+    const wsFlag = ctx.storage.get("ws", "1");
+    $wsEnabled.set(!(wsFlag === "0" || wsFlag === 0 || wsFlag === false || wsFlag === "false"));
     $labelW.set(Number(ctx.storage.get("labelW", LABEL_W)) || LABEL_W);
     $drawerW.set(Number(ctx.storage.get("drawerW", 416)) || 416);
     $drawerDocked.set(ctx.storage.get("drawerDocked", "0") === "1");
@@ -3127,6 +3163,23 @@ var plugin = {
       ctx.i18n.register(GANTT_LOCALES);
     }
     const tNow = (key) => ctx.i18n && typeof ctx.i18n.t === "function" ? ctx.i18n.t(key) : GANTT_LOCALES.en[key];
+    if (!document.getElementById("kg-handle-style")) {
+      const handleStyle = document.createElement("style");
+      handleStyle.id = "kg-handle-style";
+      handleStyle.textContent = `
+.kg-resize-handle { display: flex; align-items: center; justify-content: center; }
+.kg-resize-pill {
+  pointer-events: none; border-radius: 9999px;
+  width: 4px; height: 2.5rem;
+  background: color-mix(in srgb, var(--ui-text-primary) 55%, transparent);
+  opacity: 0; transition: opacity 120ms ease;
+}
+.kg-resize-handle:hover .kg-resize-pill,
+.kg-resize-handle:focus-visible .kg-resize-pill,
+.kg-resize-handle[data-dragging='true'] .kg-resize-pill { opacity: 1; }
+`;
+      document.head.appendChild(handleStyle);
+    }
     if (!document.getElementById("kg-arc-style")) {
       const style = document.createElement("style");
       style.id = "kg-arc-style";
