@@ -23,6 +23,16 @@ const GANTT_LOCALES = {
     emptyBoardDesc: board => `Board ${board} returned no tasks.`,
     cannotLoadBoard: 'Cannot load board',
     cannotLoadBoardDesc: base => `Backend kanban-gantt unreachable${base ? ` (${base})` : ''} — plugin enabled? gateway restarted?`,
+    boardGoneTitle: slug => `Board ${slug} is not on this gateway`,
+    boardGoneDesc: next =>
+      next
+        ? `Showing ${next} instead — that board was remembered from another gateway.`
+        : `Showing this gateway's current board instead.`,
+    boardMissingTitle: 'That board is not on this gateway',
+    boardMissingDesc: (slug, next) =>
+      next
+        ? `Board ${slug} does not exist here. This gateway's current board is ${next}.`
+        : `Board ${slug} does not exist on this gateway.`,
     taskUnreadable: 'Task unreadable',
     taskUnreadableDesc: 'Backend did not respond.',
     nTasksTotal: (n, status) => `${n} task${n > 1 ? 's' : ''} in total (dominant priority: ${status})`,
@@ -174,6 +184,16 @@ const GANTT_LOCALES = {
     emptyBoardDesc: board => `Le board ${board} ne renvoie aucune tâche.`,
     cannotLoadBoard: 'Impossible de charger le board',
     cannotLoadBoardDesc: base => `Backend kanban-gantt injoignable${base ? ` (${base})` : ''} — plugin activé ? gateway relancé ?`,
+    boardGoneTitle: slug => `Le board ${slug} n'est pas sur cette gateway`,
+    boardGoneDesc: next =>
+      next
+        ? `Affichage de ${next} à la place — ce board avait été mémorisé sur une autre gateway.`
+        : `Affichage du board courant de cette gateway.`,
+    boardMissingTitle: `Ce board n'est pas sur cette gateway`,
+    boardMissingDesc: (slug, next) =>
+      next
+        ? `Le board ${slug} n'existe pas ici. Le board courant de cette gateway est ${next}.`
+        : `Le board ${slug} n'existe pas sur cette gateway.`,
     taskUnreadable: 'Tâche illisible',
     taskUnreadableDesc: 'Le backend n’a pas répondu.',
     nTasksTotal: (n, status) => `${n} tâche${n > 1 ? 's au total' : ' au total'} (état prioritaire : ${status})`,

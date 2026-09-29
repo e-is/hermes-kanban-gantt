@@ -42,6 +42,7 @@ import { atom } from "@hermes/plugin-sdk";
 var LABEL_W = 300;
 var rest = null;
 var storage = null;
+var socket = null;
 var $baseUrl = atom("");
 var $boardSlug = atom("");
 var $labelW = atom(LABEL_W);
@@ -53,6 +54,7 @@ var DRAWER_W_MIN = 320;
 var DRAWER_W_MAX = 720;
 var $openTaskId = atom(null);
 var $newTask = atom(null);
+var $wsEnabled = atom(false);
 var $moveUnderId = atom(null);
 var apiBase = () => ($baseUrl.get() || "").trim().replace(/\/+$/, "");
 var apiFetch = (path, init) => {
@@ -87,11 +89,13 @@ var removeParent = (id, parentId, board) => apiFetch(
   `/tasks/${encodeURIComponent(id)}/parent/${encodeURIComponent(parentId)}${board ? `?board=${encodeURIComponent(board)}` : ""}`,
   { method: "DELETE" }
 );
-function setPluginDoors(restFn, storageObj) {
+function setPluginDoors(restFn, storageObj, socketFn) {
   rest = restFn;
   storage = storageObj;
+  socket = typeof socketFn === "function" ? socketFn : null;
 }
 var getStorage = () => storage;
+var getSocket = () => socket;
 
 // src/i18n.ts
 import { useMemo } from "react";
@@ -117,6 +121,10 @@ var GANTT_LOCALES = {
     emptyBoardDesc: (board) => `Board ${board} returned no tasks.`,
     cannotLoadBoard: "Cannot load board",
     cannotLoadBoardDesc: (base) => `Backend kanban-gantt unreachable${base ? ` (${base})` : ""} — plugin enabled? gateway restarted?`,
+    boardGoneTitle: (slug) => `Board ${slug} is not on this gateway`,
+    boardGoneDesc: (next) => next ? `Showing ${next} instead — that board was remembered from another gateway.` : `Showing this gateway's current board instead.`,
+    boardMissingTitle: "That board is not on this gateway",
+    boardMissingDesc: (slug, next) => next ? `Board ${slug} does not exist here. This gateway's current board is ${next}.` : `Board ${slug} does not exist on this gateway.`,
     taskUnreadable: "Task unreadable",
     taskUnreadableDesc: "Backend did not respond.",
     nTasksTotal: (n, status) => `${n} task${n > 1 ? "s" : ""} in total (dominant priority: ${status})`,
@@ -268,6 +276,10 @@ var GANTT_LOCALES = {
     emptyBoardDesc: (board) => `Le board ${board} ne renvoie aucune tâche.`,
     cannotLoadBoard: "Impossible de charger le board",
     cannotLoadBoardDesc: (base) => `Backend kanban-gantt injoignable${base ? ` (${base})` : ""} — plugin activé ? gateway relancé ?`,
+    boardGoneTitle: (slug) => `Le board ${slug} n'est pas sur cette gateway`,
+    boardGoneDesc: (next) => next ? `Affichage de ${next} à la place — ce board avait été mémorisé sur une autre gateway.` : `Affichage du board courant de cette gateway.`,
+    boardMissingTitle: `Ce board n'est pas sur cette gateway`,
+    boardMissingDesc: (slug, next) => next ? `Le board ${slug} n'existe pas ici. Le board courant de cette gateway est ${next}.` : `Le board ${slug} n'existe pas sur cette gateway.`,
     taskUnreadable: "Tâche illisible",
     taskUnreadableDesc: "Le backend n’a pas répondu.",
     nTasksTotal: (n, status) => `${n} tâche${n > 1 ? "s au total" : " au total"} (état prioritaire : ${status})`,
@@ -412,6 +424,148 @@ function bindI18n(t, template, prefix = "") {
 function useGanttI18n() {
   const t = usePluginI18n(ID);
   return useMemo(() => bindI18n(t, GANTT_LOCALES.en), [t]);
+}
+
+// src/core/ws-core.ts
+var WS_FIRST_FRAME_MS = 5e3;
+var WS_HEARTBEAT_MS = 2e4;
+var WS_IDLE_MS = Math.round(WS_HEARTBEAT_MS * 2.5);
+var WS_BACKOFF_BASE_MS = 500;
+var WS_BACKOFF_MAX_MS = 1e4;
+var WS_MAX_ATTEMPTS = 1;
+var WS_STATE = {
+  off: "off",
+  // not attempted (flag off, oauth/2nd backend, no board)
+  connecting: "connecting",
+  live: "live",
+  // at least one snapshot applied
+  dead: "dead"
+  // gave up → polling only
+};
+function nextBackoff(attempt, rand = Math.random) {
+  const capped = Math.min(WS_BACKOFF_MAX_MS, WS_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt));
+  return Math.round(capped / 2 + capped / 2 * rand());
+}
+function classifyFrame(frame, lastVersion) {
+  if (!frame || typeof frame !== "object") return { kind: "ignore" };
+  if (frame.type === "heartbeat") {
+    return { kind: "heartbeat", version: Number(frame.version) || 0 };
+  }
+  if (frame.type !== "snapshot") return { kind: "ignore" };
+  const version = Number(frame.version);
+  if (!Number.isFinite(version) || !Array.isArray(frame.tasks)) return { kind: "ignore" };
+  if (lastVersion != null && version <= lastVersion) return { kind: "stale", version };
+  const gap = lastVersion != null && version > lastVersion + 1;
+  return { kind: "snapshot", version, gap };
+}
+function frameToQueryData(frame) {
+  return {
+    board: frame.board,
+    generated_at: frame.generated_at,
+    tasks: frame.tasks || [],
+    labels: frame.labels || []
+  };
+}
+function eventsPath(board) {
+  return `/events?board=${encodeURIComponent(board || "")}`;
+}
+
+// src/ws.ts
+var LOG = "[kanban-gantt ws]";
+function subscribeGantt(socketDoor, opts) {
+  const { board, onSnapshot, onResync, onState } = opts || {};
+  const now = opts && opts.now || (() => Date.now());
+  if (typeof socketDoor !== "function" || !board) {
+    onState && onState(WS_STATE.off);
+    return () => {
+    };
+  }
+  let disposed = false;
+  let attempts = 0;
+  let lastVersion = null;
+  let disposeSocket = null;
+  let firstTimer = null;
+  let idleTimer = null;
+  let retryTimer = null;
+  let live = false;
+  const clearTimers = () => {
+    if (firstTimer) {
+      clearTimeout(firstTimer);
+      firstTimer = null;
+    }
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+  };
+  const drop = (why) => {
+    clearTimers();
+    if (disposeSocket) {
+      try {
+        disposeSocket();
+      } catch (err) {
+        console.debug(LOG, "dispose failed", err);
+      }
+      disposeSocket = null;
+    }
+    return why;
+  };
+  const armIdle = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => give("silence"), WS_IDLE_MS);
+  };
+  const give = (why) => {
+    if (disposed) return;
+    drop(why);
+    live = false;
+    console.debug(LOG, "socket unusable (" + why + ")");
+    if (attempts < WS_MAX_ATTEMPTS) {
+      const delay = nextBackoff(attempts);
+      attempts += 1;
+      onState && onState(WS_STATE.connecting);
+      console.debug(LOG, "reconnect in " + delay + "ms");
+      retryTimer = setTimeout(start, delay);
+    } else {
+      onState && onState(WS_STATE.dead);
+    }
+  };
+  function start() {
+    if (disposed) return;
+    retryTimer = null;
+    onState && onState(live ? WS_STATE.live : WS_STATE.connecting);
+    disposeSocket = socketDoor(eventsPath(board), (frame) => {
+      if (disposed) return;
+      if (firstTimer) {
+        clearTimeout(firstTimer);
+        firstTimer = null;
+      }
+      const verdict = classifyFrame(frame, lastVersion);
+      if (verdict.kind === "ignore" || verdict.kind === "stale") return;
+      armIdle();
+      if (verdict.kind === "heartbeat") return;
+      lastVersion = verdict.version;
+      attempts = 0;
+      live = true;
+      onState && onState(WS_STATE.live);
+      if (verdict.gap) {
+        console.debug(LOG, "version gap at " + verdict.version + " → REST resync");
+        onResync && onResync(verdict.version);
+      }
+      onSnapshot && onSnapshot(frameToQueryData(frame), verdict.version);
+    });
+    firstTimer = setTimeout(() => give("no-first-frame"), WS_FIRST_FRAME_MS);
+    console.debug(LOG, "subscribed", eventsPath(board), "at", now());
+  }
+  start();
+  return function dispose() {
+    disposed = true;
+    drop("dispose");
+    onState && onState(WS_STATE.off);
+  };
 }
 
 // src/ui/TitlebarBoardSwitcher.tsx
@@ -635,6 +789,21 @@ function taskBars(task, now, minBarSec) {
   }
   const single = barRange(task, now, min);
   return single ? [single] : [];
+}
+function resolveBoardSlug(stored, known, current) {
+  const remembered = typeof stored === "string" ? stored.trim() : "";
+  const slugs = (known || []).map((b) => typeof b === "string" ? b : b && b.slug).filter(Boolean);
+  const currentSlug = (current || "").trim();
+  const wanted = (currentSlug && slugs.includes(currentSlug) ? currentSlug : slugs[0]) || "";
+  if (!slugs.length) return { slug: remembered, fallback: false, suggested: "" };
+  if (!remembered) return { slug: "", fallback: false, suggested: wanted };
+  if (remembered === "all" || remembered === "*") return { slug: remembered, fallback: false, suggested: "" };
+  if (slugs.includes(remembered)) return { slug: remembered, fallback: false, suggested: "" };
+  return { slug: "", fallback: true, suggested: wanted };
+}
+function isMissingBoardError(error) {
+  const message = typeof error === "string" ? error : error && (error.message || error.detail || error.error) || "";
+  return /database not found|does not exist|no such board/i.test(String(message));
 }
 function shortId(id) {
   return (id || "").replace(/^t_/, "").slice(0, 6);
@@ -1233,6 +1402,26 @@ function toast(kind, message) {
     }
   } catch {
   }
+}
+var BOARD_KEY = "board";
+function connectionScope() {
+  try {
+    const id = host && host.state && host.state.connectionId;
+    const value = id && typeof id.get === "function" ? id.get() : id;
+    return typeof value === "string" ? value : "";
+  } catch {
+    return "";
+  }
+}
+function boardStorageKey() {
+  const scope = connectionScope();
+  return scope ? `${BOARD_KEY}.${scope}` : BOARD_KEY;
+}
+function readStoredBoard(storage2) {
+  if (!storage2) return "";
+  const scoped = storage2.get(boardStorageKey(), "");
+  if (scoped) return scoped;
+  return storage2.get(BOARD_KEY, "") || "";
 }
 function Ruler({ min, max, pxPerSec }) {
   const unit = tickUnit(max - min);
@@ -2333,11 +2522,37 @@ function KanbanGanttPage() {
     queryFn: () => fetchProfiles(),
     staleTime: 6e4
   });
-  const { data, isLoading, isError } = useQuery2({
+  const wsEnabled = useValue2($wsEnabled);
+  const [wsState, setWsState] = useState3(WS_STATE.off);
+  const socketDoor = getSocket();
+  const wsBoard = wsEnabled && !base && board ? board : null;
+  const { data, isLoading, isError, error } = useQuery2({
     queryKey: ["kanban-gantt", "gantt", apiBase(), board],
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ""}`),
-    refetchInterval: 6e4
+    refetchInterval: wsState === WS_STATE.live ? 3e5 : 6e4
   });
+  useEffect2(() => {
+    if (!wsBoard) {
+      setWsState(WS_STATE.off);
+      return void 0;
+    }
+    return subscribeGantt(socketDoor, {
+      board: wsBoard,
+      onState: setWsState,
+      onSnapshot: (snapshot) => {
+        queryClient.setQueryData(["kanban-gantt", "gantt", apiBase(), wsBoard], snapshot);
+      },
+      onResync: () => {
+        void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt", apiBase(), wsBoard] });
+      }
+    });
+  }, [wsBoard, socketDoor, queryClient]);
+  const [nowTick, setNowTick] = useState3(0);
+  useEffect2(() => {
+    if (wsState !== WS_STATE.live) return void 0;
+    const id = setInterval(() => setNowTick((t) => t + 1), 3e4);
+    return () => clearInterval(id);
+  }, [wsState]);
   const [showArchived, setShowArchived] = useState3(false);
   const [dragId, setDragId] = useState3(null);
   const [pendingReparent, setPendingReparent] = useState3(null);
@@ -2404,8 +2619,8 @@ function KanbanGanttPage() {
       void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
       $openTaskId.set(response.task_id);
     },
-    onError: (error) => {
-      const message = String(error && error.message || error || "");
+    onError: (error2) => {
+      const message = String(error2 && error2.message || error2 || "");
       toast("error", /title is required/i.test(message) ? i18n.errTitleRequired : i18n.errCreate);
     }
   });
@@ -2429,9 +2644,9 @@ function KanbanGanttPage() {
       toast("info", response.gated ? i18n.gatedNotice(childName) : i18n.movedUnder(childName, parentName));
       void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
     },
-    onError: (error) => {
+    onError: (error2) => {
       setPendingReparent(null);
-      toast("error", humanReparentError(error, i18n));
+      toast("error", humanReparentError(error2, i18n));
     }
   });
   const unlinkMutation = useMutation({
@@ -2439,7 +2654,7 @@ function KanbanGanttPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
     },
-    onError: (error) => toast("error", humanReparentError(error, i18n))
+    onError: (error2) => toast("error", humanReparentError(error2, i18n))
   });
   const handleDragStart = (id) => {
     setDragId(id);
@@ -2526,16 +2741,27 @@ function KanbanGanttPage() {
   };
   const setBoard = (slug) => {
     $boardSlug.set(slug);
-    if (getStorage()) getStorage().set("board", slug);
+    if (getStorage()) getStorage().set(boardStorageKey(), slug);
     setSearch("");
     void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
   };
   useEffect2(() => {
-    if (!board && boardsData?.boards?.length) {
-      const fallback = boardsData.current || boardsData.boards[0].slug;
-      if (fallback) setBoard(fallback);
+    const list = boardsData?.boards;
+    if (!list || !list.length) return;
+    const known = list.map((b) => typeof b === "string" ? b : b && b.slug).filter(Boolean);
+    const resolved = resolveBoardSlug(board, known, boardsData.current);
+    if (resolved.fallback) {
+      toast("warning", `${i18n.boardGoneTitle(board)} — ${i18n.boardGoneDesc(resolved.suggested)}`);
+      setBoard(resolved.suggested);
+      return;
     }
+    if (resolved.suggested) setBoard(resolved.suggested);
   }, [boardsData, board]);
+  useEffect2(() => {
+    if (!isError || !board || !isMissingBoardError(error)) return;
+    toast("warning", `${i18n.boardGoneTitle(board)} — ${i18n.boardGoneDesc(boardsData?.current || "")}`);
+    setBoard(boardsData?.current || "");
+  }, [isError, error, board, boardsData]);
   useEffect2(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -2572,14 +2798,16 @@ function KanbanGanttPage() {
     return jsx5("div", { className: "flex h-full items-center justify-center p-8", children: jsx5(Loader, {}) });
   }
   if (isError) {
+    const gone = isMissingBoardError(error);
     return jsx5("div", { className: "p-6", children: jsx5(ErrorState, {
-      title: i18n.cannotLoadBoard,
-      description: i18n.cannotLoadBoardDesc(base)
+      title: gone ? i18n.boardMissingTitle : i18n.cannotLoadBoard,
+      description: gone ? i18n.boardMissingDesc(board || boardLabel(board), boardsData?.current || "") : i18n.cannotLoadBoardDesc(base)
     }) });
   }
   if (!derived || !derived.domain) {
     return jsx5("div", { className: "p-6", children: jsx5(EmptyState, { title: i18n.emptyBoard, description: i18n.emptyBoardDesc(boardLabel(board)) }) });
   }
+  void nowTick;
   const now = Date.now() / 1e3;
   const { rows, domain } = derived;
   const visibleWidth = Math.max(trackW - labelW - 24, 300);
@@ -2878,9 +3106,10 @@ var plugin = {
   // cannot follow the app locale: it stays in the bundles' fallback language.
   description: "Gantt view (progress over time) of the kanban board — search, zoom, task detail + actions.",
   register(ctx) {
-    setPluginDoors(ctx.rest, ctx.storage);
+    setPluginDoors(ctx.rest, ctx.storage, ctx.socket);
     $baseUrl.set((ctx.storage.get("baseUrl", "") || "").replace(/\/+$/, ""));
-    $boardSlug.set(ctx.storage.get("board", "") || "");
+    $boardSlug.set(readStoredBoard(ctx.storage));
+    $wsEnabled.set(ctx.storage.get("ws", "0") === "1");
     $labelW.set(Number(ctx.storage.get("labelW", LABEL_W)) || LABEL_W);
     $drawerW.set(Number(ctx.storage.get("drawerW", 416)) || 416);
     $drawerDocked.set(ctx.storage.get("drawerDocked", "0") === "1");

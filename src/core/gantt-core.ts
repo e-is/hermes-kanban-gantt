@@ -188,6 +188,48 @@ export function taskBars(task, now, minBarSec) {
   const single = barRange(task, now, min);
   return single ? [single] : [];
 }
+/**
+ * Which board the page must show, given what it remembered and what the gateway
+ * has. A remembered slug is never trusted: it may have been chosen while ANOTHER
+ * gateway was active, and then every poll answers 503 while the page blames the
+ * backend. A slug this gateway does not list is dropped in favour of the
+ * current board — '' meaning "the gateway's current board", the convention the
+ * bundled kanban plugin uses.
+ *
+ * `suggested` is what to adopt when nothing is remembered yet (the gateway's
+ * current board, else the first one listed).
+ */
+export function resolveBoardSlug(stored, known, current) {
+  const remembered = typeof stored === 'string' ? stored.trim() : '';
+  const slugs = (known || [])
+    .map(b => (typeof b === 'string' ? b : b && b.slug))
+    .filter(Boolean);
+  // The gateway's current board only counts as a target if it exists: a gateway
+  // whose current board is itself missing (a leftover `default`) must fall back
+  // to a board it actually has, or the page stays stuck on a 503.
+  const currentSlug = (current || '').trim();
+  const wanted = (currentSlug && slugs.includes(currentSlug) ? currentSlug : slugs[0]) || '';
+  // No list yet: leave the page alone rather than guessing at a fallback.
+  if (!slugs.length) return { slug: remembered, fallback: false, suggested: '' };
+  if (!remembered) return { slug: '', fallback: false, suggested: wanted };
+  // 'all' / '*' are switcher filters, not boards to validate.
+  if (remembered === 'all' || remembered === '*') return { slug: remembered, fallback: false, suggested: '' };
+  if (slugs.includes(remembered)) return { slug: remembered, fallback: false, suggested: '' };
+  return { slug: '', fallback: true, suggested: wanted };
+}
+
+/**
+ * True when the answer was "this board does not exist here" rather than "the
+ * backend is down". The two used to share one message, which sent people
+ * restarting gateways that were perfectly healthy.
+ */
+export function isMissingBoardError(error) {
+  const message = typeof error === 'string'
+    ? error
+    : (error && (error.message || error.detail || error.error)) || '';
+  return /database not found|does not exist|no such board/i.test(String(message));
+}
+
 export function shortId(id) {
   return (id || '').replace(/^t_/, '').slice(0, 6)
 }

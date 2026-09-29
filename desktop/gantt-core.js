@@ -147,6 +147,21 @@ function taskBars(task, now, minBarSec) {
   const single = barRange(task, now, min);
   return single ? [single] : [];
 }
+function resolveBoardSlug(stored, known, current) {
+  const remembered = typeof stored === "string" ? stored.trim() : "";
+  const slugs = (known || []).map((b) => typeof b === "string" ? b : b && b.slug).filter(Boolean);
+  const currentSlug = (current || "").trim();
+  const wanted = (currentSlug && slugs.includes(currentSlug) ? currentSlug : slugs[0]) || "";
+  if (!slugs.length) return { slug: remembered, fallback: false, suggested: "" };
+  if (!remembered) return { slug: "", fallback: false, suggested: wanted };
+  if (remembered === "all" || remembered === "*") return { slug: remembered, fallback: false, suggested: "" };
+  if (slugs.includes(remembered)) return { slug: remembered, fallback: false, suggested: "" };
+  return { slug: "", fallback: true, suggested: wanted };
+}
+function isMissingBoardError(error) {
+  const message = typeof error === "string" ? error : error && (error.message || error.detail || error.error) || "";
+  return /database not found|does not exist|no such board/i.test(String(message));
+}
 function shortId(id) {
   return (id || "").replace(/^t_/, "").slice(0, 6);
 }
@@ -239,9 +254,11 @@ export {
   descendantsOf,
   dropCandidates,
   isDescendant,
+  isMissingBoardError,
   isTerminal,
   matchesSearch,
   relationsOf,
+  resolveBoardSlug,
   shortId,
   statusIcon,
   statusTone,

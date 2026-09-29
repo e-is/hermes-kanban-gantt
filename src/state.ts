@@ -8,6 +8,7 @@ export const LABEL_W = 300 // px — default width of the sticky label column
 
 let rest = null
 let storage = null
+let socket = null
 
 /** Optional custom backend base URL ('' = the plugin's own namespace). */
 export const $baseUrl = atom('')
@@ -28,6 +29,14 @@ export const $openTaskId = atom(null)
 
 /** "New task" dialog: null = closed, { parentId } = open (prefilled parent). */
 export const $newTask = atom(null)
+
+/**
+ * Prototype switch (spike t_64075faf): when true the gantt snapshot comes from
+ * the `/events` websocket instead of the 60 s poll — and the poll is demoted to
+ * a 300 s safety net. Stored under the `ws` key; the server half is gated
+ * separately by the `KANBAN_GANTT_WS` env var, so either side can be turned off.
+ */
+export const $wsEnabled = atom(false)
 
 /** Task whose "move under…" picker is open (the page owns the dialog). */
 export const $moveUnderId = atom(null)
@@ -86,11 +95,14 @@ const removeParent = (id, parentId, board) =>
     `${board ? `?board=${encodeURIComponent(board)}` : ''}`,
     { method: 'DELETE' })
 
-export function setPluginDoors(restFn, storageObj) {
+export function setPluginDoors(restFn, storageObj, socketFn) {
   rest = restFn
   storage = storageObj
+  socket = typeof socketFn === 'function' ? socketFn : null
 }
 export const getStorage = () => storage
+/** The SDK's `ctx.socket` door, or null when the host doesn't provide one. */
+export const getSocket = () => socket
 
 export {
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,

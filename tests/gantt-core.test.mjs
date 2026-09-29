@@ -19,7 +19,8 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const core = await import(join(HERE, '..', 'desktop', 'gantt-core.js'))
 
 const { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, DAY, MIN_BAR,
-  statusIcon, isTerminal, descendantsOf, isDescendant, relationsOf, dropCandidates } = core
+  statusIcon, isTerminal, descendantsOf, isDescendant, relationsOf, dropCandidates,
+  resolveBoardSlug, isMissingBoardError } = core
 const NOW = 1_800_000_000
 const H = 3600
 
@@ -328,4 +329,58 @@ test('dropCandidates keeps the board check optional', () => {
   const byId = Object.fromEntries(
     dropCandidates(GRAPH, 'b', undefined).map(c => [c.task.id, c]))
   assert.equal(byId.d.allowed, true)
+})
+
+// ── the remembered board (the `obsfish` stranding) ──────────────────────────
+
+test('a remembered board this gateway does not have falls back to the current one', () => {
+  // Chosen while the remote gateway was active, then the app switched to This
+  // device, which never had it: every poll used to answer 503 and the page blamed
+  // the backend.
+  const r = resolveBoardSlug('obsfish', ['gantt-demo', 'obsventes'], 'gantt-demo')
+  assert.equal(r.fallback, true)
+  assert.equal(r.slug, '')            // '' = the gateway's current board
+  assert.equal(r.suggested, 'gantt-demo')
+})
+
+test('a remembered board the gateway lists is kept', () => {
+  const r = resolveBoardSlug('obsventes', ['gantt-demo', 'obsventes'], 'gantt-demo')
+  assert.equal(r.fallback, false)
+  assert.equal(r.slug, 'obsventes')
+})
+
+test('nothing remembered adopts the gateway current board', () => {
+  const r = resolveBoardSlug('', ['gantt-demo', 'obsventes'], 'obsventes')
+  assert.equal(r.fallback, false)
+  assert.equal(r.suggested, 'obsventes')
+})
+
+test('a current board that is itself missing falls back to a board the gateway has', () => {
+  // The real case on This device: /boards reported current='default' while the
+  // gateway only had named boards, so following `current` kept the 503 alive.
+  const r = resolveBoardSlug('obsfish', ['gantt-demo', 'obsventes'], 'default')
+  assert.equal(r.suggested, 'gantt-demo')
+})
+
+test('switcher filters are not validated as boards', () => {
+  assert.equal(resolveBoardSlug('all', ['gantt-demo'], 'gantt-demo').fallback, false)
+  assert.equal(resolveBoardSlug('*', ['gantt-demo'], 'gantt-demo').fallback, false)
+})
+
+test('with no board list yet the page is left alone', () => {
+  const r = resolveBoardSlug('obsfish', [], '')
+  assert.equal(r.fallback, false)
+  assert.equal(r.slug, 'obsfish')
+  assert.equal(r.suggested, '')
+})
+
+test('a board-specific failure is told apart from a dead backend', () => {
+  // Verbatim messages from the desktop log and the plugin's own API.
+  assert.equal(isMissingBoardError(
+    `GET /gantt → HTTP 503: {"detail":"board 'obsfish' database not found at /home/b/.hermes/kanban/boards/obsfish/kanban.db"}`), true)
+  assert.equal(isMissingBoardError(
+    `404: {"detail":"board 'gantt-demo' does not exist"}`), true)
+  assert.equal(isMissingBoardError(new Error('backend not ready')), false)
+  assert.equal(isMissingBoardError(new Error('GET /boards → HTTP 500')), false)
+  assert.equal(isMissingBoardError(undefined), false)
 })

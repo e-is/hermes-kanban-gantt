@@ -58,13 +58,15 @@ import {
   setPluginDoors,
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
   $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $openTaskId,
-  $newTask, $moveUnderId,
+  $newTask, $moveUnderId, $wsEnabled,
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
   createTask, fetchProjects, fetchProfiles,
   setParent, removeParent, applyBase
 } from './state'
-import { getStorage } from './state'
+import { getStorage, getSocket } from './state'
 import { GANTT_LOCALES, useGanttI18n } from './i18n'
+import { subscribeGantt } from './ws'
+import { WS_STATE } from './core/ws-core'
 import { TitlebarBoardSwitcher } from './ui/TitlebarBoardSwitcher'
 import { NewTaskDialog } from './ui/NewTaskDialog'
 import { TaskRelations } from './ui/TaskRelations'
@@ -85,7 +87,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, DAY, MIN_BAR } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR } from './core/gantt-core.ts'
 
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -112,6 +114,39 @@ function toast(kind, message) {
   } catch {
     /* no desktop bridge: drop it rather than crash the page */
   }
+}
+
+// ── the remembered board, scoped per gateway ────────────────────────────────
+// The bundled kanban plugin scopes its board preference by connection
+// (`boardSlug.<scope>`). Ours kept one global key, so a slug chosen while another
+// gateway was active survived the switch: every poll then answered 503 for a
+// board that gateway never had, and the page blamed the backend. '' means "the
+// gateway's current board", so the fallback is the empty value, not a guess.
+const BOARD_KEY = 'board'
+
+function connectionScope() {
+  try {
+    const id = host && host.state && host.state.connectionId
+    const value = id && typeof id.get === 'function' ? id.get() : id
+    return typeof value === 'string' ? value : ''
+  } catch {
+    /* no desktop bridge (standalone server): one scope, one key */
+    return ''
+  }
+}
+
+function boardStorageKey() {
+  const scope = connectionScope()
+  return scope ? `${BOARD_KEY}.${scope}` : BOARD_KEY
+}
+
+function readStoredBoard(storage) {
+  if (!storage) return ''
+  const scoped = storage.get(boardStorageKey(), '')
+  if (scoped) return scoped
+  // Written before the keys were scoped: adopt it once. The /boards validation
+  // drops it if THIS gateway does not have that board.
+  return storage.get(BOARD_KEY, '') || ''
 }
 
 
@@ -1355,11 +1390,47 @@ export function KanbanGanttPage() {
     queryFn: () => fetchProfiles(),
     staleTime: 60_000
   })
-  const { data, isLoading, isError } = useQuery({
+  // ── prototype: websocket push for THIS loop (spike t_64075faf) ────────────
+  // With the flag on, `/events` feeds the same cache entry this query fills and
+  // the poll is demoted to a 300 s safety net; off (or dead socket, or a custom
+  // backend base URL, which the socket door cannot address) it is today's 60 s
+  // poll. Nothing else in the page changes — same queryKey, same data shape.
+  const wsEnabled = useValue($wsEnabled)
+  const [wsState, setWsState] = useState(WS_STATE.off)
+  const socketDoor = getSocket()
+  const wsBoard = wsEnabled && !base && board ? board : null
+
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['kanban-gantt', 'gantt', apiBase(), board],
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ''}`),
-    refetchInterval: 60_000
+    refetchInterval: wsState === WS_STATE.live ? 300_000 : 60_000
   })
+
+  useEffect(() => {
+    if (!wsBoard) {
+      setWsState(WS_STATE.off)
+      return undefined
+    }
+    return subscribeGantt(socketDoor, {
+      board: wsBoard,
+      onState: setWsState,
+      onSnapshot: snapshot => {
+        queryClient.setQueryData(['kanban-gantt', 'gantt', apiBase(), wsBoard], snapshot)
+      },
+      onResync: () => {
+        void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt', apiBase(), wsBoard] })
+      }
+    })
+  }, [wsBoard, socketDoor, queryClient])
+
+  // R6: the 60 s poll was also what advanced the timeline's "now" cursor; with
+  // pushes driving the data, a local 30 s tick keeps open run arcs moving.
+  const [nowTick, setNowTick] = useState(0)
+  useEffect(() => {
+    if (wsState !== WS_STATE.live) return undefined
+    const id = setInterval(() => setNowTick(t => t + 1), 30_000)
+    return () => clearInterval(id)
+  }, [wsState])
 
   const [showArchived, setShowArchived] = useState(false)
   // ── re-parenting: drag & drop plus the keyboard-reachable picker ───────────
@@ -1585,18 +1656,36 @@ export function KanbanGanttPage() {
 
   const setBoard = slug => {
     $boardSlug.set(slug)
-    if (getStorage()) getStorage().set('board', slug)
+    if (getStorage()) getStorage().set(boardStorageKey(), slug)
     setSearch('')
     void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
   }
 
-  // Pick the fallback board once the list arrives and none is selected yet.
+  // Adopt a board when none is remembered, and drop one this gateway does not
+  // have. The remembered slug is validated against /boards, never trusted: it may
+  // have been chosen while another gateway was active — that is how `obsfish`
+  // stranded the page on This device, one 503 per poll, with no way out.
   useEffect(() => {
-    if (!board && boardsData?.boards?.length) {
-      const fallback = boardsData.current || boardsData.boards[0].slug
-      if (fallback) setBoard(fallback)
+    const list = boardsData?.boards
+    if (!list || !list.length) return
+    const known = list.map(b => (typeof b === 'string' ? b : b && b.slug)).filter(Boolean)
+    const resolved = resolveBoardSlug(board, known, boardsData.current)
+    if (resolved.fallback) {
+      toast('warning', `${i18n.boardGoneTitle(board)} — ${i18n.boardGoneDesc(resolved.suggested)}`)
+      setBoard(resolved.suggested)
+      return
     }
+    if (resolved.suggested) setBoard(resolved.suggested)
   }, [boardsData, board])
+
+  // A board-specific failure cannot be fixed by retrying, and renaming it
+  // "backend unreachable" hides the only useful fact: forget the slug and let
+  // this gateway's current board take over.
+  useEffect(() => {
+    if (!isError || !board || !isMissingBoardError(error)) return
+    toast('warning', `${i18n.boardGoneTitle(board)} — ${i18n.boardGoneDesc(boardsData?.current || '')}`)
+    setBoard(boardsData?.current || '')
+  }, [isError, error, board, boardsData])
 
   // Track the pane width so the default Gantt scale derives from real geometry.
   useEffect(() => {
@@ -1641,15 +1730,25 @@ export function KanbanGanttPage() {
     return jsx('div', { className: 'flex h-full items-center justify-center p-8', children: jsx(Loader, {}) })
   }
   if (isError) {
+    // Name the real cause. A board this gateway does not have is not a dead
+    // backend, and "plugin enabled? gateway restarted?" sent people restarting
+    // healthy gateways.
+    const gone = isMissingBoardError(error)
     return jsx('div', { className: 'p-6', children: jsx(ErrorState, {
-      title: i18n.cannotLoadBoard,
-      description: i18n.cannotLoadBoardDesc(base)
+      title: gone ? i18n.boardMissingTitle : i18n.cannotLoadBoard,
+      description: gone
+        ? i18n.boardMissingDesc(board || boardLabel(board), boardsData?.current || '')
+        : i18n.cannotLoadBoardDesc(base)
     }) })
   }
   if (!derived || !derived.domain) {
     return jsx('div', { className: 'p-6', children: jsx(EmptyState, { title: i18n.emptyBoard, description: i18n.emptyBoardDesc(boardLabel(board)) }) })
   }
 
+  // R6: with pushes driving the data there is no poll left to re-render the
+  // timeline, so `nowTick` (30 s while the socket is live) is read here — that
+  // read is the whole point, it keeps the "now" cursor and open run arcs moving.
+  void nowTick
   const now = Date.now() / 1000
   const { rows, domain } = derived
   const visibleWidth = Math.max(trackW - labelW - 24, 300)
@@ -1971,9 +2070,12 @@ const plugin = {
   // cannot follow the app locale: it stays in the bundles' fallback language.
   description: 'Gantt view (progress over time) of the kanban board — search, zoom, task detail + actions.',
   register(ctx) {
-    setPluginDoors(ctx.rest, ctx.storage)
+    setPluginDoors(ctx.rest, ctx.storage, ctx.socket)
     $baseUrl.set((ctx.storage.get('baseUrl', '') || '').replace(/\/+$/, ''))
-    $boardSlug.set(ctx.storage.get('board', '') || '')
+    $boardSlug.set(readStoredBoard(ctx.storage))
+    // Prototype: websocket push is opt-in (storage `ws` = '1'), and the server
+    // half stays off unless the gateway sets KANBAN_GANTT_WS=1.
+    $wsEnabled.set(ctx.storage.get('ws', '0') === '1')
     $labelW.set(Number(ctx.storage.get('labelW', LABEL_W)) || LABEL_W)
     $drawerW.set(Number(ctx.storage.get('drawerW', 416)) || 416)
     $drawerDocked.set(ctx.storage.get('drawerDocked', '0') === '1')
