@@ -50,6 +50,59 @@ from fastapi import APIRouter, WebSocket
 
 log = logging.getLogger(__name__)
 
+
+_PLUGIN_API_CACHE: list = []
+
+
+def _plugin_api():
+    """The sibling `plugin_api` module, however this plugin was loaded.
+
+    Standalone (`python plugin_api.py`) and tests put this directory on
+    `sys.path`, so a plain `import plugin_api` works. Mounted by the gateway,
+    core loads the api file with `spec_from_file_location` and never touches
+    `sys.path` (`hermes_cli/web_server_dashboard.py:862`) — so `import plugin_api`
+    raises `ImportError` there. Reuse the instance core already loaded (matching
+    by file), else fall back to a by-path load of the same file.
+    """
+    if _PLUGIN_API_CACHE:
+        return _PLUGIN_API_CACHE[0]
+    import importlib
+    import importlib.util
+    import sys
+
+    here = Path(__file__).resolve().parent / "plugin_api.py"
+
+    def _matches(mod: Any) -> bool:
+        f = getattr(mod, "__file__", None)
+        if not f:
+            return False
+        try:
+            return Path(f).resolve() == here
+        except OSError:  # pragma: no cover - unreadable path
+            return False
+
+    mod = None
+    for cand in list(sys.modules.values()):
+        if _matches(cand):
+            mod = cand
+            break
+    if mod is None:
+        try:
+            cand = importlib.import_module("plugin_api")
+            mod = cand if _matches(cand) else None
+        except Exception:  # noqa: BLE001 - fall through to the by-path load
+            mod = None
+    if mod is None:
+        spec = importlib.util.spec_from_file_location("kanban_gantt_plugin_api", here)
+        if spec is None or spec.loader is None:  # pragma: no cover - defensive
+            raise ImportError(f"cannot load plugin_api from {here}")
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+    _PLUGIN_API_CACHE.append(mod)
+    return mod
+
+
 # ---------------------------------------------------------------------------
 # Feature flag + tuning knobs (all env-driven so nothing needs a redeploy)
 # ---------------------------------------------------------------------------
@@ -105,8 +158,14 @@ class WsConfig:
 
 
 def websocket_enabled() -> bool:
-    """True when the prototype route should exist at all."""
-    return _env_flag(WS_ENABLE_ENV, False)
+    """True when the events route should exist.
+
+    ON by default: the page carries no Refresh button, so the push IS the update
+    path. The flag survives only as an emergency off-switch for a gateway that
+    must not open websockets (``KANBAN_GANTT_WS=0``) — the client keeps polling
+    as its safety net whenever the route is absent or the socket dies.
+    """
+    return _env_flag(WS_ENABLE_ENV, True)
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +320,7 @@ class BoardStream:
 
     async def _signature(self) -> Optional[tuple]:
         """Current signature, or None when the board file is gone/unreadable."""
-        from plugin_api import _board_db_path  # local import: avoids a cycle
+        _board_db_path = _plugin_api()._board_db_path  # no cycle: loaded lazily
 
         def work():
             path = _board_db_path(self.board)
@@ -441,7 +500,7 @@ def attach(router: APIRouter, reader: Optional[Callable[[str], dict]] = None) ->
     `plugin_api._read_gantt` (resolved lazily so import order never matters).
     """
     if not websocket_enabled():
-        log.info("kanban-gantt ws: %s not set — /events not registered (polling only)",
+        log.info("kanban-gantt ws: %s=0 — /events not registered (polling only)",
                  WS_ENABLE_ENV)
         return False
 
@@ -460,12 +519,11 @@ def attach(router: APIRouter, reader: Optional[Callable[[str], dict]] = None) ->
             return
 
         slug = (ws.query_params.get("board") or "").strip()
+        api = _plugin_api()
         if not slug:
-            from plugin_api import _resolve_board
-            slug = _resolve_board(None)
+            slug = api._resolve_board(None)
         try:
-            from plugin_api import _board_db_path
-            _board_db_path(slug)          # R10: same validation as the REST read
+            api._board_db_path(slug)      # R10: same validation as the REST read
         except Exception:
             await ws.close(code=CLOSE_POLICY_VIOLATION)
             return
@@ -496,7 +554,11 @@ def attach(router: APIRouter, reader: Optional[Callable[[str], dict]] = None) ->
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            log.info("kanban-gantt ws: stream for %s ended: %s", slug, type(exc).__name__)
+            # Log WHY, not just the class: a ModuleNotFoundError's type alone
+            # hides the one fact that makes it fixable (the module's name). This
+            # line cost a debugging round-trip exactly that way.
+            log.warning("kanban-gantt ws: stream for %s ended: %s: %s",
+                        slug, type(exc).__name__, exc)
         finally:
             stream.detach(sub)
             pump.cancel()
@@ -506,6 +568,5 @@ def attach(router: APIRouter, reader: Optional[Callable[[str], dict]] = None) ->
 
 def _default_reader() -> Callable[[str], dict]:
     def reader(board: str) -> dict:
-        from plugin_api import _read_gantt
-        return _read_gantt(board)
+        return _plugin_api()._read_gantt(board)
     return reader

@@ -1,0 +1,101 @@
+# Real-gateway websocket upgrade — raw evidence
+
+Card `t_01745262`, 2026-09-29, workstation `fixe13.e-is`, wall clock 18:21–18:28.
+Harness: `docs/spikes/harness/gateway/` (`sandbox.sh` builds the throwaway `HERMES_HOME`,
+`probes.py` drives the sockets). Plugin revision: `spike/ws-push-prototype` working tree,
+after the `load_sibling()` fix. Gateway: `hermes dashboard --port 47119 --host 127.0.0.1
+--no-open --skip-build`, `HERMES_HOME` = sandbox, `HERMES_KANBAN_HOME` = sandbox board root,
+`KANBAN_GANTT_WS=1`, started **env-clean** (`env -u HERMES_KANBAN_DB -u HERMES_KANBAN_BOARD …`).
+
+## 1. Before the fix — the route never registers in the gateway
+
+stdout of a real `hermes dashboard` with the prototype in place:
+
+```
+→ Skipping web UI build (--skip-build); using dist at /home/blavenie/.hermes/hermes-agent/hermes_cli/web_dist
+kanban-gantt: websocket prototype unavailable (No module named 'plugin_ws')
+HERMES_DASHBOARD_READY port=47119
+  Hermes Web UI → http://127.0.0.1:47119
+```
+
+Cause: core imports the plugin `api` file with
+`importlib.util.spec_from_file_location("hermes_dashboard_plugin_<name>", api_path)`
+(`hermes_cli/web_server_dashboard.py:862`) and never adds the plugin directory to
+`sys.path`, so `import plugin_ws` raises `ImportError` and the guard swallows it.
+Fixed by `load_sibling()` / `_plugin_api()`; pinned by `tests/ws_mount_gateway.py`.
+
+## 2. `tests/ws_mount_gateway.py` (core's import mode, no `sys.path` help)
+
+```
+PASS M1 gateway-style import registers /events when KANBAN_GANTT_WS=1 — ['/boards', '/gantt', '/tasks/bulk', '/tasks/{task_id}', '/tasks/{task_id}/status', '/tasks/{task_id}/comments', '/tasks/{task_id}/assignee', '/projects', '/profiles', '/tasks', '/tasks/{task_id}/parent', '/tasks/{task_id}/parent/{parent_id}', '/meta', '/events']
+PASS M2 the websocket module is the one the plugin router uses — loaded|same-instance
+PASS M3 flag off ⇒ no /events route, REST route set unchanged — [... '/meta']  (no '/events')
+PASS M4 flag off ⇒ the websocket module is still importable (no crash) — loaded|same-instance
+
+RESULT: 4/4 checks passed
+```
+
+## 3. After the fix — the probe against the live gateway, with the real token
+
+```
+PASS G1 unauthenticated upgrade refused — InvalidStatus
+PASS G2 gateway accepts the upgrade and pushes a snapshot first — type=snapshot version=1 tasks=22 bytes=10494
+PASS G3 out-of-process writes are pushed over the gateway socket — latencies_ms=[553, 554, 555] versions=[2, 3, 4]
+PASS G4 a second subscriber is accepted on the same board — version=5
+PASS G5 unknown board refused (no crash, no frame) — InvalidStatus
+
+GATEWAY RESULT: 5/5 checks passed
+```
+
+(An earlier run of the same probe, one subscriber, gave `latencies_ms=[554, 553, 553]`,
+`tasks=19 bytes=9516`; the board grows as the probe inserts its own tasks.)
+
+## 4. Gateway log — the mount and the auth gate
+
+`$SANDBOX/home/logs/{agent,gui,errors}.log`, filtered:
+
+```
+INFO hermes_cli.web_server: Mounted plugin API routes: /api/plugins/kanban-gantt/
+INFO kanban_gantt_plugin_ws: kanban-gantt ws: rejected upgrade (core_reject)
+INFO kanban_gantt_plugin_ws: kanban-gantt ws: stream for wsgw ended: RuntimeError
+WARNING hermes_cli.plugins: Failed to load plugin 'kanban-gantt': No __init__.py in …/plugins/kanban-gantt
+```
+
+* the mount is the production one (`include_router` + `_plugin_route_secret_scope`), not the
+  plugin's standalone `create_app()`;
+* a bad/absent credential is a **`core_reject`** — `authorize()` did delegate to core
+  `_ws_auth_ok`; the line records the reason, never the credential;
+* **`?token=` redaction**: `grep -i token` over every gateway log (and the redirected stdout)
+  matches **nothing**, and this deployment emits **no uvicorn access log** — the concern is
+  closed by measurement;
+* `stream for wsgw ended: RuntimeError` fires on every last-subscriber disconnect (benign so
+  far: the next subscriber recreates the stream) — carried as a T1 teardown item;
+* the `No __init__.py` warning is a sandbox-copy artifact (the harness copies only
+  `dashboard/` + `plugin.yaml`); it did not prevent the REST or ws routes from mounting, and
+  the real plugin ships `__init__.py`.
+
+## 5. The pinning trap, reproduced end-to-end (hard part #2)
+
+The gateway launched from a kanban worker's shell inherits the worker's env, including
+`HERMES_KANBAN_DB=/…/boards/gantt-demo/kanban.db`. In that (first) run:
+
+```
+PASS G2 gateway accepts the upgrade and pushes a snapshot first — … tasks=20 bytes=10383
+FAIL G3 write 0 pushed a frame — no frame within 8 s
+FAIL G5 unknown board refused (no crash, no frame) — got a frame
+GATEWAY RESULT: 3/7 checks passed
+```
+
+i.e. `?board=does-not-exist` was served a valid snapshot, and writes to the intended board
+were never seen, because every subscription resolved to the *pinned* board instead of the
+requested slug. Same behaviour from a plain shell with the pinned env:
+
+```
+khome /home/blavenie/.hermes/cache/scratch/ws-gw-probe/kh
+wsgw           -> /home/blavenie/.hermes/kanban/boards/gantt-demo/kanban.db True
+does-not-exist -> /home/blavenie/.hermes/kanban/boards/gantt-demo/kanban.db True
+```
+
+Mitigation today: start the gateway env-clean (`env -u HERMES_KANBAN_DB -u HERMES_KANBAN_BOARD`).
+Proper fix (T1): after resolving a slug, assert the path is `<boards_root>/<slug>/kanban.db`
+and refuse anything else.

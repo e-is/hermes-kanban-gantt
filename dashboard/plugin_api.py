@@ -969,13 +969,66 @@ def create_app(allow_cors: bool = True) -> FastAPI:
     return app
 
 
+def load_sibling(name: str):
+    """Import a module sitting next to *this* file, whatever load mode we are in.
+
+    Two very different ways this plugin's Python gets imported:
+
+    * **Standalone dev server / tests** — `python plugin_api.py` puts this
+      directory on `sys.path`, so a plain `import plugin_ws` works.
+    * **Mounted by the gateway** — core loads the `api` file with
+      `importlib.util.spec_from_file_location("hermes_dashboard_plugin_<name>", …)`
+      (`hermes_cli/web_server_dashboard.py:862`) and never touches `sys.path`, so
+      a plain sibling import raises `ImportError` and the feature silently
+      degrades (verified: `kanban-gantt: websocket prototype unavailable
+      (No module named 'plugin_ws')` in a real `hermes dashboard` log).
+
+    So: reuse an already-loaded module whose file *is* the sibling (never load a
+    second copy — the gateway's own instance must be the one wired up), else try
+    the plain import, else load it by path with a deterministic module name.
+    """
+    import importlib
+    import importlib.util
+    import sys
+
+    here = Path(__file__).resolve().parent / f"{name}.py"
+
+    def _is_sibling(mod: Any) -> bool:
+        f = getattr(mod, "__file__", None)
+        if not f:
+            return False
+        try:
+            return Path(f).resolve() == here
+        except OSError:  # pragma: no cover - unreadable path
+            return False
+
+    for mod in list(sys.modules.values()):
+        if _is_sibling(mod):
+            return mod
+    try:
+        mod = importlib.import_module(name)
+        if _is_sibling(mod):
+            return mod
+    except Exception:  # noqa: BLE001 - fall through to the by-path load
+        pass
+    spec = importlib.util.spec_from_file_location(f"kanban_gantt_{name}", here)
+    if spec is None or spec.loader is None:  # pragma: no cover - defensive
+        raise ImportError(f"cannot load sibling {name} from {here}")
+    mod = importlib.util.module_from_spec(spec)
+    # Register before exec so `from __future__ import annotations` + pydantic can
+    # resolve string annotations by module name (same reason core does it).
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
 # ---------------------------------------------------------------------------
 # Prototype: websocket push for the gantt snapshot loop (spike t_64075faf).
 # OFF unless KANBAN_GANTT_WS=1 — see dashboard/plugin_ws.py for the contract.
 # Registered last so the route set is identical to today's when the flag is off.
 # ---------------------------------------------------------------------------
 try:  # pragma: no cover - import guard only (bare copies of this file)
-    import plugin_ws
+    plugin_ws = load_sibling("plugin_ws")
 except Exception as _ws_exc:  # noqa: BLE001 - never break the REST backend
     print(f"kanban-gantt: websocket prototype unavailable ({_ws_exc})")
     plugin_ws = None
