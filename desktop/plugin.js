@@ -2531,14 +2531,24 @@ function KanbanGanttPage() {
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ""}`),
     refetchInterval: wsState === WS_STATE.live ? 3e5 : 6e4
   });
+  const recordWsState = (state) => {
+    setWsState(state);
+    if (getStorage()) getStorage().set("wsState", state);
+  };
   useEffect2(() => {
     if (!wsBoard) {
+      const why = !wsEnabled ? "disabled" : base ? "custom-base" : !socketDoor ? "no-door" : "no-board";
+      if (getStorage()) {
+        getStorage().set("wsOff", why);
+        getStorage().set("wsState", WS_STATE.off);
+      }
       setWsState(WS_STATE.off);
       return void 0;
     }
+    if (getStorage()) getStorage().set("wsOff", "");
     return subscribeGantt(socketDoor, {
       board: wsBoard,
-      onState: setWsState,
+      onState: recordWsState,
       onSnapshot: (snapshot) => {
         queryClient.setQueryData(["kanban-gantt", "gantt", apiBase(), wsBoard], snapshot);
       },
@@ -3109,7 +3119,7 @@ var plugin = {
     setPluginDoors(ctx.rest, ctx.storage, ctx.socket);
     $baseUrl.set((ctx.storage.get("baseUrl", "") || "").replace(/\/+$/, ""));
     $boardSlug.set(readStoredBoard(ctx.storage));
-    $wsEnabled.set(ctx.storage.get("ws", "0") === "1");
+    $wsEnabled.set(ctx.storage.get("ws", "1") === "1");
     $labelW.set(Number(ctx.storage.get("labelW", LABEL_W)) || LABEL_W);
     $drawerW.set(Number(ctx.storage.get("drawerW", 416)) || 416);
     $drawerDocked.set(ctx.storage.get("drawerDocked", "0") === "1");
