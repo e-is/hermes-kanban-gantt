@@ -49,7 +49,7 @@ tests/
    (syntax), CI drift guard: rebuild + `git diff --exit-code desktop/`.
 2. [x] **Extract the pure core** — DONE: `src/core/gantt-core.ts` (real
    exported functions, no template string, no eval). `desktop/gantt-core.js`
-   is the built artifact consumed by `tests/gantt-core.test.mjs` and the demo.
+   is the built artifact consumed by `tests/gantt-core.test.mjs`.
 3. [~] **Split the renderer** — started: the whole renderer lives in
    `src/main.ts` (byte-identical logic to the pre-port plugin.js, imports the
    core module). Remaining: mechanically convert `jsx()` calls to JSX per
@@ -57,11 +57,11 @@ tests/
    per component with the manual checklist after each.
 4. [x] **Type the SDK boundary** — DONE: `src/sdk.d.ts` (loose ambient types
    for the SDK subset in use; tighten per module later).
-5. [~] **Tests to Hermes expectations** — core tests now run against the
-   built artifact without any eval; sticky-header UI test skips cleanly
-   without playwright. TODO: newswire-style `.stubs/` ESM render smoke tests
-   (register + page render without a browser); core unit tests for DST
-   boundaries, min-bar width, archived filtering.
+5. [x] **Tests to Hermes expectations** — core tests run against the built
+   artifact without any eval, and `tests/ui/esm-render.mjs` imports the built
+   plugin as ESM against SDK/react stubs to assert register + page render +
+   the page-header switcher contribution without a browser. Remaining: core
+   unit tests for DST boundaries, min-bar width, archived filtering.
 6. [ ] **Backend notes** — split `plugin_api.py` only if it keeps growing.
 
 ## What NOT to do yet
@@ -77,5 +77,5 @@ tests/
 - **Radix/Slot pitfalls** (`asChild` single child) and Electron drag regions
   are regression-prone — keep the AGENTS.md gotchas and the UI smoke tests.
 - The GANTT_CORE_SRC extraction trick is gone: the core is a real module
-  (`src/core/gantt-core.ts`) and the demo imports the built
-  `desktop/gantt-core.js`. The demo server serves both halves.
+  (`src/core/gantt-core.ts`) built to `desktop/gantt-core.js`, which the node
+  tests import directly.

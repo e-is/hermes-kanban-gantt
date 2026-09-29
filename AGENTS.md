@@ -20,7 +20,7 @@ and bulk operations. Zero API keys, zero model tokens.
   mounted. `…/desktop-plugin-sdk.md` — the renderer SDK. One page per
   capability surface lives beside them (`plugin-llm-access.md`,
   `model-provider-plugin.md`, …).
-- `README.md` — install, layout, demo and the feature list users read.
+- `README.md` — install, layout, tests and the feature list users read.
 
 ## Architecture map
 
@@ -32,7 +32,7 @@ dashboard/plugin_api.py  BACKEND — FastAPI router: gantt snapshot from the
                          shared kanban SQLite store, task detail, creation,
                          parent links, status/comments/assignee, bulk ops
 desktop/plugin.js        RENDERER ARTIFACT — plain ESM, loaded uncompiled
-desktop/gantt-core.js    pure-core artifact (tests and the demo import it)
+desktop/gantt-core.js    pure-core artifact (the node tests import it)
 src/                     AUTHORING SOURCES (TypeScript) — bundle with
                          `npm run build`; desktop/*.js are generated
   main.ts                page, rows, bars, drawer, drag & drop
@@ -41,8 +41,8 @@ src/                     AUTHORING SOURCES (TypeScript) — bundle with
   ui/                    NewTaskDialog, ReparentChooser, TaskRelations, switcher
 install.sh               optional installer (desktop half → desktop-plugins/,
                          backend half → plugins/)
-tests/                   node:test (core, REST door, sticky label), pytest
-                         backend suite, demo server (demo.html + /plugin.js + API)
+tests/                   node:test (core, REST door), a stub-render smoke test
+                         (tests/ui/esm-render.mjs, no browser), pytest backend
 ```
 
 - **Backend owns** all SQLite/kanban data access. Routes live under
@@ -63,8 +63,7 @@ tests/                   node:test (core, REST door, sticky label), pytest
 
 ```bash
 npm run build && npm run check
-node --test tests/gantt-core.test.mjs tests/rest-method.test.mjs
-bash tests/run_tests.sh        # pytest backend (isolated venv, HERMES_AGENT_HOME)
+npm test                       # node suites + stub-render + pytest backend
 ```
 
 ## Gotchas

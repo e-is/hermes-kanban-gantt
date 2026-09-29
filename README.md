@@ -69,10 +69,11 @@ src/                 AUTHORING SOURCES (TypeScript)
   sdk.d.ts           ambient types for the SDK subset in use
 desktop/             BUILD ARTIFACTS — loaded uncompiled by Hermes Desktop
   plugin.js          bundled renderer (do not edit; run `npm run build`)
-  gantt-core.js      bundled pure core (tests + demo import it)
+  gantt-core.js      bundled pure core (the node tests import it)
 install.sh           optional convenience installer (desktop half + backend half)
-tests/               node:test suite (pure gantt core, REST door), pytest backend
-                     suite, demo server (one port: demo + API + plugin.js)
+tests/               node:test suites (pure gantt core, REST door), a stub-render
+                     smoke test that mounts the built plugin without a browser
+                     (tests/ui/esm-render.mjs), and the pytest backend suite
 ```
 
 Build & test:
@@ -81,8 +82,7 @@ Build & test:
 npm install            # esbuild
 npm run build          # src/ → desktop/
 npm run check          # syntax-gate the artifacts
-node --test tests/gantt-core.test.mjs tests/rest-method.test.mjs
-bash tests/run_tests.sh
+npm test               # node suites + stub-render + pytest backend
 ```
 
 ## Architecture
@@ -101,32 +101,27 @@ bash tests/run_tests.sh
 ## Tests
 
 ```bash
+npm test                                                        # everything below
+
 # pure core + REST door (node:test, no deps)
 node --test tests/gantt-core.test.mjs tests/rest-method.test.mjs
+
+# the built plugin, imported as ESM against SDK/react stubs: page registers,
+# renders and projects its switcher — no browser, no desktop needed.
+# The stub fills in any SDK export the artifact imports, so it cannot drift.
+node tests/ui/esm-render.mjs
 
 # backend (isolated venv; HERMES_AGENT_HOME points at a hermes-agent checkout)
 tests/run_tests.sh
 ```
 
-## Demo
+## Visual validation
 
-Runs the plugin's real backend + a standalone demo page in a browser — no
-Hermes desktop needed. Prereqs: `node`, `playwright` (npm, for the scripted
-run only), a Python with `fastapi` + `uvicorn` for the backend.
-
-```bash
-# 1. one-time: machine-local paths (see .env.example)
-cp .env.example .env   # then edit KG_PYTHON / KG_* paths
-
-# 2. interactive demo page (auto-spawns the standalone backend)
-node tests/demo-server.mjs          # → open http://127.0.0.1:4200/demo.html
-
-# 3. or headless scripted run + screenshots in tests/demo-shots/
-node tests/demo_playwright.mjs
-```
-
-Machine-specific paths (python, playwright, browsers, hermes checkout) come
-from `.env` (gitignored, `KG_*` variables — environment variables always win).
+There is no browser harness: the demo page was retired (it rendered its own
+simplified DOM, so it proved nothing about the real component tree). Visual
+work is validated in the desktop itself, where the plugin actually runs —
+`install.sh`, then Ctrl+K → "Reload desktop plugins", or drive a debug build
+over CDP (`HERMES_DESKTOP_CDP_PORT=9223 hermes desktop`).
 
 ## Screenshots
 

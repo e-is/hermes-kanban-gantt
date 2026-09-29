@@ -78,28 +78,73 @@ size differs (a new file vs a two-line re-pin).
    The tag itself satisfies the "released" bar; creating the GitHub Release page
    needs `gh` and can be skipped.
 4. **Validate locally** (same checks as admission CI):
-   `hermes plugins validate <repo-root>` → must print `Validation passed`.
-   Reading the checks: manifest, capability probe, security scan, desktop-surface
-   lint. Clear your own MEDIUM/HIGH findings before the PR — a bundled library's
-   prop-types `SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED` literal and ZWJ
-   emoji are the usual false-ish positives; post-process them out of the artifact.
+   `hermes plugins validate <repo-root>` → the check list must end in
+   `Validation passed`. `--json` prints the machine-readable per-check report
+   (`checks[]` with `name` / `ok` / `detail`), which is how you read WHICH check
+   failed without parsing the wrapped text. Clear your own MEDIUM/HIGH findings
+   before the PR — a bundled library's prop-types
+   `SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED` literal and ZWJ emoji are the
+   usual false-ish positives; post-process them out of the artifact.
 5. **Get the entry right** (see schema): `sha:` = the tag's commit, `version:` =
    the same label, `requires_hermes:` in sync with the manifest, `screenshots:`
    pinned to that sha.
 6. **Open the PR against hermes-agent** editing `plugin-catalog/<name>.yaml`.
-   The submitter must own the plugin repo (rule 5). Catalog CI
-   (`.github/workflows/plugin-catalog-ci.yml`) must be green; cross-check with
-   `scripts/validate_plugin_catalog.py`. For an UPDATE, state the commit range
-   being adopted in the body — that range is what the reviewer reads.
+   The submitter must own the plugin repo (rule 5). For an UPDATE, state the
+   commit range being adopted in the body — that range is what the reviewer reads.
+
+## Re-pinning an existing entry is an EDIT, and it is the common case
+
+`plugin-catalog/<name>.yaml` already exists once the plugin was listed, and the
+catalog allows exactly one file per plugin `name:` (the structural validator
+rejects a duplicate). So a version bump is a **modification of that file** —
+`sha`, `version`, `requires_hermes`, and the re-pinned `screenshots`/`image` URLs —
+never a second file, and never a rename. Model the PR on the listing PR that
+added the entry: title `plugin catalog: … kanban-gantt …`, body opening with
+`## What does this PR do?`, the repo link, what the adopted commit range brings,
+and a `## Screenshots` section when the gallery changes.
+
+The listing PR also carried one extra file, `contributors/emails/<email>`, which
+is a ONE-TIME addition: check it with
+`GET /repos/NousResearch/hermes-agent/contents/contributors/emails/<email>` and
+do not re-add it on a re-pin.
+
+## What the catalog CI actually runs
+
+`.github/workflows/plugin-catalog-ci.yml` fires only on PRs touching
+`plugin-catalog/**` and has two jobs:
+
+- **structural** — `pip install ruamel.yaml` then
+  `python3 scripts/validate_plugin_catalog.py plugin-catalog/` over the WHOLE
+  directory (so an unrelated malformed entry shows up in your PR).
+- **pinned-source-validate** — finds the changed entry files, then clones the
+  entry's repo and **checks out the pinned sha** and runs
+  `hermes plugins validate` THERE. Two consequences that decide whether a local
+  failure is real:
+  - It validates the CLONE at that commit, **with no package install** —
+    generated/gitignored trees (`.agents/skills/*` from a skills sync,
+    `node_modules`, build caches) do not exist there. A `security scan` finding
+    from such a file does not fail admission; one from a TRACKED file does. Prove
+    the split locally by checking each finding's path with
+    `git ls-files --error-unmatch`.
+  - The pinned sha must be reachable in the repo (`GET /repos/<owner>/<repo>/commits/<sha>`
+    answers 200) — verify that BEFORE opening the PR, since an unpushed tag or a
+    local-only commit fails this gate with no useful message.
 
 ## Practicalities on this machine
 
 - The catalog is visible in the installed checkout: `ls ~/.hermes/hermes-agent/plugin-catalog/`
   and the policy at `plugin-catalog/README.md`; the validator lives at
   `scripts/validate_plugin_catalog.py`.
-- `gh` is usually absent and the fine-grained token in `~/.hermes/.env` is often
-  read-only → the PR is opened from the owner's fork instead: push the branch to
-  the fork (SSH works regardless of the token) and hand over
+- Wire the fork clone before editing anything:
+  `git remote set-url origin git@github.com:<fork-owner>/hermes-agent.git` (a fork
+  the token can PUSH to — probe it with `GET /repos/<owner>/hermes-agent` and read
+  `permissions.push`) and `git remote set-url upstream https://github.com/NousResearch/hermes-agent.git`,
+  then branch off `upstream/main` (`git checkout -b catalog/<name>-<version> upstream/main`).
+  The first fetch from a fresh fork remote of that repo takes minutes — start it
+  early, and never let it block the rest of the work.
+- `gh` is usually absent and a fine-grained token is often read-only → the PR is
+  opened from the owner's fork instead: push the branch to the fork (SSH works
+  regardless of the token) and hand over
   `https://github.com/NousResearch/hermes-agent/compare/main...<owner>:<branch>?quick_pull=1`
   with the body written to a file. Do that branch work in `~/git/hermes-agent`
   (fork clone), never in the installed checkout.
@@ -111,10 +156,14 @@ size differs (a new file vs a two-line re-pin).
 ## Checklist before submitting
 
 - [ ] Public repo, default branch installs cleanly.
-- [ ] `sha` = a full 40-hex commit that is the release (not a branch/tag).
+- [ ] `sha` = a full 40-hex commit that is the release (the tag's commit, not a branch/tag string).
 - [ ] `version` bumped in the SAME PR as `sha`; `requires_hermes` matches the manifest.
 - [ ] No self-updating code (checked at the pinned commit, not only on main).
 - [ ] `capabilities:` equals what actually registers at that commit.
-- [ ] `hermes plugins validate` → `Validation passed`; catalog CI green.
-- [ ] `image`/`screenshots` on GitHub hosts, pinned to the entry's sha.
+- [ ] The EXISTING entry file was edited, not duplicated.
+- [ ] `hermes plugins validate` → `Validation passed`, and every remaining
+      `caution` finding is in a gitignored (hence absent-at-that-commit) file.
+- [ ] The pinned sha answers 200 on the commits API (reachable in the repo).
+- [ ] `image`/`screenshots` on GitHub hosts, pinned to the entry's sha, and each
+      URL verified to exist at that sha.
 - [ ] README at the pinned sha is the one users should see (it renders on the docs page).

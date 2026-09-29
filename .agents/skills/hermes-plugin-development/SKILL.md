@@ -1,6 +1,6 @@
 ---
 name: hermes-plugin-development
-description: Use when developing or fixing a Hermes desktop plugin (repo or standalone).
+description: Use when building or fixing a Hermes desktop plugin.
 version: 1.0.0
 author: Ben (blavenie), Hermes Agent
 license: GPL-3.0
@@ -202,21 +202,35 @@ When seeding MANY tasks at once (demo/validation boards), use the domain layer f
 - The script is NOT idempotent — `create_task` without `idempotency_key` inserts duplicates every run; delete the board dir (`rm -rf boards/<slug>`) before re-seeding, and count the rows after to prove one seed ran once.
 - Run timestamps belong in `task_runs` rows (task id + `started_at`/`ended_at`/`outcome`) — the `tasks` table has no `run_started_at`/`run_ended_at` columns; the backend's `/gantt` derives run windows from `task_runs`.
 
-## Test scripts must be location-independent
+## Test setup rules (checkout-independent, no implicit network)
 
-Never hardcode absolute repo paths in test runner scripts — team containers use different mount points (e.g. `/opt/data/...`) than the user's machine.
-
-- Anchor everything on `SCRIPT_DIR` from `BASH_SOURCE[0]`.
-- When EVERY terminal command fails before it runs (`cd: /opt/data: No such file`, exit 126), the session's cwd is stale from another context (a team container) — the shell cd's there before your command executes. Pass an explicit `workdir` on the call instead of retrying; do not conclude the tooling is broken.
-- Make checkout-dependent paths (e.g. `HERMES_AGENT_HOME` for the `hermes_cli` PYTHONPATH) overridable via env var, with an ordered fallback list: explicit env → `~/.hermes/hermes-agent` → the container path.
-- Fail with an explicit error naming the env var when the checkout is not found, instead of failing obscurely at `cd`.
-- Machine-local paths (python, playwright module, browsers path, hermes checkout) belong in a gitignored `.env` at the repo root with a committed `.env.example` documenting every key, plus a tiny loader in the test/demo scripts (parse `KEY=VALUE`, strip quotes, an ALREADY-SET environment variable always wins). The team container and the user's machine then share one script with zero hardcoded paths. Document the loop in the README's `## Demo` section: copy `.env.example` → `.env`, edit the paths, then either the interactive demo page or the scripted run that writes screenshots.
-- `chmod +x` test scripts after rewriting them — write_file drops the exec bit.
-- Node unit tests need a GLOB, not a directory: `node --experimental-strip-types --test "tests/unit/*.test.ts"`. Passing the directory (`--test tests/unit/`) makes current Node treat it as a single test file and report one failing subtest named after the path — which reads as a genuine test failure and sends you hunting a bug that does not exist. Keep the README's command in glob form.
-- The backend pytest suite needs `fastapi` + `pytest` + `httpx` together; the hermes venv carries fastapi without pytest and a system python usually has pytest without fastapi. Don't hunt for the right interpreter — create a throwaway venv (`python3 -m venv /tmp/<name>-venv && /tmp/<name>-venv/bin/pip install -q fastapi pytest httpx`) and run `PYTHONPATH=<repo> /tmp/<name>-venv/bin/python -m pytest tests/ -q`. A venv under `/tmp` does not survive a reboot, so recreate it rather than assuming it exists.
-- `hermes_cli` keeps gaining imports from the wider agent tree (`kanban_db` → `kanban_db_workspace` → `worktree_ops` → `utils` → `ruamel.yaml`), so an existing test venv goes stale and the suite dies at COLLECTION with `ModuleNotFoundError` — not a plugin regression. Have the runner verify the module set it actually needs on every run and top the venv up when one is missing; list MODULES for the import check but DISTRIBUTIONS for the install (the module `yaml` is the package `pyyaml` — passing `yaml` to `uv pip install` fails resolution). Offline fallback needing no network: prepend the hermes-agent venv's `site-packages` to `PYTHONPATH` (pure-python deps import across interpreter versions; anything compiled fails the same check and is reported instead of faked) — and `export` it, since an unexported assignment leaves the check failing. Add a `PYTEST_PYTHON` escape hatch to run the suite on any interpreter that already has the stack.
-- Isolate the data directory in tests, or a test that reaches a WRITER rewrites shipped data. An autouse `tmp_path` fixture must monkeypatch `DATA_DIR` AND every module-level path constant (`MODELS_FILE`, `PRICE_HISTORY_FILE`, `PROFILES_FILE`, `CACHE_FILE`, `HF_LANGS_CACHE_FILE`, …) — patching only the loader the test calls is not enough, because the endpoint under test invokes the saver itself. Symptom when missed: `git status` shows the repo's `data/models.json` having lost the whole seed list (19 models -> 1). Also write the double-encoding regression test as `content=json.dumps(json.dumps({...}))` (see the `ctx.rest` contract above) so the assertion pins the real bridge behaviour.
-
+- Never hardcode absolute repo paths: team containers mount the repo elsewhere
+  (`/opt/data/...`). Anchor on `SCRIPT_DIR` from `BASH_SOURCE[0]`.
+- When EVERY terminal command fails before it runs (`cd: /opt/data: No such file`,
+  exit 126), the session's cwd is stale from another context — pass an explicit
+  `workdir` on the call instead of retrying; do not conclude the tooling is broken.
+- Make checkout-dependent paths (e.g. `HERMES_AGENT_HOME` for the `hermes_cli`
+  PYTHONPATH) overridable by env var with an ordered fallback, and fail with an
+  explicit error naming the variable instead of at `cd`.
+- `chmod +x` test scripts after rewriting them — a file write drops the exec bit.
+- Node tests need a GLOB, not a directory: `node --test "tests/unit/*.test.ts"`.
+  Passing the directory treats it as one file and reports a single failing subtest
+  named after the path, which reads as a genuine bug.
+- The backend pytest suite needs `fastapi` + `pytest` + `httpx` together; neither
+  the hermes venv nor a system python normally has all three. Create a throwaway
+  venv (`python3 -m venv /tmp/<name>-venv && …/pip install -q fastapi pytest httpx`)
+  and run `PYTHONPATH=<repo> …/python -m pytest tests/ -q`. It does not survive a
+  reboot, so recreate it rather than assuming it exists.
+- `hermes_cli` keeps gaining imports (`kanban_db` → … → `ruamel.yaml`), so a test
+  venv goes stale and the suite dies at COLLECTION with `ModuleNotFoundError` —
+  not a plugin regression. Have the runner verify the module set it needs on every
+  run and top the venv up; list MODULES for the check but DISTRIBUTIONS for the
+  install (module `yaml` = package `pyyaml`). Offline fallback: prepend the
+  hermes-agent venv's `site-packages` to `PYTHONPATH` (pure-python deps import
+  across versions; compiled ones fail the same check and are reported, not faked).
+- Isolate test data or a test that reaches a WRITER rewrites shipped data: an
+  autouse `tmp_path` fixture must monkeypatch every module-level path constant, not
+  just the loader the test calls.
 ## hermes_cli compatibility layer
 
 Imports in `plugin_api.py` and tests should target the current `hermes_cli` module paths. If tests emit a `HermesPluginCompatWarning` about a moved symbol (old path kept only for external plugins, with a removal date), migrate the import rather than relying on the shim.
@@ -264,18 +278,47 @@ No auth layer, no theme toggle, split the dashboard halves, seed from the user's
 
 The port shape (manifest, `__init__.py` probe, `dashboard/`, `desktop/plugin.js`, tests, install.sh) and the TSX/refactor path are in `references/standalone-repo-and-refactor.md`; read it before porting a plugin into its own repo.
 
-## Validate visual fixes with the repo's demo + Playwright screenshots
+## Validate visual fixes: the desktop IS the harness
 
-The user's standing preference: after every visual/UI fix, produce SCREENSHOTS for validation proactively — "j'attend de ta part des captures d'écrans pour valider tes corrections plus rapidement" — and for non-trivial visual/UX changes (e.g. bar semantics, status iconography) present ANALYSIS + PROPOSAL FIRST and write no code until approved. Re-run `bash install.sh` at the END of EVERY change, not only before a CDP session, and check the deployed artifact against the fresh build (md5 / a marker unique to the new code): the user tests on his own desktop and asks for the reinstall by name — work left only in the repo is, to him, not delivered.
+The user's standing preference: after every visual/UI fix, produce SCREENSHOTS for
+validation proactively, and for non-trivial visual/UX changes present ANALYSIS +
+PROPOSAL FIRST and write no code until approved. Re-run `bash install.sh` at the
+END of every change, and check the deployed artifact against the fresh build (md5,
+or a marker unique to the new code): the user tests on his own desktop and asks
+for the reinstall by name — work left only in the repo is, to him, not delivered.
 
-For a NEW FEATURE the user splits the work explicitly: ANALYSIS first, then PLAN, then code ("Fais d'abord une analyse, avant le plan"). The analysis is a separate deliverable: where the data actually lives, the invariants/tests that already constrain the feature, the options with a recommendation, and — explicitly — the few decisions you need arbitrated. Wait for those answers, THEN show the plan (branch name, one commit per topic, tests and i18n keys in the same commit as the code they cover, how it will be validated on screen) and start coding only after it is agreed. Do not fold the plan into the analysis, and do not start coding while an open decision is unanswered: the answers routinely reshape the design (e.g. 'add a parent vs replace parents' became a modal, and 'children in the drawer' gained click-to-open).
+For a NEW FEATURE the user splits the work explicitly: ANALYSIS first, then PLAN,
+then code ("Fais d'abord une analyse, avant le plan"). The analysis is a separate
+deliverable: where the data actually lives, the invariants/tests that already
+constrain the feature, the options with a recommendation, and — explicitly — the
+few decisions you need arbitrated. Wait for those answers, THEN show the plan
+(branch name, one commit per topic, tests and i18n keys in the same commit as the
+code they cover, how it will be validated on screen) and start coding only after
+it is agreed. Do not fold the plan into the analysis, and do not start coding
+while an open decision is unanswered: the answers routinely reshape the design.
 
-The plugin repo ships the loop (`cd ~/git/hermes-kanban-gantt`):
-1. `npm run build` (esbuild src/ -> desktop/plugin.js) then `npm run check` (node --check both artifacts) — `node --check` alone does NOT parse JSX; the build is the JSX syntax gate.
-2. `node tests/demo_playwright.mjs --out <dir>` — spins a temp board seeded via the hermes domain layer, serves the plugin, renders it in Chromium, and writes PNGs to `tests/demo-shots/` (default). Vision-check the PNGs after.
-3. The script's defaults assume the team container (`KG_PYTHON=/opt/hermes/.venv/bin/python`, playwright resolved from `/usr/local/lib/node_modules/playwright`, `PLAYWRIGHT_BROWSERS_PATH=/opt/data/tmp/pw-browsers`). On the user's machine override: `KG_PYTHON=<venv python>` with `PYTHONPATH=~/.hermes/hermes-agent` (hermes_cli import), point the playwright import at the nvm global (`~/.nvm/versions/node/v22.21.1/lib/node_modules/playwright/index.mjs`) and let browsers resolve from the default `~/.cache/ms-playwright`. Check the three hardcoded paths in the script head before assuming a failure is environmental.
-4. For long-run pixel checks (sticky columns, connector geometry, bar shapes) use `tests/demo_multi_boards_shots.mjs` / crop screenshots on the label column region rather than eyeballing the full window.
-5. Know what the demo harness does NOT show: `demo.html` renders its own simplified DOM, so changes to the real component tree (status icons replacing dots, drawer chrome, connector markup) validate there only if the demo page was built from the same code — timeline BAR semantics carry over, per-row chrome often does not. When the fix touches the real component, validate in the actual desktop (CDP route above) or extend the demo harness to mount the real component; presenting a demo screenshot as proof of a component-tree change is a false validation.
+The loop, cheapest first:
+
+1. `npm run build && npm run check` — the JSX syntax gate (`node --check` alone
+   does not parse JSX).
+2. `node tests/ui/esm-render.mjs` — imports the REAL built `desktop/plugin.js`
+   through a Node loader that maps the three bare specifiers to stubs and asserts
+   registration, page render and the page-header switcher contribution, with no
+   browser. Keep its SDK stub in step by DERIVING the missing exports from the
+   artifact's own import list rather than hand-listing them: `ConfirmDialog` once
+   aborted the import and the suite read as a bare "FAIL: plugin failed to import".
+3. `npm test` — all of it (node suites + the stub render + the pytest backend).
+4. The real desktop, the only place that validates pixels: `install.sh`, then
+   Ctrl+K → "Reload desktop plugins" (a manifest change needs an app restart).
+   For scripted inspection use the CDP route above.
+
+There is deliberately NO browser/demo harness. An earlier `demo.html` + playwright
+pair was retired: it rendered its own simplified DOM, so a change to the real
+component tree validated there only by accident, and its screenshots read as proof
+of something they never exercised. Rebuilding one is not the answer — mount the
+real artifact (step 2) or look at the desktop.
+
+## Gantt bar semantics
 
 Gantt bar semantics the user validated for advancement-over-time views (reuse for sibling gantt plugins, keep the statuses consistent):
 - Blocked tasks must NOT render as a solid bar to now (reads as "running today"). Solid red bars only over each failed run window; then a dashed red waiting bar (`color-mix` light red fill, dashed border) from the last run end (or creation when no runs) to now, title "bloquée — en attente d'action". Same waiting grammar as todo's dashed bars.
@@ -364,6 +407,14 @@ All remaining scan findings after the CRITICAL fix are typically MEDIUM (obfusca
 Two more findings that are YOUR code, not a library false positive — clear them before shipping the artifact:
 - **Zero-width joiners (U+200D) in emoji literals are flagged HIGH `injection`.** An icon written as a multi-codepoint emoji sequence (`'👁\u200d🗨'`) carries a ZWJ; a single-codepoint glyph (`🙈`) does not. Grep the built artifact AND the `src/` bundles for `\u200d` before assuming the finding is library noise.
 - **A committed runtime cache is flagged MEDIUM `obfuscation`.** A minified cache blob such as `dashboard/data/_openrouter_cache.json` is runtime state, not source: `git rm --cached` it and add it (with its siblings, e.g. `dashboard/data/_*_cache.json`) to `.gitignore`. The backend must already tolerate the file being absent (`if not PATH.exists(): return {}`).
+
+**`hermes plugins validate <repo>` scans the DIRECTORY, not the git index.** It calls `tools/plugin_guard.scan_plugin(<dir>)`, which walks the filesystem and skips only VCS/venv noise — a gitignored file (a generated skill copy, a local build cache, a scratch note) is therefore scanned locally while it does NOT exist at the commit a catalog entry pins. Split the findings before reacting: query the scanner directly for structured results (`from tools.plugin_guard import scan_plugin`, then `(f.file, f.severity, f.pattern_id, f.line)` per finding — the CLI prints basenames only) and test each path with `git ls-files --error-unmatch <path>`. Only `critical`/`high` in a TRACKED file makes the verdict `dangerous` (which fails admission); the remainder is `caution`, i.e. warnings a reviewer reads.
+
+Two patterns that plain DOCUMENTATION trips, both fixable by rewording instead of pasting:
+- The privilege-escalation pattern — any literal spelling of the set-uid / set-gid flag names (`set` + `uid`), including a legitimate launch instruction such as the Electron flag that disables the sandbox. Describe the flag ("plus the sandbox-relaxing flag Electron documents for containers") rather than writing it out.
+- `env_exfil_curl` — a `curl` on a non-localhost URL that interpolates a variable whose name ends in KEY/TOKEN/SECRET/PASSWORD/CREDENTIALS (`-H "Authorization: Bearer $OPENROUTER_API_KEY"`). Say which header to send and where the key lives; never paste that command, and read the regex out of `tools/skills_guard.py` when a reworded version is still flagged.
+
+A vendored agent skill inside a plugin repo is the usual carrier of both (`references/…` example commands are the plugin's own source at the pinned sha) — sanitize it when the entry is pinned, and re-run the scanner to prove the tracked tree is clean. See `references/plugin-catalog-listing.md` for what the catalog's pinned-source gate clones and runs.
 
 ## Reviewing someone else's plugin PR: verify every claim, trust none
 

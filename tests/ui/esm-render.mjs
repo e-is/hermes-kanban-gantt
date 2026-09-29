@@ -8,8 +8,8 @@
  *   - import-scan clean (only SDK/react specifiers in source)
  *   - register(ctx) registers page + sidebar nav + palette command
  *   - page render produces the gantt (task titles, filter, legend)
- *   - board switcher contribution to titleBar.center is registered while the
- *     page is mounted
+ *   - board switcher contribution to WORKSPACE_PAGE_HEADER_AREA is registered
+ *     while the page is mounted
  *
  * Run: node tests/ui/esm-render.mjs
  */
@@ -118,6 +118,7 @@ const sdkStub = {
   Streamdown: 'Streamdown',
   Switch: 'Switch',
   TITLEBAR_AREAS: { left: 'titleBar.left', center: 'titleBar.center', right: 'titleBar.right' },
+  WORKSPACE_PAGE_HEADER_AREA: 'workspace.pageHeader',
   atom,
   profileColor: () => '#888888',
   profileColorSoft: () => 'rgba(136,136,136,0.2)',
@@ -128,6 +129,22 @@ const sdkStub = {
   useQueryClient: () => ({ invalidateQueries: () => {} }),
   useValue: useValueImpl
 }
+
+// Any SDK name the artifact imports but the map above does not know is filled in
+// automatically, so the stub cannot drift behind the plugin (a missing export
+// used to abort the import outright — `ConfirmDialog` did exactly that). Names
+// starting with `use` get a callable no-op, everything else a placeholder tag.
+const artifactSource = readFileSync(PLUGIN_PATH, 'utf8')
+const sdkImportBlocks = [...artifactSource.matchAll(/import\s*\{([^}]+)\}\s*from\s*['"]@hermes\/plugin-sdk['"]/g)]
+const importedNames = sdkImportBlocks
+  .flatMap(m => m[1].split(','))
+  .map(s => s.trim().split(/\s+as\s+/)[0])
+  .filter(Boolean)
+const autoFilled = [...new Set(importedNames.filter(name => !(name in sdkStub)))]
+for (const name of autoFilled) {
+  sdkStub[name] = name.startsWith('use') ? () => undefined : name
+}
+if (autoFilled.length) console.log('stub auto-filled: ' + autoFilled.join(', '))
 
 const reactStub = {
   useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
@@ -323,7 +340,7 @@ if (pageNode) {
   pageNode = page.render() // second render picks up resolved query data
   const flat = JSON.stringify(pageNode)
   check(flat.includes('Epic — first task'), 'page renders task titles')
-  check(flat.includes('"area":"titleBar.center"') || flat.includes('"area": "titleBar.center"'), 'page projects its switcher into titleBar.center')
+  check(flat.includes('"area":"workspace.pageHeader"') || flat.includes('"area": "workspace.pageHeader"'), 'page projects its switcher into WORKSPACE_PAGE_HEADER_AREA')
 }
 
 // 4) titlebar chrome: switcher contributed to titleBar.center

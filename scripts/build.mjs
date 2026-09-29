@@ -7,7 +7,7 @@
  *                           EXTERNAL — the desktop loader rewrites exactly
  *                           those bare specifiers.
  *   desktop/gantt-core.js   pure core as a standalone ESM module, consumed by
- *                           tests/gantt-core.test.mjs and tests/demo.html.
+ *                           tests/gantt-core.test.mjs.
  *
  * CI guard: rebuild and `git diff --exit-code desktop/` to detect drift.
  */

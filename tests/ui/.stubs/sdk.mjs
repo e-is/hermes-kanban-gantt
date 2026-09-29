@@ -47,7 +47,19 @@ const sdk = {
     "center": "titleBar.center",
     "right": "titleBar.right"
   },
-  "queryClient": {}
+  "WORKSPACE_PAGE_HEADER_AREA": "workspace.pageHeader",
+  "queryClient": {},
+  "ConfirmDialog": "ConfirmDialog",
+  "Dialog": "Dialog",
+  "DialogContent": "DialogContent",
+  "DialogFooter": "DialogFooter",
+  "DialogHeader": "DialogHeader",
+  "DialogTitle": "DialogTitle",
+  "Input": "Input",
+  "Popover": "Popover",
+  "PopoverContent": "PopoverContent",
+  "PopoverTrigger": "PopoverTrigger",
+  "DialogDescription": "DialogDescription"
 }
 sdk.host = { navigate: path => calls.navigate.push(path) }
 sdk.atom = __atom
@@ -83,4 +95,16 @@ export const SIDEBAR_NAV_AREA = sdk.SIDEBAR_NAV_AREA
 export const Streamdown = sdk.Streamdown
 export const Switch = sdk.Switch
 export const TITLEBAR_AREAS = sdk.TITLEBAR_AREAS
+export const WORKSPACE_PAGE_HEADER_AREA = sdk.WORKSPACE_PAGE_HEADER_AREA
 export const queryClient = sdk.queryClient
+export const ConfirmDialog = sdk.ConfirmDialog
+export const Dialog = sdk.Dialog
+export const DialogContent = sdk.DialogContent
+export const DialogFooter = sdk.DialogFooter
+export const DialogHeader = sdk.DialogHeader
+export const DialogTitle = sdk.DialogTitle
+export const Input = sdk.Input
+export const Popover = sdk.Popover
+export const PopoverContent = sdk.PopoverContent
+export const PopoverTrigger = sdk.PopoverTrigger
+export const DialogDescription = sdk.DialogDescription

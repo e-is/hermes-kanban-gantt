@@ -6,6 +6,7 @@ node_modules/
 .DS_Store
 .env
 .idea/
+tests/ui/.stubs/
 
 # Agent skills refreshed from skills-lock.json by `npm install` (postinstall,
 # `skills update`); .claude/skills is a tracked symlink to .agents/skills.

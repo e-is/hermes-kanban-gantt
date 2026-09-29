@@ -7,8 +7,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "node --check desktop/plugin.js && node --check desktop/gantt-core.js",
-    "test": "node --test tests/gantt-core.test.mjs tests/test_sticky.mjs && bash tests/run_tests.sh",
-    "demo": "node tests/demo-server.mjs",
+    "test": "node --test tests/gantt-core.test.mjs tests/rest-method.test.mjs && node tests/ui/esm-render.mjs && bash tests/run_tests.sh",
     "skills:update": "skills update -p -y || echo 'skills:update failed (ignored)'",
     "postinstall": "npm run --silent skills:update"
   },
