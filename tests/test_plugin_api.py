@@ -413,3 +413,40 @@ def test_parent_unlink_missing_link(client):
     http, board = client
     r = http.delete(f"/tasks/{board['child']}/parent/t_missing?board={board['slug']}")
     assert r.status_code == 404
+
+
+def _gantt(http, slug):
+    data = http.get(f"/gantt?board={slug}").json()
+    return {t["id"]: t for t in data["tasks"]}
+
+
+def test_reparent_is_visible_in_the_gantt_snapshot(client):
+    """What the page re-renders must already carry the new hierarchy.
+
+    The UI refreshes by re-reading /gantt (the query invalidation target), so the
+    moved task, its new parent AND its old parent all have to come back with the
+    updated links and status in THAT payload — not only in /tasks/<id>.
+    """
+    http, board = client
+    before = _gantt(http, board["slug"])
+    assert before[board["child"]]["parents"] == [board["parent"]]
+    assert before[board["parent"]]["children"] == [board["child"]]
+
+    r = http.post(f"/tasks/{board['child']}/parent?board={board['slug']}",
+                  json={"parentId": board["solo"], "mode": "replace"})
+    assert r.status_code == 200
+
+    after = _gantt(http, board["slug"])
+    assert after[board["child"]]["parents"] == [board["solo"]]
+    assert after[board["solo"]]["children"] == [board["child"]]
+    # the link removed on the other side must be gone too (no ghost connector)
+    assert after[board["parent"]]["children"] == []
+    # and the gated status is what the row/badge will paint
+    assert after[board["child"]]["status"] == "todo"
+
+    # unlink from the parent list -> the snapshot drops the edge and re-gates
+    d = http.delete(f"/tasks/{board['child']}/parent/{board['solo']}?board={board['slug']}")
+    assert d.status_code == 200
+    freed = _gantt(http, board["slug"])
+    assert freed[board["child"]]["parents"] == []
+    assert freed[board["solo"]]["children"] == []

@@ -96,6 +96,20 @@ function humanReparentError(error, i18n) {
   return i18n.errReparent
 }
 
+/** Report through the desktop's own notification stack — it auto-dismisses and
+ *  lives outside the page layout, so a stale message can never end up painted
+ *  inside the drawer. Falls back to nothing when the bridge is absent (plain
+ *  browser / demo). */
+function toast(kind, message) {
+  try {
+    if (host && typeof host.notify === 'function' && message) {
+      host.notify({ kind, message })
+    }
+  } catch {
+    /* no desktop bridge: drop it rather than crash the page */
+  }
+}
+
 
 /** Apply a new backend base URL and refetch everything. */
 const applyBase = value => {
@@ -927,7 +941,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     onSuccess: () => {
       setActionError(null)
       void refetch()
-      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
     },
     onError: error => setActionError(String(error?.message || error))
   })
@@ -1329,8 +1343,6 @@ export function KanbanGanttPage() {
   // ── re-parenting: drag & drop plus the keyboard-reachable picker ───────────
   const [dragId, setDragId] = useState(null)
   const [pendingReparent, setPendingReparent] = useState(null)   // { childId, parentId }
-  const [reparentNote, setReparentNote] = useState(null)
-  const [reparentError, setReparentError] = useState(null)
   const allTasks = data?.tasks || []
   const [selectedAssignees, setSelectedAssignees] = useState(() => new Set())
   const [disabledStatuses, setDisabledStatuses] = useState(() => {
@@ -1407,35 +1419,34 @@ export function KanbanGanttPage() {
     mutationFn: ({ childId, parentId, mode }) => setParent(childId, parentId, mode, board),
     onSuccess: response => {
       setPendingReparent(null)
-      setReparentError(null)
       const child = allTasks.find(t => t.id === response.task_id)
       const parent = allTasks.find(t => t.id === response.parent_id)
       const childName = child ? child.title : response.task_id
       const parentName = parent ? parent.title : response.parent_id
       // A re-parent can GATE the task (ready -> todo) — say so rather than let
       // the status change appear on its own.
-      setReparentNote(response.gated ? i18n.gatedNotice(childName) : i18n.movedUnder(childName, parentName))
-      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
+      toast('info', response.gated ? i18n.gatedNotice(childName) : i18n.movedUnder(childName, parentName))
+      // Prefix invalidation: the tree (gantt snapshot) AND the open task's
+      // detail both refetch, so the moved task's row, its parent's row and the
+      // drawer's relations all repaint together.
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
     },
     onError: error => {
       setPendingReparent(null)
-      setReparentNote(null)
-      setReparentError(humanReparentError(error, i18n))
+      toast('error', humanReparentError(error, i18n))
     }
   })
 
   const unlinkMutation = useMutation({
     mutationFn: ({ childId, parentId }) => removeParent(childId, parentId, board),
     onSuccess: () => {
-      setReparentError(null)
-      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
     },
-    onError: error => setReparentError(humanReparentError(error, i18n))
+    onError: error => toast('error', humanReparentError(error, i18n))
   })
 
   const handleDragStart = id => {
     setDragId(id)
-    setReparentError(null)
   }
 
   const handleDropOn = targetId => {
@@ -1444,7 +1455,7 @@ export function KanbanGanttPage() {
     if (!childId || childId === targetId) return
     const candidate = dropMap ? dropMap.get(targetId) : null
     if (candidate && !candidate.allowed) {
-      setReparentError(reasonLabel(candidate.reason, i18n))
+      toast('error', reasonLabel(candidate.reason, i18n))
       return
     }
     const child = allTasks.find(t => t.id === childId)
@@ -1464,7 +1475,7 @@ export function KanbanGanttPage() {
     if (!childId || childId === parentId) return
     const candidate = dropCandidates(allTasks, childId, boardOf(childId)).find(c => c.task.id === parentId)
     if (candidate && !candidate.allowed) {
-      setReparentError(reasonLabel(candidate.reason, i18n))
+      toast('error', reasonLabel(candidate.reason, i18n))
       return
     }
     const child = allTasks.find(t => t.id === childId)
@@ -1849,28 +1860,6 @@ export function KanbanGanttPage() {
               $drawerDocked.set(next)
               if (getStorage()) getStorage().set('drawerDocked', next ? '1' : '0')
             }
-          })
-        : null,
-      // Re-parent feedback: a drop that gated the task, or a refusal.
-      (reparentNote || reparentError)
-        ? jsx('div', {
-            className: cn(
-              'flex items-center gap-1.5 rounded border px-2 py-1 text-[11px]',
-              reparentError
-                ? 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300'
-                : 'border-(--ui-stroke-tertiary) bg-(--ui-bg-tertiary) text-(--ui-text-secondary)'
-            ),
-            children: [
-              jsx(Codicon, { name: reparentError ? 'error' : 'info', size: '0.8rem' }),
-              jsx('span', { className: 'min-w-0 flex-1', children: reparentError || reparentNote }),
-              jsx('button', {
-                type: 'button',
-                'aria-label': i18n.close,
-                className: 'shrink-0 cursor-pointer rounded border-0 bg-transparent p-0.5 text-(--ui-text-quaternary) hover:text-(--ui-text-primary)',
-                onClick: () => { setReparentNote(null); setReparentError(null) },
-                children: jsx(Codicon, { name: 'close', size: '0.75rem' })
-              })
-            ]
           })
         : null,
       // Asked only when the dropped task already has parents: add vs replace.

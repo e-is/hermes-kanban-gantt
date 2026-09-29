@@ -42,6 +42,9 @@ declare module '@hermes/plugin-sdk' {
   export function usePluginI18n(id?: string): any
   export const host: {
     navigate: (path: string) => void
+    /** App notification stack (auto-dismissing toast outside the page layout). */
+    notify: (input: { kind?: string; title?: string; message?: string; detail?: string }) => string
+    notifyError: (error: unknown, fallback: string) => string
     [k: string]: any
   }
   export const queryClient: any
