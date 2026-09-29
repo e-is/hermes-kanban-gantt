@@ -71,6 +71,10 @@ install_file "$SCRIPT_DIR/desktop/plugin.js"                 "$HERMES_HOME/deskt
 install_file "$SCRIPT_DIR/plugin.yaml"               "$HERMES_HOME/plugins/kanban-gantt/plugin.yaml"
 install_file "$SCRIPT_DIR/dashboard/manifest.json"   "$HERMES_HOME/plugins/kanban-gantt/dashboard/manifest.json"
 install_file "$SCRIPT_DIR/dashboard/plugin_api.py"   "$HERMES_HOME/plugins/kanban-gantt/dashboard/plugin_api.py"
+# The push route lives in its own module; without it the gateway logs
+# "websocket prototype unavailable (No module named 'plugin_ws')" and silently
+# serves polling only, so the page has to keep its Refresh button forever.
+install_file "$SCRIPT_DIR/dashboard/plugin_ws.py"    "$HERMES_HOME/plugins/kanban-gantt/dashboard/plugin_ws.py"
 
 echo "Fait. Dans Hermes Desktop : Ctrl+K (⌘K sur macOS) → Reload desktop plugins, puis Ctrl+K → « Kanban Gantt »"
 echo "Puis activer le backend : hermes plugins enable kanban-gantt"

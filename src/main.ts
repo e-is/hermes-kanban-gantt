@@ -1406,14 +1406,33 @@ export function KanbanGanttPage() {
     refetchInterval: wsState === WS_STATE.live ? 300_000 : 60_000
   })
 
+  // The socket's state is PERSISTED, not just held in React state: it is the only
+  // way a silent push failure is diagnosable from outside — the client talks to
+  // console.debug, which nothing captures in a packaged build (so "why is there
+  // no live update?" had no answer). `wsOff` names the condition that switched it
+  // off; `wsState` is the lifecycle the client reports.
+  const recordWsState = state => {
+    setWsState(state)
+    if (getStorage()) getStorage().set('wsState', state)
+  }
+
   useEffect(() => {
     if (!wsBoard) {
+      // Three different causes land here, so record which one it is: the flag,
+      // a custom backend base (the socket door only speaks to the plugin's own
+      // namespace), a host without the door, or no board yet.
+      const why = !wsEnabled ? 'disabled' : base ? 'custom-base' : !socketDoor ? 'no-door' : 'no-board'
+      if (getStorage()) {
+        getStorage().set('wsOff', why)
+        getStorage().set('wsState', WS_STATE.off)
+      }
       setWsState(WS_STATE.off)
       return undefined
     }
+    if (getStorage()) getStorage().set('wsOff', '')
     return subscribeGantt(socketDoor, {
       board: wsBoard,
-      onState: setWsState,
+      onState: recordWsState,
       onSnapshot: snapshot => {
         queryClient.setQueryData(['kanban-gantt', 'gantt', apiBase(), wsBoard], snapshot)
       },
@@ -2073,9 +2092,11 @@ const plugin = {
     setPluginDoors(ctx.rest, ctx.storage, ctx.socket)
     $baseUrl.set((ctx.storage.get('baseUrl', '') || '').replace(/\/+$/, ''))
     $boardSlug.set(readStoredBoard(ctx.storage))
-    // Prototype: websocket push is opt-in (storage `ws` = '1'), and the server
-    // half stays off unless the gateway sets KANBAN_GANTT_WS=1.
-    $wsEnabled.set(ctx.storage.get('ws', '0') === '1')
+    // Push is the page's update path (there is no Refresh button), so the client
+    // asks for it unless the user opted out with storage `ws` = '0'. The gateway
+    // exposes /events unless it was started with KANBAN_GANTT_WS=0; the poll
+    // below stays as the safety net for either case, and for a dead socket.
+    $wsEnabled.set(ctx.storage.get('ws', '1') === '1')
     $labelW.set(Number(ctx.storage.get('labelW', LABEL_W)) || LABEL_W)
     $drawerW.set(Number(ctx.storage.get('drawerW', 416)) || 416)
     $drawerDocked.set(ctx.storage.get('drawerDocked', '0') === '1')

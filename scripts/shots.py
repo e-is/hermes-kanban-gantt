@@ -444,6 +444,36 @@ async def run_scenario(ui: Desktop, *, make_gif: bool):
     await ui.shot("screenshot-en-04-move")
 
 
+def cleanup_board():
+    """Delete the demo board, because the gateway DISPATCHES it.
+
+    Measured the hard way: an `auto-decomposer` split the triage card into
+    children within a minute of seeding and the dispatcher spawned real agent runs
+    (`spawned=2` in the gateway log) that spent tokens on demo data. The board is
+    therefore built by the seed at the start of a run and removed here at the end,
+    so the window in which it can attract a worker is seconds, and a stray board
+    never survives between captures.
+    """
+    board_dir = Path.home() / ".hermes" / "kanban" / "boards" / DEMO_BOARD
+    if not board_dir.exists():
+        return
+    code = ("import sys, os;"
+            "sys.path.insert(0, os.path.expanduser('~/.hermes/hermes-agent'));"
+            "from hermes_cli import kanban_db as k;"
+            "from hermes_cli import kanban_db_connect;"
+            "c = kanban_db_connect.connect(board=sys.argv[1]);"
+            "ids = [r[0] for r in c.execute('SELECT id FROM tasks')];"
+            "[k.archive_task(c, t) for t in ids];"
+            "c.commit();"
+            "print(len(ids))")
+    env = {**os.environ, "PYTHONPATH": str(Path.home() / ".hermes" / "hermes-agent")}
+    out = subprocess.run([sys.executable, "-c", code, DEMO_BOARD], env=env, capture_output=True, text=True)
+    if out.returncode == 0:
+        print(f"  archived {out.stdout.strip()} demo tasks before removing the board")
+    shutil.rmtree(board_dir, ignore_errors=True)
+    print(f"  removed the demo board ({board_dir}) — the gateway dispatches it, so it must not linger")
+
+
 def encode_animation():
     frames = sorted(FRAMES.glob("frame-*.jpg"))
     if not frames:
@@ -520,6 +550,8 @@ async def main():
     ap.add_argument("--no-gif", action="store_true")
     ap.add_argument("--no-seed", action="store_true",
                     help="keep the board as it is (it is dispatchable: agents may have worked on it)")
+    ap.add_argument("--keep-board", action="store_true",
+                    help="leave the seeded demo board in place (it is dispatched, so it spends tokens)")
     args = ap.parse_args()
 
     if not args.no_seed:
@@ -552,6 +584,11 @@ async def main():
                 encode_animation()
             except Exception as exc:
                 print(f"  ! animation not encoded: {exc}")
+        if not args.keep_board:
+            try:
+                cleanup_board()
+            except Exception as exc:
+                print(f"  ! demo board not removed: {exc}")
         shots = sorted(p.name for p in DOCS.glob("screenshot-en-*.png"))
         gif = ANIM / "kanban-gantt.gif"
         detail = "\n".join(f"• docs/{s}" for s in shots[-4:])
