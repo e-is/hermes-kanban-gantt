@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 
 import {
   WS_BACKOFF_BASE_MS, WS_BACKOFF_MAX_MS, WS_FIRST_FRAME_MS, WS_HEARTBEAT_MS, WS_IDLE_MS,
-  WS_MAX_ATTEMPTS, WS_STATE, classifyFrame, eventsPath, frameToQueryData, nextBackoff
+  WS_MAX_ATTEMPTS, WS_REARM_MS, WS_STATE, classifyFrame, eventsPath, frameToQueryData, nextBackoff
 } from '../desktop/ws-core.js'
 
 const snap = (version, extra = {}) => ({
@@ -73,6 +73,18 @@ test('timeouts are ordered: first frame < idle silence > heartbeat', () => {
   assert.equal(WS_FIRST_FRAME_MS, 5_000)
   assert.equal(WS_IDLE_MS, Math.round(WS_HEARTBEAT_MS * 2.5))
   assert.ok(WS_FIRST_FRAME_MS < WS_IDLE_MS)
+})
+
+test('the retry budget is finite, but the client re-arms by itself', () => {
+  // A gateway restart closes every socket (uvicorn closes with 1012). With a
+  // one-shot retry and no re-arm, the page silently stayed on the 60 s poll until
+  // someone reloaded it — the permanent degradation the spike listed as a risk and
+  // that was observed after a backend recycle. These numbers pin the policy: one
+  // quick retry (inside the backoff cap), then a slow self re-arm that must not
+  // fire during an idle window.
+  assert.equal(WS_MAX_ATTEMPTS, 1)
+  assert.ok(WS_BACKOFF_MAX_MS < WS_REARM_MS, 'the one-shot retry must stay much sooner than the re-arm')
+  assert.ok(WS_REARM_MS >= WS_IDLE_MS * 2, 'a re-arm must not race the idle-silence window')
 })
 
 test('the subscribe path pins the board at the handshake (R9/B6)', () => {

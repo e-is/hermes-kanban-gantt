@@ -14,6 +14,15 @@ let socket = null
 export const $baseUrl = atom('')
 /** Slug of the selected kanban board ('' until chosen). */
 export const $boardSlug = atom('')
+/** Identity of the gateway/connection the page is bound to.
+ *
+ *  The remembered board and the push socket are both connection-scoped: when this
+ *  changes (a gateway switch, or the backend restarting in place), the page must
+ *  re-read its scoped preference and re-subscribe instead of keeping the previous
+ *  backend's state. The bundled kanban plugin does the same with
+ *  `host.state.connectionId`.
+ */
+export const $connectionScope = atom('')
 /** Width (px) of the sticky task-name column — resizable via its drag handle. */
 export const $labelW = atom(LABEL_W)
 /** Width (px) of the task drawer — resizable via its left-edge handle. */

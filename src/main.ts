@@ -58,7 +58,7 @@ import {
   setPluginDoors,
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
   $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $openTaskId,
-  $newTask, $moveUnderId, $wsEnabled,
+  $newTask, $moveUnderId, $wsEnabled, $connectionScope,
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
   createTask, fetchProjects, fetchProfiles,
   setParent, removeParent, applyBase
@@ -1364,6 +1364,7 @@ export function KanbanGanttPage() {
   const queryClient = useQueryClient()
   const base = useValue($baseUrl)
   const board = useValue($boardSlug)
+  const scope = useValue($connectionScope)
   const openTaskId = useValue($openTaskId)
   const newTask = useValue($newTask)
   const moveUnderId = useValue($moveUnderId)
@@ -1440,7 +1441,7 @@ export function KanbanGanttPage() {
         void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt', apiBase(), wsBoard] })
       }
     })
-  }, [wsBoard, socketDoor, queryClient])
+  }, [wsBoard, socketDoor, queryClient, scope])
 
   // R6: the 60 s poll was also what advanced the timeline's "now" cursor; with
   // pushes driving the data, a local 30 s tick keeps open run arcs moving.
@@ -1833,7 +1834,7 @@ export function KanbanGanttPage() {
         className: 'flex flex-col flex-1 min-h-0 min-w-0 pl-3 py-2',
         children: [
 
-      // Top header row: Left title + task count badge + blocked badge + filter + search, Center board switcher, Right refresh
+      // Top header row: Left title + task count badge + blocked badge + filter + search, Center board switcher, Right zoom + new task
       jsxs('div', {
         className: 'flex flex-wrap items-center justify-between gap-2 mb-2',
         children: [
@@ -1909,7 +1910,11 @@ export function KanbanGanttPage() {
                 }),
                 jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${Math.round(zoom * 100)}%` })
               ] }),
-              jsx(Button, { size: 'xs', onClick: () => void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] }), children: i18n.refresh }),
+              // No Refresh button by design: the update path is the /events push
+              // (verified live: an out-of-UI write reached the page in ~1 s with
+              // zero /gantt requests). The 60 s poll remains the safety net for a
+              // gateway with the push disabled, a client that opted out, or a dead
+              // socket — so nobody needs a manual reload any more.
               // Far right: the board's only creation verb.
               jsx(Button, {
                 size: 'xs',
@@ -2092,11 +2097,33 @@ const plugin = {
     setPluginDoors(ctx.rest, ctx.storage, ctx.socket)
     $baseUrl.set((ctx.storage.get('baseUrl', '') || '').replace(/\/+$/, ''))
     $boardSlug.set(readStoredBoard(ctx.storage))
+    // Bind the connection scope, and follow it: a gateway switch (or the backend
+    // restarting in place) must re-read this connection's remembered board and
+    // make the push client re-subscribe, rather than keeping the previous
+    // backend's board and a socket to a dead port.
+    $connectionScope.set(connectionScope())
+    try {
+      const conn = host && host.state && host.state.connectionId
+      if (conn && typeof conn.listen === 'function' && typeof ctx.onDispose === 'function') {
+        ctx.onDispose(conn.listen(() => {
+          $connectionScope.set(connectionScope())
+          $boardSlug.set(readStoredBoard(ctx.storage))
+        }))
+      }
+    } catch {
+      /* no host.state (standalone server): one scope for the life of the page */
+    }
     // Push is the page's update path (there is no Refresh button), so the client
     // asks for it unless the user opted out with storage `ws` = '0'. The gateway
     // exposes /events unless it was started with KANBAN_GANTT_WS=0; the poll
     // below stays as the safety net for either case, and for a dead socket.
-    $wsEnabled.set(ctx.storage.get('ws', '1') === '1')
+    //
+    // Accept every spelling of "off" and nothing else as off: storage values
+    // round-trip through JSON, so a hand-written '1' comes back as the number 1
+    // and a strict `=== '1'` silently disabled the push (found live, through the
+    // persisted wsOff state below).
+    const wsFlag = ctx.storage.get('ws', '1')
+    $wsEnabled.set(!(wsFlag === '0' || wsFlag === 0 || wsFlag === false || wsFlag === 'false'))
     $labelW.set(Number(ctx.storage.get('labelW', LABEL_W)) || LABEL_W)
     $drawerW.set(Number(ctx.storage.get('drawerW', 416)) || 416)
     $drawerDocked.set(ctx.storage.get('drawerDocked', '0') === '1')

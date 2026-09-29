@@ -25,6 +25,15 @@ export const WS_BACKOFF_BASE_MS = 500
 export const WS_BACKOFF_MAX_MS = 10_000
 /** The prototype retries ONCE per outage, then leaves polling in charge. */
 export const WS_MAX_ATTEMPTS = 1
+/** After the retry budget is spent, the client re-arms itself this often.
+ *
+ *  A gateway restart closes every socket (uvicorn closes with 1012), and the
+ *  one-shot policy then left the page on polling until someone reloaded it — the
+ *  permanent degradation the spike's §7 listed as a risk, and what was observed
+ *  after a backend recycle. Polling stays the safety net; this only makes the
+ *  push come back on its own, so a restart heals within minutes instead of never.
+ */
+export const WS_REARM_MS = 5 * 60_000
 
 /** Socket lifecycle as seen by the UI. */
 export const WS_STATE = {

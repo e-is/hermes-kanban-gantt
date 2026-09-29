@@ -17,7 +17,7 @@
  */
 
 import {
-  WS_STATE, WS_FIRST_FRAME_MS, WS_IDLE_MS, WS_MAX_ATTEMPTS,
+  WS_STATE, WS_FIRST_FRAME_MS, WS_IDLE_MS, WS_MAX_ATTEMPTS, WS_REARM_MS,
   classifyFrame, eventsPath, frameToQueryData, nextBackoff
 } from './core/ws-core'
 
@@ -44,12 +44,14 @@ export function subscribeGantt(socketDoor, opts) {
   let firstTimer = null
   let idleTimer = null
   let retryTimer = null
+  let rearmTimer = null
   let live = false
 
   const clearTimers = () => {
     if (firstTimer) { clearTimeout(firstTimer); firstTimer = null }
     if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
     if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
+    if (rearmTimer) { clearTimeout(rearmTimer); rearmTimer = null }
   }
 
   const drop = (why) => {
@@ -80,6 +82,16 @@ export function subscribeGantt(socketDoor, opts) {
       retryTimer = setTimeout(start, delay)
     } else {
       onState && onState(WS_STATE.dead)
+      // Re-arm on our own: a gateway restart must not leave the page on polling
+      // forever (see WS_REARM_MS). The budget resets so the next outage gets its
+      // own retry.
+      console.debug(LOG, 're-arming in ' + WS_REARM_MS + 'ms')
+      rearmTimer = setTimeout(() => {
+        rearmTimer = null
+        if (disposed) return
+        attempts = 0
+        start()
+      }, WS_REARM_MS)
     }
   }
 

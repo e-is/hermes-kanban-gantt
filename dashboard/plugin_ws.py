@@ -459,13 +459,25 @@ class Subscriber:
                     return
 
     async def pump(self) -> None:
-        """Writer task: one send at a time, overruns reset on a clean send."""
-        while True:
-            frame = await self.queue.get()
-            if frame.get("type") == "close":
-                return
-            await self.ws.send_json(frame)
-            self.overruns = 0
+        """Writer task: one send at a time, overruns reset on a clean send.
+
+        A closed peer is the NORMAL end of this task — the page navigates away,
+        the gateway restarts, the client gives up — so it exits quietly. Letting
+        the send error escape left an un-retrieved task exception that asyncio
+        printed as "Task exception was never retrieved … RuntimeError" on every
+        disconnect, which read like a server fault in the gateway log.
+        """
+        try:
+            while True:
+                frame = await self.queue.get()
+                if frame.get("type") == "close":
+                    return
+                await self.ws.send_json(frame)
+                self.overruns = 0
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self.closing = True
 
 
 # ---------------------------------------------------------------------------
@@ -549,8 +561,22 @@ def attach(router: APIRouter, reader: Optional[Callable[[str], dict]] = None) ->
                     await asyncio.wait_for(ws.receive(), timeout=config.poll_s)
                 except asyncio.TimeoutError:
                     pass
-            log.info("kanban-gantt ws: closing %s (slow consumer)", slug)
-            await ws.close(code=CLOSE_SLOW_CONSUMER)
+                except Exception:
+                    # The peer is gone. starlette refuses a second receive() after
+                    # a disconnect message ("Cannot call receive once a disconnect
+                    # message has been received"), and that is the NORMAL end of a
+                    # subscription — the page navigated away, the gateway
+                    # restarted, the client gave up. Break instead of raising, so
+                    # a clean departure never reaches the error log below.
+                    break
+            if sub.closing:
+                # Only a saturated client is worth a close frame (4408); a peer
+                # that simply went away needs nothing.
+                log.info("kanban-gantt ws: closing %s (slow consumer)", slug)
+                try:
+                    await ws.close(code=CLOSE_SLOW_CONSUMER)
+                except Exception:
+                    pass
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -560,8 +586,12 @@ def attach(router: APIRouter, reader: Optional[Callable[[str], dict]] = None) ->
             log.warning("kanban-gantt ws: stream for %s ended: %s: %s",
                         slug, type(exc).__name__, exc)
         finally:
+            sub.closing = True
             stream.detach(sub)
             pump.cancel()
+            # Consume the cancellation: an un-awaited task is what made every
+            # disconnect print "Task exception was never retrieved" in the log.
+            await asyncio.gather(pump, return_exceptions=True)
 
     return True
 

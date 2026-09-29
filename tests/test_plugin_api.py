@@ -136,6 +136,45 @@ def test_gantt_rejects_traversal(client):
     assert http.get("/gantt?board=..%2Fetc").status_code in (400, 503)
 
 
+def test_a_board_resolving_outside_its_own_directory_is_refused(monkeypatch, tmp_path):
+    """A pinned HERMES_KANBAN_DB must be REFUSED, not silently obeyed.
+
+    A gateway launched from a kanban worker's shell inherits `HERMES_KANBAN_DB`,
+    and the core resolver then answers every slug with that one pinned file — so
+    `?board=does-not-exist` used to return a valid snapshot of the pinned board
+    under the wrong name (docs/spikes/websocket-recommendation §4.1, reproduced
+    live; it is also what made this plugin look like it was serving `obsfish`).
+    Serving another board's data silently is worse than a 404.
+    """
+    import types
+
+    elsewhere = tmp_path / "boards" / "someone-elses-board" / "kanban.db"
+    elsewhere.parent.mkdir(parents=True)
+    elsewhere.write_bytes(b"")
+
+    monkeypatch.setattr(plugin_api, "_kb", lambda: types.SimpleNamespace(kanban_db_path=lambda slug: elsewhere))
+
+    with pytest.raises(Exception) as exc:
+        plugin_api._board_db_path("wanted-board")
+
+    assert "refused" in str(exc.value)
+
+
+def test_a_board_in_its_own_directory_is_served(monkeypatch, tmp_path):
+    """The assertion must not reject the honest case it exists to protect."""
+    import types
+
+    boards = tmp_path / "boards"
+    own = boards / "wanted-board" / "kanban.db"
+    own.parent.mkdir(parents=True)
+    own.write_bytes(b"")
+
+    monkeypatch.setattr(plugin_api, "_boards_root", lambda: boards)
+    monkeypatch.setattr(plugin_api, "_kb", lambda: types.SimpleNamespace(kanban_db_path=lambda slug: own))
+
+    assert plugin_api._board_db_path("wanted-board") == own
+
+
 def test_task_detail(client):
     http, board = client
     r = http.get(f"/tasks/{board['child']}?board={board['slug']}")

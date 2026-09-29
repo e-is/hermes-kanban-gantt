@@ -294,7 +294,13 @@ export function NewTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) onClose() }}>
-      <DialogContent className="w-[min(32rem,94vw)] max-w-none">
+      {/* Width and the `overflow-visible` override are the bundled kanban
+          plugin's (`w-[min(42rem,94vw)] max-w-none overflow-visible`): the shell's
+          DialogContent publishes itself as the portal container for popovers born
+          inside it and its default scroll box then crops them at the dialog edge —
+          which is exactly what the project / parent / skills menus do here. This
+          dialog owns a scroller on its body, so the shell's clip is redundant. */}
+      <DialogContent className="w-[min(42rem,94vw)] max-w-none overflow-visible">
         <DialogHeader>
           <DialogTitle>{i18n.newTask}</DialogTitle>
         </DialogHeader>

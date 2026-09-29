@@ -99,6 +99,23 @@ def _board_db_path(slug: str) -> Path:
         path = _kb().kanban_db_path(slug)
     except Exception:
         path = _boards_root() / slug / "kanban.db"
+    # ASSERT the resolved file belongs to the board that was asked for. A gateway
+    # launched from a kanban worker's shell inherits HERMES_KANBAN_DB, and the core
+    # resolver then answers EVERY slug with that one pinned file — so
+    # `?board=does-not-exist` returned a valid snapshot of the pinned board under
+    # the wrong name (reproduced end-to-end in docs/spikes/websocket-recommendation
+    # §4.1, and it is what made this plugin look like it was serving `obsfish`).
+    # Refusing is the only safe answer: serving another board's data silently is
+    # worse than a 404.
+    resolved = path.resolve()
+    expected = (_boards_root() / slug / "kanban.db").resolve()
+    legacy_default = (_boards_root().parent / "kanban.db").resolve()
+    if resolved != expected and not (slug == "default" and resolved == legacy_default):
+        raise HTTPException(
+            status_code=404,
+            detail=(f"board '{slug}' resolved to {path} — that is not this board's own "
+                    "database, so it is refused (HERMES_KANBAN_DB pinning?)"),
+        )
     if not path.is_file():
         raise HTTPException(
             status_code=503,
