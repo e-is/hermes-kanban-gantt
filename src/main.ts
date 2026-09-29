@@ -1264,6 +1264,13 @@ export function KanbanGanttPage() {
     queryFn: () => fetchProjects(),
     staleTime: 60_000
   })
+  // Hermes profiles: assignee choices that exist before any task is assigned
+  // (the board's own assignee list is empty until then).
+  const { data: profilesData } = useQuery({
+    queryKey: ['kanban-gantt', 'profiles', apiBase()],
+    queryFn: () => fetchProfiles(),
+    staleTime: 60_000
+  })
   const { data, isLoading, isError } = useQuery({
     queryKey: ['kanban-gantt', 'gantt', apiBase(), board],
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ''}`),
@@ -1727,7 +1734,11 @@ export function KanbanGanttPage() {
       jsx(NewTaskDialog, {
         open: Boolean(newTask),
         boardSlug: board && board !== 'all' && board !== '*' ? board : undefined,
-        assignees: (derived && derived.allAssignees) || [],
+        assignees: (() => {
+          const fromBoard = (derived && derived.allAssignees) || []
+          const fromProfiles = (profilesData && profilesData.profiles) || []
+          return Array.from(new Set([...fromProfiles, ...fromBoard])).sort()
+        })(),
         tasks: (data && data.tasks) || [],
         projects: (projectsData && projectsData.projects) || [],
         defaultParentId: newTask ? newTask.parentId : '',

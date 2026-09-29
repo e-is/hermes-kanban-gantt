@@ -61,6 +61,9 @@ declare module '@hermes/plugin-sdk' {
   export const DialogHeader: any
   export const DialogTitle: any
   export const Input: any
+  export const Popover: any
+  export const PopoverContent: any
+  export const PopoverTrigger: any
   export const Contribute: any
   export const DropdownMenu: any
   export const DropdownMenuContent: any

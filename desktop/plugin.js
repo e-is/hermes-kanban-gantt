@@ -175,6 +175,9 @@ var GANTT_LOCALES = {
     newTaskModelInherit: "Profile default",
     newTaskModelHint: "Runs this task on a specific model; empty uses the assignee profile’s own.",
     newTaskGoalMode: "Goal mode",
+    newTaskProjectSearch: "Search a project…",
+    newTaskParentSearch: "Search a task…",
+    newTaskNoMatch: "No match",
     create: "Create",
     creating: "Creating…",
     createSubtask: "Create a sub-task",
@@ -296,6 +299,9 @@ var GANTT_LOCALES = {
     newTaskModelInherit: "Modèle du profil",
     newTaskModelHint: "Exécute la tâche sur un modèle précis ; vide = le modèle du profil assigné.",
     newTaskGoalMode: "Mode objectif",
+    newTaskProjectSearch: "Rechercher un projet…",
+    newTaskParentSearch: "Rechercher une tâche…",
+    newTaskNoMatch: "Aucun résultat",
     create: "Créer",
     creating: "Création…",
     createSubtask: "Créer une sous-tâche",
@@ -411,6 +417,9 @@ import {
   DropdownMenuSeparator as DropdownMenuSeparator2,
   DropdownMenuTrigger as DropdownMenuTrigger2,
   Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Switch
 } from "@hermes/plugin-sdk";
 
@@ -627,6 +636,71 @@ function Picker({ value, children, ariaLabel }) {
     /* @__PURE__ */ jsx2(DropdownMenuContent2, { align: "start", className: "min-w-[13rem]", children })
   ] });
 }
+function SearchPicker({
+  value,
+  options,
+  selectedId,
+  onPick,
+  ariaLabel,
+  searchPlaceholder,
+  emptyLabel,
+  className
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const visible = needle ? options.filter((o) => o.label.toLowerCase().includes(needle) || (o.hint || "").toLowerCase().includes(needle)) : options;
+  return /* @__PURE__ */ jsxs2(Popover, { open, onOpenChange: (next) => {
+    setOpen(next);
+    if (!next) setQuery("");
+  }, children: [
+    /* @__PURE__ */ jsx2(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsxs2(
+      "button",
+      {
+        type: "button",
+        "aria-label": ariaLabel,
+        className: "flex min-w-0 items-center gap-1.5 rounded border border-(--ui-stroke-tertiary) bg-transparent px-1.5 py-0.5 text-left text-[11px] text-(--ui-text-secondary) cursor-pointer",
+        children: [
+          /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: value }),
+          /* @__PURE__ */ jsx2(Codicon2, { className: "shrink-0 text-(--ui-text-quaternary)", name: "chevron-down", size: "0.75rem" })
+        ]
+      }
+    ) }),
+    /* @__PURE__ */ jsxs2(PopoverContent, { align: "start", className: className || "w-[16rem] p-1.5", children: [
+      /* @__PURE__ */ jsx2(
+        Input,
+        {
+          autoFocus: true,
+          value: query,
+          placeholder: searchPlaceholder,
+          "aria-label": searchPlaceholder,
+          onChange: (event) => setQuery(event.target.value)
+        }
+      ),
+      /* @__PURE__ */ jsx2("div", { className: "mt-1 flex max-h-64 flex-col gap-0.5 overflow-y-auto", children: visible.length === 0 ? /* @__PURE__ */ jsx2("div", { className: "px-1 py-1.5 text-[11px] italic text-(--ui-text-quaternary)", children: emptyLabel }) : visible.map((option) => /* @__PURE__ */ jsxs2(
+        "button",
+        {
+          type: "button",
+          onClick: () => {
+            onPick(option.id);
+            setOpen(false);
+            setQuery("");
+          },
+          className: "flex min-w-0 items-center gap-1.5 rounded border-0 bg-transparent px-1 py-0.5 text-left text-[11px] text-(--ui-text-secondary) cursor-pointer hover:bg-(--ui-row-hover-background)",
+          children: [
+            option.status ? /* @__PURE__ */ jsx2(StatusDot, { status: option.status }) : null,
+            /* @__PURE__ */ jsxs2("span", { className: "flex min-w-0 flex-1 flex-col", children: [
+              /* @__PURE__ */ jsx2("span", { className: "truncate", children: option.label }),
+              option.hint ? /* @__PURE__ */ jsx2("span", { className: "truncate font-mono text-[9.5px] text-(--ui-text-quaternary)", children: option.hint }) : null
+            ] }),
+            selectedId === option.id && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
+          ]
+        },
+        option.id
+      )) })
+    ] })
+  ] });
+}
 function NewTaskDialog({
   open,
   boardSlug,
@@ -721,20 +795,25 @@ function NewTaskDialog({
         }
       ) }),
       /* @__PURE__ */ jsxs2("div", { className: "grid grid-cols-2 gap-2.5", children: [
-        /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskProject, children: /* @__PURE__ */ jsxs2(Picker, { value: chosenProject ? chosenProject.name : i18n.newTaskNoProject, ariaLabel: i18n.newTaskProject, children: [
-          /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setProjectId(""), children: [
-            /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: i18n.newTaskNoProject }),
-            !projectId && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
-          ] }),
-          projects.length > 0 && /* @__PURE__ */ jsx2(DropdownMenuSeparator2, {}),
-          projects.map((project) => /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setProjectId(project.id), children: [
-            /* @__PURE__ */ jsxs2("span", { className: "flex min-w-0 flex-1 flex-col", children: [
-              /* @__PURE__ */ jsx2("span", { className: "truncate", children: project.name }),
-              project.path ? /* @__PURE__ */ jsx2("span", { className: "truncate font-mono text-[9.5px] text-(--ui-text-quaternary)", children: project.path }) : null
-            ] }),
-            projectId === project.id && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
-          ] }, project.id))
-        ] }) }),
+        /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskProject, children: /* @__PURE__ */ jsx2(
+          SearchPicker,
+          {
+            value: chosenProject ? chosenProject.name : i18n.newTaskNoProject,
+            selectedId: projectId,
+            onPick: setProjectId,
+            ariaLabel: i18n.newTaskProject,
+            searchPlaceholder: i18n.newTaskProjectSearch,
+            emptyLabel: i18n.newTaskNoMatch,
+            options: [
+              { id: "", label: i18n.newTaskNoProject },
+              ...projects.map((project) => ({
+                id: project.id,
+                label: project.name,
+                hint: project.path || void 0
+              }))
+            ]
+          }
+        ) }),
         /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskWorkspace, children: /* @__PURE__ */ jsx2(Picker, { value: workspaceKind, ariaLabel: i18n.newTaskWorkspace, children: WORKSPACE_KINDS.map((kind) => /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setWorkspaceKind(kind), children: [
           /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate font-mono text-[11px]", children: kind }),
           workspaceKind === kind && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
@@ -794,27 +873,21 @@ function NewTaskDialog({
         ),
         /* @__PURE__ */ jsx2("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: i18n.newTaskModelHint })
       ] }),
-      /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskParent, children: /* @__PURE__ */ jsxs2(
-        Picker,
+      /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskParent, children: /* @__PURE__ */ jsx2(
+        SearchPicker,
         {
           value: chosenParent ? /* @__PURE__ */ jsxs2("span", { className: "flex min-w-0 items-center gap-1.5", children: [
             /* @__PURE__ */ jsx2(StatusDot, { status: chosenParent.status }),
             /* @__PURE__ */ jsx2("span", { className: "min-w-0 truncate", children: chosenParent.title })
           ] }) : i18n.newTaskNoParent,
+          selectedId: parentId,
+          onPick: setParentId,
           ariaLabel: i18n.newTaskParent,
-          children: [
-            /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setParentId(""), children: [
-              /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: i18n.newTaskNoParent }),
-              !parentId && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
-            ] }),
-            parentOptions.length > 0 && /* @__PURE__ */ jsx2(DropdownMenuSeparator2, {}),
-            parentOptions.map((task) => /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setParentId(task.id), children: [
-              /* @__PURE__ */ jsxs2("span", { className: "flex min-w-0 flex-1 items-center gap-1.5", children: [
-                /* @__PURE__ */ jsx2(StatusDot, { status: task.status }),
-                /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: task.title })
-              ] }),
-              parentId === task.id && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
-            ] }, task.id))
+          searchPlaceholder: i18n.newTaskParentSearch,
+          emptyLabel: i18n.newTaskNoMatch,
+          options: [
+            { id: "", label: i18n.newTaskNoParent },
+            ...parentOptions.map((task) => ({ id: task.id, label: task.title, status: task.status }))
           ]
         }
       ) }),
@@ -1887,6 +1960,11 @@ function KanbanGanttPage() {
     queryFn: () => fetchProjects(),
     staleTime: 6e4
   });
+  const { data: profilesData } = useQuery2({
+    queryKey: ["kanban-gantt", "profiles", apiBase()],
+    queryFn: () => fetchProfiles(),
+    staleTime: 6e4
+  });
   const { data, isLoading, isError } = useQuery2({
     queryKey: ["kanban-gantt", "gantt", apiBase(), board],
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ""}`),
@@ -2299,7 +2377,11 @@ function KanbanGanttPage() {
       jsx3(NewTaskDialog, {
         open: Boolean(newTask),
         boardSlug: board && board !== "all" && board !== "*" ? board : void 0,
-        assignees: derived && derived.allAssignees || [],
+        assignees: (() => {
+          const fromBoard = derived && derived.allAssignees || [];
+          const fromProfiles = profilesData && profilesData.profiles || [];
+          return Array.from(/* @__PURE__ */ new Set([...fromProfiles, ...fromBoard])).sort();
+        })(),
         tasks: data && data.tasks || [],
         projects: projectsData && projectsData.projects || [],
         defaultParentId: newTask ? newTask.parentId : "",

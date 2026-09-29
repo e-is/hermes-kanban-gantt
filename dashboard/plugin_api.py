@@ -723,6 +723,30 @@ def list_projects():
     }
 
 
+@router.get("/profiles")
+def list_hermes_profiles():
+    """Hermes profiles, so the create form can offer them as assignees.
+
+    The board's own assignees only exist once a task has been assigned; before
+    that the field would be empty on a fresh board. Degrades to an empty list.
+    """
+    try:
+        from hermes_cli import profiles as profiles_mod
+
+        rows = profiles_mod.list_profiles()
+    except Exception:
+        return {"profiles": []}
+    out = []
+    for p in rows:
+        if isinstance(p, dict):
+            name = p.get("name") or p.get("id")
+        else:
+            name = getattr(p, "name", None) or getattr(p, "id", None)
+        if name:
+            out.append(str(name))
+    return {"profiles": sorted(set(out), key=lambda n: (n != "default", n))}
+
+
 @router.post("/tasks")
 def create_task(payload: NewTaskBody, board: Optional[str] = Query(None)):
     """Create a task through the domain layer.

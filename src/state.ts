@@ -65,6 +65,9 @@ const createTask = (values, board) =>
 /** Projects a task can be linked to (empty list when the profile has none). */
 const fetchProjects = () => apiFetch('/projects')
 
+/** Hermes profiles, offered as assignees before any task is assigned. */
+const fetchProfiles = () => apiFetch('/profiles')
+
 export function setPluginDoors(restFn, storageObj) {
   rest = restFn
   storage = storageObj
@@ -72,5 +75,5 @@ export function setPluginDoors(restFn, storageObj) {
 export const getStorage = () => storage
 
 export {
-  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, createTask, fetchProjects, applyBase
+  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, createTask, fetchProjects, fetchProfiles, applyBase
 }
