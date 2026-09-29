@@ -4,6 +4,9 @@ Scope: the desktop plugin `e-is/hermes-kanban-gantt`, working tree `~/git/hermes
 branch `spike/ws-push-prototype`, HEAD `7a2df25` **plus an uncommitted tree that a sibling card
 (`t_38159a28`, the websocket PoC) is editing concurrently** — every `plugin_ws.py` / `src/ws.ts`
 line below is a snapshot, and the polling paths themselves are unchanged by that sibling.
+Re-checked after the sibling landed its work as commit `48fda64`: the polling line numbers below
+(`src/main.ts:1378, 1403-1407, 1447-1452`, `src/ui/TitlebarBoardSwitcher.tsx:16-20`) still hold
+unchanged.
 
 This audit was re-run from scratch (grep + live handlers + a sealed latency harness); the four
 older docs in `docs/spikes/` (`current-state-and-requirements.md`, `polling-baseline.md`,
