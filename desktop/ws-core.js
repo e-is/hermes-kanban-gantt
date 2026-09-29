@@ -5,6 +5,7 @@ var WS_IDLE_MS = Math.round(WS_HEARTBEAT_MS * 2.5);
 var WS_BACKOFF_BASE_MS = 500;
 var WS_BACKOFF_MAX_MS = 1e4;
 var WS_MAX_ATTEMPTS = 1;
+var WS_REARM_MS = 5 * 6e4;
 var WS_STATE = {
   off: "off",
   // not attempted (flag off, oauth/2nd backend, no board)
@@ -48,6 +49,7 @@ export {
   WS_HEARTBEAT_MS,
   WS_IDLE_MS,
   WS_MAX_ATTEMPTS,
+  WS_REARM_MS,
   WS_STATE,
   classifyFrame,
   eventsPath,
