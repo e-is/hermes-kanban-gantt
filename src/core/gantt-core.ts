@@ -20,6 +20,78 @@ const STATUS_TONE = {
 export function statusTone(status) {
   return STATUS_TONE[status] || 'var(--ui-text-secondary)';
 }
+// Representative Codicon per status, tinted with the status tone — this is what
+// replaces the tiny colour dot next to a task name (and is reused by every list
+// that shows a task, e.g. the parent/child relations).
+const STATUS_ICON = {
+  triage:    'question',
+  todo:      'circle-large-outline',
+  scheduled: 'clock',
+  ready:     'play-circle',
+  running:   'pulse',
+  blocked:   'warning',
+  review:    'eye',
+  done:      'check',
+  archived:  'archive'
+};
+export function statusIcon(status) {
+  return STATUS_ICON[status] || 'circle-large-outline';
+}
+// Terminal statuses: a parent in one of these does not gate its children.
+export const TERMINAL_STATUSES = ['done', 'archived'];
+export function isTerminal(status) {
+  return TERMINAL_STATUSES.indexOf(status) !== -1;
+}
+/** Every id reachable from ``rootId`` by following ``children`` (excluding it). */
+export function descendantsOf(tasks, rootId) {
+  const adj = new Map();
+  for (const t of tasks) adj.set(t.id, t.children || []);
+  const out = new Set();
+  const stack = [...(adj.get(rootId) || [])];
+  while (stack.length) {
+    const id = stack.pop();
+    if (out.has(id)) continue;
+    out.add(id);
+    stack.push(...(adj.get(id) || []));
+  }
+  return out;
+}
+/** True when ``candidateId`` sits below ``ancestorId`` — the cycle guard the UI
+ *  uses to grey a drop target out (the domain still refuses it). */
+export function isDescendant(tasks, ancestorId, candidateId) {
+  return descendantsOf(tasks, ancestorId).has(candidateId);
+}
+/** Parent and child tasks of ``taskId``, in board order, as full task records. */
+export function relationsOf(tasks, taskId) {
+  const byId = new Map(tasks.map(t => [t.id, t]));
+  const task = byId.get(taskId);
+  if (!task) return { parents: [], children: [] };
+  const pick = ids => (ids || []).map(id => byId.get(id)).filter(Boolean);
+  return { parents: pick(task.parents), children: pick(task.children) };
+}
+/**
+ * Tasks that may become the parent of ``draggedId`` — every candidate comes
+ * back with an ``allowed`` flag and, when refused, the reason, so the picker
+ * can grey rows out instead of hiding them.
+ *
+ * Refused: itself, its own descendants (a cycle the domain rejects), a task on
+ * another board (task_links is per-board sqlite), a done/archived task, and a
+ * task already linked as its parent (a no-op the user should see).
+ */
+export function dropCandidates(tasks, draggedId, boardSlug) {
+  const dragged = tasks.find(t => t.id === draggedId);
+  const below = descendantsOf(tasks, draggedId);
+  const alreadyLinked = new Set((dragged && dragged.parents) || []);
+  return tasks.map(task => {
+    let reason = null;
+    if (task.id === draggedId) reason = 'self';
+    else if (below.has(task.id)) reason = 'descendant';
+    else if (boardSlug && task.board && task.board !== boardSlug) reason = 'other-board';
+    else if (isTerminal(task.status)) reason = 'terminal';
+    else if (alreadyLinked.has(task.id)) reason = 'linked';
+    return { task, allowed: reason === null, reason };
+  });
+}
 export function barRange(task, now, minBarSec) {
   const min = minBarSec || MIN_BAR;
   // Real execution window (a worker actually ran the task) — the truth for

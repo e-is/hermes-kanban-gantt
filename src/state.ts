@@ -26,6 +26,12 @@ export const DRAWER_W_MAX = 720
 /** Open task id in the drawer (null = closed). */
 export const $openTaskId = atom(null)
 
+/** "New task" dialog: null = closed, { parentId } = open (prefilled parent). */
+export const $newTask = atom(null)
+
+/** Task whose "move under…" picker is open (the page owns the dialog). */
+export const $moveUnderId = atom(null)
+
 const apiBase = () => ($baseUrl.get() || '').trim().replace(/\/+$/, '')
 
 /** GET/POST/PATCH through the plugin namespace, or an absolute custom base. */
@@ -42,9 +48,12 @@ const apiFetch = (path, init) => {
     })
   }
   if (!rest) return Promise.reject(new Error('backend not ready'))
-  return rest(path, init?.body != null
-    ? { method: init.method, body: init.body }
-    : undefined)
+  // The METHOD must travel even without a body: `ctx.rest` defaults to GET when
+  // the options object is missing, so a bodyless DELETE used to be sent as a
+  // GET and fell through to the backend's catch-all 404 (no route matches).
+  const opts = { method: init?.method || 'GET' }
+  if (init?.body != null) opts.body = init.body
+  return rest(path, opts)
 }
 
 const fetchBoards = () => apiFetch('/boards')
@@ -53,6 +62,30 @@ const fetchGantt = board =>
 const fetchTask = (id, board) =>
   apiFetch(`/tasks/${encodeURIComponent(id)}${board ? `?board=${encodeURIComponent(board)}` : ''}`)
 
+/** Create a task on the current board (the domain derives its status). */
+const createTask = (values, board) =>
+  apiFetch(
+    `/tasks${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+    { method: 'POST', body: values })
+
+/** Projects a task can be linked to (empty list when the profile has none). */
+const fetchProjects = () => apiFetch('/projects')
+
+/** Hermes profiles, offered as assignees before any task is assigned. */
+const fetchProfiles = () => apiFetch('/profiles')
+
+/** Link `parentId -> id` (mode 'replace' drops the task's other parents first). */
+const setParent = (id, parentId, mode, board) =>
+  apiFetch(
+    `/tasks/${encodeURIComponent(id)}/parent${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+    { method: 'POST', body: { parentId, mode: mode || 'add' } })
+
+const removeParent = (id, parentId, board) =>
+  apiFetch(
+    `/tasks/${encodeURIComponent(id)}/parent/${encodeURIComponent(parentId)}` +
+    `${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+    { method: 'DELETE' })
+
 export function setPluginDoors(restFn, storageObj) {
   rest = restFn
   storage = storageObj
@@ -60,5 +93,7 @@ export function setPluginDoors(restFn, storageObj) {
 export const getStorage = () => storage
 
 export {
-  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, applyBase
+  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
+  createTask, fetchProjects, fetchProfiles,
+  setParent, removeParent, applyBase
 }

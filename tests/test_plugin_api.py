@@ -283,3 +283,291 @@ def test_gantt_all_boards(client):
     r_bulk = http.post("/tasks/bulk?board=all", json={"ids": [board["solo"]], "action": "blocked", "reason": "all block"})
     assert r_bulk.status_code == 200
     assert r_bulk.json()["results"][0]["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# Task creation
+# ---------------------------------------------------------------------------
+
+def _gantt(http, slug):
+    """The snapshot the page re-renders, keyed by task id."""
+    data = http.get(f"/gantt?board={slug}").json()
+    return {t["id"]: t for t in data["tasks"]}
+
+
+def test_create_task(client):
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}", json={"title": "[TEST] created"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["ok"] is True
+    assert data["board"] == board["slug"]
+    # No parent -> the domain settles it on ready (dispatcher's queue).
+    assert data["status"] == "ready"
+
+    snap = _gantt(http, board["slug"])
+    assert data["task_id"] in snap
+    assert snap[data["task_id"]]["title"] == "[TEST] created"
+
+
+def test_create_task_with_fields(client):
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}", json={
+        "title": "[TEST] with fields",
+        "body": "some body",
+        "assignee": "someone",
+        "priority": 3,
+    })
+    assert r.status_code == 200
+    detail = http.get(f"/tasks/{r.json()['task_id']}?board={board['slug']}").json()["task"]
+    assert detail["title"] == "[TEST] with fields"
+    assert detail["body"] == "some body"
+    assert detail["assignee"] == "someone"
+    assert detail["priority"] == 3
+
+
+def test_create_subtask_is_gated_by_its_parent(client):
+    """A new task under a not-yet-done parent lands in todo, not ready."""
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}",
+                  json={"title": "[TEST] child of solo", "parentId": board["solo"]})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["parent_id"] == board["solo"]
+    # `solo` is a fresh todo task -> non-terminal -> the child is gated.
+    assert data["status"] == "todo"
+    snap = _gantt(http, board["slug"])
+    assert snap[data["task_id"]]["parents"] == [board["solo"]]
+    assert data["task_id"] in snap[board["solo"]]["children"]
+
+
+def test_create_task_triage(client):
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}",
+                  json={"title": "[TEST] to triage", "triage": True})
+    assert r.status_code == 200
+    assert r.json()["status"] == "triage"
+
+
+def test_create_task_rejects_empty_title(client):
+    http, board = client
+    assert http.post(f"/tasks?board={board['slug']}", json={"title": "   "}).status_code == 400
+    assert http.post(f"/tasks?board={board['slug']}", json={"title": ""}).status_code == 400
+
+
+def test_create_task_rejects_foreign_parent(client):
+    http, board = client
+    other = kanban_db.connect(board="kanban-gantt-test-other")
+    try:
+        foreign = kanban_db.create_task(other, title="[TEST] other board", created_by="test")
+    finally:
+        other.close()
+    r = http.post(f"/tasks?board={board['slug']}",
+                  json={"title": "[TEST] cross-board child", "parentId": foreign})
+# Parent links (re-parenting)
+#
+# The domain owns the invariants; these tests pin that the ROUTES surface them
+# (status codes + payload) instead of swallowing or re-deriving them.
+# ---------------------------------------------------------------------------
+
+def _mk(slug, title, **kw):
+    conn = kanban_db.connect(board=slug)
+    try:
+        return kanban_db.create_task(conn, title=title, created_by="test", **kw)
+    finally:
+        conn.close()
+
+
+def _parents(http, task_id, slug):
+    return http.get(f"/tasks/{task_id}?board={slug}").json()["task"]["parents"]
+
+
+def test_parent_link_add(client):
+    http, board = client
+    parent = _mk(board["slug"], "[TEST] new parent")
+    r = http.post(f"/tasks/{board['solo']}/parent?board={board['slug']}",
+                  json={"parentId": parent})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["parents"] == [parent]
+    assert data["mode"] == "add"
+    assert _parents(http, board["solo"], board["slug"]) == [parent]
+
+
+def test_parent_link_replace_swaps_parents(client):
+    http, board = client
+    # `child` starts linked to `parent`; re-parent it onto `solo` and expect the
+    # old link (and only it) to be dropped.
+    r = http.post(f"/tasks/{board['child']}/parent?board={board['slug']}",
+                  json={"parentId": board["solo"], "mode": "replace"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["parents"] == [board["solo"]]
+    assert data["unlinked"] == [board["parent"]]
+    assert _parents(http, board["child"], board["slug"]) == [board["solo"]]
+
+
+def test_parent_link_gates_ready_child(client):
+    """A `ready` child re-parented under a non-terminal parent goes back to todo."""
+    http, board = client
+    # `solo` is a fresh todo task -> non-terminal, so linking must gate.
+    conn = kanban_db.connect(board=board["slug"])
+    conn.execute("UPDATE tasks SET status = 'ready' WHERE id = ?", (board["child"],))
+    conn.commit()
+    conn.close()
+
+    r = http.post(f"/tasks/{board['child']}/parent?board={board['slug']}",
+                  json={"parentId": board["solo"], "mode": "replace"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["gated"] is True
+    assert data["status_before"] == "ready"
+    assert data["status_after"] == "todo"
+
+
+def test_parent_link_self_refused(client):
+    http, board = client
+    r = http.post(f"/tasks/{board['solo']}/parent?board={board['slug']}",
+                  json={"parentId": board["solo"]})
+    assert r.status_code == 400
+
+
+def test_parent_link_cycle_refused(client):
+    http, board = client
+    # child is already a descendant of parent -> linking parent under child cycles
+    r = http.post(f"/tasks/{board['parent']}/parent?board={board['slug']}",
+                  json={"parentId": board["child"]})
+    assert r.status_code == 409
+    assert "cycle" in r.json()["detail"]
+
+
+def test_parent_link_running_child_refused(client):
+    http, board = client
+    # create_task refuses to leave a task 'running' without a run, so force the
+    # state the domain's guard is about: status + a current run.
+    running = _mk(board["slug"], "[TEST] running task")
+    conn = kanban_db.connect(board=board["slug"])
+    conn.execute("UPDATE tasks SET status = 'running', current_run_id = 1 WHERE id = ?",
+                 (running,))
+    conn.commit()
+    conn.close()
+    r = http.post(f"/tasks/{running}/parent?board={board['slug']}",
+                  json={"parentId": board["solo"]})
+    assert r.status_code == 409
+    assert "running" in r.json()["detail"]
+
+
+def test_parent_link_cross_board_refused(client):
+    http, board = client
+    other = _mk("kanban-gantt-test-other", "[TEST] other-board task")
+    r = http.post(f"/tasks/{board['solo']}/parent?board={board['slug']}",
+                  json={"parentId": other})
+    assert r.status_code == 409
+    assert "not on board" in r.json()["detail"]
+
+
+def test_create_task_idempotency_key_prevents_duplicates(client):
+    """The UI sends one key per submit, so a double click cannot create two."""
+    http, board = client
+    payload = {"title": "[TEST] once only", "idempotencyKey": "kg-test-key-1"}
+    first = http.post(f"/tasks?board={board['slug']}", json=payload)
+    second = http.post(f"/tasks?board={board['slug']}", json=payload)
+    assert first.status_code == second.status_code == 200
+    assert first.json()["task_id"] == second.json()["task_id"]
+    snap = _gantt(http, board["slug"])
+    assert len([t for t in snap.values() if t["title"] == "[TEST] once only"]) == 1
+
+
+def test_create_task_accepts_the_reference_form_fields(client):
+    """Workspace, skills, model override and goal mode reach the domain."""
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}", json={
+        "title": "[TEST] full form",
+        "body": "described",
+        "workspaceKind": "worktree",
+        "workspacePath": "/tmp/kg-ws",
+        "skills": ["alpha", " beta ", ""],
+        "modelOverride": "openrouter/test-model",
+        "goalMode": True,
+    })
+    assert r.status_code == 200
+    detail = http.get(f"/tasks/{r.json()['task_id']}?board={board['slug']}").json()["task"]
+    assert detail["body"] == "described"
+    assert detail["workspace_kind"] == "worktree"
+    assert detail["workspace_path"] == "/tmp/kg-ws"
+    # blank entries are dropped, the rest trimmed
+    assert [s.strip() for s in (detail.get("skills") or []) if s.strip()] == ["alpha", "beta"]
+    assert detail["model_override"] == "openrouter/test-model"
+
+
+def test_create_task_rejects_an_unknown_workspace_kind(client):
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}",
+                  json={"title": "[TEST] bad ws", "workspaceKind": "nonsense"})
+    assert r.status_code == 400
+    assert "workspaceKind" in r.json()["detail"]
+
+
+def test_projects_endpoint_never_breaks_the_dialog(client):
+    """Projects come from the profile's own projects.db; absent -> empty list."""
+    http, _ = client
+    r = http.get("/projects")
+    assert r.status_code == 200
+    assert isinstance(r.json()["projects"], list)
+def test_parent_link_unknown_task(client):
+    http, board = client
+    r = http.post(f"/tasks/t_missing/parent?board={board['slug']}",
+                  json={"parentId": board["solo"]})
+    assert r.status_code == 404
+    r2 = http.post(f"/tasks/{board['solo']}/parent?board={board['slug']}",
+                   json={"parentId": ""})
+    assert r2.status_code == 400
+    r3 = http.post(f"/tasks/{board['solo']}/parent?board={board['slug']}",
+                   json={"parentId": board["parent"], "mode": "nonsense"})
+    assert r3.status_code == 400
+
+
+def test_parent_unlink(client):
+    http, board = client
+    r = http.delete(f"/tasks/{board['child']}/parent/{board['parent']}?board={board['slug']}")
+    assert r.status_code == 200
+    assert r.json()["parents"] == []
+    assert _parents(http, board["child"], board["slug"]) == []
+
+
+def test_parent_unlink_missing_link(client):
+    http, board = client
+    r = http.delete(f"/tasks/{board['child']}/parent/t_missing?board={board['slug']}")
+    assert r.status_code == 404
+
+
+def test_reparent_is_visible_in_the_gantt_snapshot(client):
+    """What the page re-renders must already carry the new hierarchy.
+
+    The UI refreshes by re-reading /gantt (the query invalidation target), so the
+    moved task, its new parent AND its old parent all have to come back with the
+    updated links and status in THAT payload — not only in /tasks/<id>.
+    """
+    http, board = client
+    before = _gantt(http, board["slug"])
+    assert before[board["child"]]["parents"] == [board["parent"]]
+    assert before[board["parent"]]["children"] == [board["child"]]
+
+    r = http.post(f"/tasks/{board['child']}/parent?board={board['slug']}",
+                  json={"parentId": board["solo"], "mode": "replace"})
+    assert r.status_code == 200
+
+    after = _gantt(http, board["slug"])
+    assert after[board["child"]]["parents"] == [board["solo"]]
+    assert after[board["solo"]]["children"] == [board["child"]]
+    # the link removed on the other side must be gone too (no ghost connector)
+    assert after[board["parent"]]["children"] == []
+    # and the gated status is what the row/badge will paint
+    assert after[board["child"]]["status"] == "todo"
+
+    # unlink from the parent list -> the snapshot drops the edge and re-gates
+    d = http.delete(f"/tasks/{board['child']}/parent/{board['solo']}?board={board['slug']}")
+    assert d.status_code == 200
+    freed = _gantt(http, board["slug"])
+    assert freed[board["child"]]["parents"] == []
+    assert freed[board["solo"]]["children"] == []

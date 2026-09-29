@@ -18,7 +18,8 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 // ESM export statements.
 const core = await import(join(HERE, '..', 'desktop', 'gantt-core.js'))
 
-const { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, DAY, MIN_BAR } = core
+const { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, DAY, MIN_BAR,
+  statusIcon, isTerminal, descendantsOf, isDescendant, relationsOf, dropCandidates } = core
 const NOW = 1_800_000_000
 const H = 3600
 
@@ -187,7 +188,6 @@ test('empty query matches everything; non-matching text excluded', () => {
 })
 
 // ── tree building ─────────────────────────────────────────────────────────────
-
 test('buildRows covers every task with diamond sharing owned once', () => {
   const tasks = [
     { id: 'r', children: ['c1', 'c2'], parents: [] },
@@ -249,4 +249,83 @@ test('tickUnit selects day/week/month by span', () => {
 test('ticks cover the domain', () => {
   const ts = ticks(0, 10 * DAY, 'day')
   assert.ok(ts.length >= 10 && ts[0] <= 0 && ts[ts.length - 1] >= 10 * DAY - DAY)
+})
+
+// ── status icons ───────────────────────────────────────────────────────────────
+
+test('statusIcon maps every status and falls back for unknown ones', () => {
+  assert.equal(statusIcon('blocked'), 'warning')
+  assert.equal(statusIcon('done'), 'check')
+  assert.equal(statusIcon('running'), 'pulse')
+  assert.equal(statusIcon('nonsense'), 'circle-large-outline')
+  assert.equal(statusIcon(undefined), 'circle-large-outline')
+})
+
+test('isTerminal only accepts done and archived', () => {
+  assert.equal(isTerminal('done'), true)
+  assert.equal(isTerminal('archived'), true)
+  assert.equal(isTerminal('review'), false)
+  assert.equal(isTerminal(undefined), false)
+})
+
+// ── hierarchy (re-parenting) ───────────────────────────────────────────────────
+
+// a -> b -> c, plus a  d  that dangles
+const GRAPH = [
+  { id: 'a', title: 'A', status: 'todo', board: 'one', children: ['b'], parents: [] },
+  { id: 'b', title: 'B', status: 'todo', board: 'one', children: ['c'], parents: ['a'] },
+  { id: 'c', title: 'C', status: 'todo', board: 'one', children: [], parents: ['b'] },
+  { id: 'd', title: 'D', status: 'todo', board: 'two', children: [], parents: [] },
+  { id: 'e', title: 'E', status: 'done', board: 'one', children: [], parents: [] }
+]
+
+test('descendantsOf walks the whole subtree, excluding the root', () => {
+  const below = descendantsOf(GRAPH, 'a')
+  assert.deepEqual([...below].sort(), ['b', 'c'])
+  assert.equal(below.has('a'), false)
+  assert.equal(descendantsOf(GRAPH, 'c').size, 0)
+  // a cycle already in the data must not loop forever
+  const cyclic = [
+    { id: 'x', children: ['y'] },
+    { id: 'y', children: ['x'] }
+  ]
+  assert.equal(descendantsOf(cyclic, 'x').size, 2)
+})
+
+test('isDescendant is the cycle guard the drop target uses', () => {
+  assert.equal(isDescendant(GRAPH, 'a', 'c'), true)
+  assert.equal(isDescendant(GRAPH, 'c', 'a'), false)
+  assert.equal(isDescendant(GRAPH, 'a', 'a'), false)
+})
+
+test('relationsOf returns full parent and child records', () => {
+  const rel = relationsOf(GRAPH, 'b')
+  assert.deepEqual(rel.parents.map(t => t.id), ['a'])
+  assert.deepEqual(rel.children.map(t => t.id), ['c'])
+  assert.deepEqual(relationsOf(GRAPH, 'missing'), { parents: [], children: [] })
+})
+
+test('dropCandidates refuses self, descendants, other boards, terminal and linked', () => {
+  const cands = dropCandidates([
+    ...GRAPH,
+    { id: 'f', title: 'F', status: 'todo', board: 'one', children: [], parents: [] }
+  ], 'b', 'one')
+  const byId = Object.fromEntries(cands.map(c => [c.task.id, c]))
+
+  assert.equal(byId.b.allowed, false)
+  assert.equal(byId.b.reason, 'self')
+  assert.equal(byId.c.reason, 'descendant')
+  assert.equal(byId.a.reason, 'linked')       // already b's parent -> no-op
+  assert.equal(byId.d.reason, 'other-board')
+  assert.equal(byId.e.reason, 'terminal')
+  assert.equal(byId.f.allowed, true)
+  assert.equal(byId.f.reason, null)
+})
+
+test('dropCandidates keeps the board check optional', () => {
+  // Single-board view: no boardSlug, so a foreign task is offered unless another
+  // rule refuses it.
+  const byId = Object.fromEntries(
+    dropCandidates(GRAPH, 'b', undefined).map(c => [c.task.id, c]))
+  assert.equal(byId.d.allowed, true)
 })

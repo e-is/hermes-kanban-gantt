@@ -26,6 +26,7 @@ import {
   Button,
   cn,
   Codicon,
+  ConfirmDialog,
   Contribute,
   DropdownMenu,
   DropdownMenuContent,
@@ -57,11 +58,17 @@ import {
   setPluginDoors,
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
   $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $openTaskId,
-  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, applyBase
+  $newTask, $moveUnderId,
+  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
+  createTask, fetchProjects, fetchProfiles,
+  setParent, removeParent, applyBase
 } from './state'
 import { getStorage } from './state'
 import { GANTT_LOCALES, useGanttI18n } from './i18n'
 import { TitlebarBoardSwitcher } from './ui/TitlebarBoardSwitcher'
+import { NewTaskDialog } from './ui/NewTaskDialog'
+import { TaskRelations } from './ui/TaskRelations'
+import { ReparentChoiceDialog, MoveUnderDialog, reasonLabel } from './ui/ReparentChooser'
 
 const ID = 'kanban-gantt'
 
@@ -78,7 +85,34 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, DAY, MIN_BAR } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, DAY, MIN_BAR } from './core/gantt-core.ts'
+
+
+/** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
+ *  status, so the domain's wording is matched when present and a generic
+ *  sentence covers the rest (the UI greys refused targets before the call). */
+function humanReparentError(error, i18n) {
+  const message = String((error && error.message) || error || '')
+  if (/cycle/i.test(message)) return i18n.errCycle
+  if (/running/i.test(message)) return i18n.errRunning
+  if (/not on board/i.test(message)) return i18n.errOtherBoard
+  if (/own parent|itself/i.test(message)) return i18n.errSelf
+  return i18n.errReparent
+}
+
+/** Report through the desktop's own notification stack — it auto-dismisses and
+ *  lives outside the page layout, so a stale message can never end up painted
+ *  inside the drawer. Falls back to nothing when the bridge is absent (plain
+ *  browser / demo). */
+function toast(kind, message) {
+  try {
+    if (host && typeof host.notify === 'function' && message) {
+      host.notify({ kind, message })
+    }
+  } catch {
+    /* no desktop bridge: drop it rather than crash the page */
+  }
+}
 
 
 /** Apply a new backend base URL and refetch everything. */
@@ -255,7 +289,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
   })
 }
 
-function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge }) {
+function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
   const i18n = useGanttI18n()
   const labelW = useValue($labelW)
   const bars = taskBars(task, now)
@@ -281,20 +315,10 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     : null
 
   const dotColor = (bars.length > 0 ? bars[bars.length - 1]?.tone : null) || statusTone(task.status)
-  // Representative Codicon per status, colored with the status tone — replaces
-  // the tiny status dot (kept from the blocked warning icon it already used).
-  const STATUS_ICON = {
-    triage: 'question',
-    todo: 'circle-large-outline',
-    scheduled: 'clock',
-    ready: 'play-circle',
-    running: 'pulse',
-    blocked: 'warning',
-    review: 'eye',
-    done: 'check',
-    archived: 'archive'
-  }
-  const statusIcon = STATUS_ICON[task.status] || 'circle-large-outline'
+  // Representative Codicon per status, coloured with the status tone — replaces
+  // the tiny status dot (the map lives in the core, shared with every list that
+  // renders a task).
+  const icon = statusIcon(task.status)
   const statusTitle = i18n.col?.[task.status] || task.status
 
   // 2-col grid (label | timeline): the label cell is position:sticky left so
@@ -362,10 +386,10 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
                   className: 'relative inline-flex items-center justify-center',
                   children: [
                     jsx('div', { className: 'kg-arc', style: { '--kanban-tone': dotColor } }),
-                    jsx(Codicon, { name: statusIcon, size: '0.85rem' })
+                    jsx(Codicon, { name: icon, size: '0.85rem' })
                   ]
                 })
-              : jsx(Codicon, { name: statusIcon, size: '0.85rem' })
+              : jsx(Codicon, { name: icon, size: '0.85rem' })
           }),
           showBoardBadge && task.board
             ? jsx(Badge, {
@@ -380,9 +404,33 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             className: cn(
               'relative inline-flex items-center min-w-0 flex-1 whitespace-nowrap overflow-hidden text-ellipsis text-[11px] text-left select-none px-1 py-0.5 rounded',
               task.status === 'running' && 'font-medium',
-              isSelected ? 'font-bold text-(--ui-accent)' : ''
+              isSelected ? 'font-bold text-(--ui-accent)' : '',
+              // Drop feedback while another row is being dragged over this one.
+              dragState === 'ok' && 'ring-1 ring-inset ring-(--ui-accent) bg-(--ui-accent)/10',
+              dragState === 'no' && 'ring-1 ring-inset ring-red-500/60 bg-red-500/10'
             ),
             title: `${showBoardBadge && task.board ? `[${task.board}] ` : ''}${name} (${task.id}) — ${i18n.clickForDetail}`,
+            // Drag handle = the name cell only: the checkbox, the bars and the
+            // width handles keep their own gestures, and a plain click still
+            // opens the detail (native DnD needs actual movement to start).
+            draggable: true,
+            onDragStart: event => {
+              event.dataTransfer.setData('text/plain', task.id)
+              event.dataTransfer.effectAllowed = 'move'
+              onDragStartTask(task.id)
+            },
+            onDragEnd: () => onDragEndTask(),
+            onDragOver: event => {
+              if (!onDropOn) return
+              event.preventDefault()
+              event.dataTransfer.dropEffect = dragState === 'ok' ? 'move' : 'none'
+            },
+            onDrop: event => {
+              if (!onDropOn) return
+              event.preventDefault()
+              event.stopPropagation()
+              onDropOn(task.id)
+            },
             children: [
               task.status === 'running'
                 ? jsx('div', { className: 'kg-arc', style: { '--kanban-tone': dotColor } })
@@ -825,9 +873,10 @@ function StatusBadge({ status, onPick, disabled }) {
   ] })
 }
 
-function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, onToggleDock }) {
+function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked = false, onToggleDock }) {
   const drawerW = useValue($drawerW)
   const i18n = useGanttI18n()
+  const queryClient = useQueryClient()
   const scrollContainerRef = useRef(null)
   const prevTaskIdRef = useRef(null)
 
@@ -848,39 +897,53 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
   }, [taskId])
 
   const [comment, setComment] = useState('')
-  const [actionError, setActionError] = useState(null)
   const [runsOpen, setRunsOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(true)
   const [showAllComments, setShowAllComments] = useState(false)
+  // Parent link awaiting confirmation (the click that asked to remove it).
+  const [pendingUnlink, setPendingUnlink] = useState(null)
+
+  // Parents/children come from the WHOLE board snapshot, not the filtered rows,
+  // so a relation hidden by the current filter still shows up here.
+  const relations = useMemo(() => relationsOf(tasks, taskId), [tasks, taskId])
 
   const statusMutation = useMutation({
     mutationFn: payload => apiFetch(
       `/tasks/${encodeURIComponent(taskId)}/status${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'PATCH', body: payload }),
     onSuccess: () => {
-      setActionError(null)
       void refetch()
       void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
     },
-    onError: error => setActionError(String(error?.message || error))
+    onError: error => toast('error', String(error?.message || error))
   })
   const commentMutation = useMutation({
     mutationFn: body => apiFetch(
       `/tasks/${encodeURIComponent(taskId)}/comments${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'POST', body }),
-    onSuccess: () => { setActionError(null); void refetch() },
-    onError: error => setActionError(String(error?.message || error))
+    onSuccess: () => { void refetch() },
+    onError: error => toast('error', String(error?.message || error))
   })
   const assignMutation = useMutation({
     mutationFn: profile => apiFetch(
       `/tasks/${encodeURIComponent(taskId)}/assignee${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'PATCH', body: { profile } }),
     onSuccess: () => {
-      setActionError(null)
       void refetch()
       void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
     },
-    onError: error => setActionError(String(error?.message || error))
+    onError: error => toast('error', String(error?.message || error))
+  })
+
+  // Dropping one parent link. The domain also re-evaluates the task's gate, so
+  // a task freed by the removal can come back to `ready` — hence the refetch.
+  const unlinkMutation = useMutation({
+    mutationFn: parentId => removeParent(taskId, parentId, board),
+    onSuccess: () => {
+      void refetch()
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+    },
+    onError: error => toast('error', String(error?.message || error))
   })
 
   const st = data?.task?.status || 'todo'
@@ -968,6 +1031,27 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                         onClick: () => { if (data?.task?.title) void navigator.clipboard.writeText(data.task.title) },
                         children: i18n.copyTitle
                       }),
+                      jsx(DropdownMenuSeparator, {}),
+                      // Creation verb reachable from a task: the new task starts
+                      // as a child of this one.
+                      jsx(DropdownMenuItem, {
+                        className: 'flex items-center gap-2 px-3 py-1.5',
+                        onClick: () => $newTask.set({ parentId: taskId }),
+                        children: jsxs('span', { className: 'flex items-center gap-2', children: [
+                          jsx(Codicon, { name: 'add', size: '0.85rem' }),
+                          i18n.createSubtask
+                        ] })
+                      }),
+                      // Keyboard-reachable twin of the drag & drop: opens the
+                      // page's task picker for this task.
+                      jsx(DropdownMenuItem, {
+                        className: 'flex items-center gap-2 px-3 py-1.5',
+                        onClick: () => $moveUnderId.set(taskId),
+                        children: jsxs('span', { className: 'flex items-center gap-2', children: [
+                          jsx(Codicon, { name: 'move', size: '0.85rem' }),
+                          i18n.moveUnder
+                        ] })
+                      }),
                       more.length ? jsx(DropdownMenuSeparator, {}) : null,
                       more.map(a => jsx(DropdownMenuItem, {
                         key: a,
@@ -1013,9 +1097,6 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
         ]
       }),
 
-      actionError
-        ? jsx('div', { className: 'text-[10px] text-red-500 bg-red-500/10 border border-red-500/20 rounded p-1.5 shrink-0', children: actionError })
-        : null,
 
       // Scrollable content underneath the pinned header + title
       isLoading
@@ -1023,15 +1104,30 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
         : isError
           ? jsx(ErrorState, { title: i18n.taskUnreadable, description: i18n.taskUnreadableDesc })
           : jsxs('div', { ref: scrollContainerRef, className: 'flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pt-1', children: [
-              (data?.task?.dependencies || []).length
-                ? jsxs('div', { className: 'text-[11px]', children: [
-                    jsx('span', { className: 'text-[10px] uppercase text-(--ui-text-tertiary)', children: i18n.dependencies }),
-                    ...(data.task.dependencies || []).map((d, i) => jsxs('span', { title: d.id, children: [
-                      i > 0 ? ' · ' : null,
-                      jsx('span', { className: 'text-(--ui-text-secondary)', children: `${d.relation === 'parent' ? '⬅' : '➡'} ${d.title}` })
-                    ] }, i))
-                  ] })
-                : null,
+              // 0. Relations — parents (removable, behind a confirmation) and
+              //    children (read-only for now: removing that link means
+              //    re-parenting the child itself). Clicking a name opens that
+              //    task's detail, which also selects its row in the gantt.
+              jsx(TaskRelations, {
+                heading: i18n.parents,
+                tasks: relations.parents,
+                emptyLabel: relations.parents.length === 0 ? i18n.noParents : undefined,
+                onOpen: id => $openTaskId.set(id),
+                onRemove: id => {
+                  const parent = relations.parents.find(t => t.id === id)
+                  setPendingUnlink({ id, title: parent ? parent.title : id })
+                },
+                removeLabel: i18n.removeParentLink,
+                openLabel: i18n.openTask,
+                disabled: unlinkMutation.isPending
+              }),
+              jsx(TaskRelations, {
+                heading: i18n.children,
+                tasks: relations.children,
+                emptyLabel: relations.children.length === 0 ? i18n.noChildren : undefined,
+                onOpen: id => $openTaskId.set(id),
+                openLabel: i18n.openTask
+              }),
               // 1. Description (no max-h clamp)
               data?.task?.body
                 ? jsxs('div', { className: 'flex flex-col gap-1', children: [
@@ -1209,7 +1305,19 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                     }, i)) })
                   ] })
                 : null
-            ] })
+            ] }),
+      // Drops a parent link — behind a confirmation, so a stray click on the
+      // row's ✕ never silently rewires the tree.
+      jsx(ConfirmDialog, {
+        open: Boolean(pendingUnlink),
+        onClose: () => setPendingUnlink(null),
+        onConfirm: () => unlinkMutation.mutateAsync(pendingUnlink.id),
+        title: i18n.removeParentConfirmTitle(pendingUnlink ? pendingUnlink.title : ''),
+        description: i18n.removeParentConfirmDesc,
+        confirmLabel: i18n.removeParentLink(pendingUnlink ? pendingUnlink.title : ''),
+        cancelLabel: i18n.cancel,
+        destructive: true
+      })
     ]
   })
 }
@@ -1222,6 +1330,8 @@ export function KanbanGanttPage() {
   const base = useValue($baseUrl)
   const board = useValue($boardSlug)
   const openTaskId = useValue($openTaskId)
+  const newTask = useValue($newTask)
+  const moveUnderId = useValue($moveUnderId)
   const labelW = useValue($labelW)
   const drawerW = useValue($drawerW)
   const drawerDocked = useValue($drawerDocked)
@@ -1231,6 +1341,20 @@ export function KanbanGanttPage() {
     queryFn: () => apiFetch('/boards'),
     refetchInterval: 5 * 60_000
   })
+  // Projects are only needed by the creation dialog; cached for a minute so
+  // opening it is instant.
+  const { data: projectsData } = useQuery({
+    queryKey: ['kanban-gantt', 'projects', apiBase()],
+    queryFn: () => fetchProjects(),
+    staleTime: 60_000
+  })
+  // Hermes profiles: assignee choices that exist before any task is assigned
+  // (the board's own assignee list is empty until then).
+  const { data: profilesData } = useQuery({
+    queryKey: ['kanban-gantt', 'profiles', apiBase()],
+    queryFn: () => fetchProfiles(),
+    staleTime: 60_000
+  })
   const { data, isLoading, isError } = useQuery({
     queryKey: ['kanban-gantt', 'gantt', apiBase(), board],
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ''}`),
@@ -1238,6 +1362,10 @@ export function KanbanGanttPage() {
   })
 
   const [showArchived, setShowArchived] = useState(false)
+  // ── re-parenting: drag & drop plus the keyboard-reachable picker ───────────
+  const [dragId, setDragId] = useState(null)
+  const [pendingReparent, setPendingReparent] = useState(null)   // { childId, parentId }
+  const allTasks = data?.tasks || []
   const [selectedAssignees, setSelectedAssignees] = useState(() => new Set())
   const [disabledStatuses, setDisabledStatuses] = useState(() => {
     const saved = getStorage() ? getStorage().get('disabledStatuses', null) : null
@@ -1295,6 +1423,108 @@ export function KanbanGanttPage() {
     const allAssignees = Array.from(new Set(data.tasks.map(t => t.assignee).filter(Boolean))).sort()
     return { rows, domain, total: visible.length, tasks: visible, allAssignees }
   }, [data, showArchived, disabledStatuses, selectedAssignees, search])
+
+  // Creating a task: the domain derives the status (ready, or todo when the
+  // chosen parent is not finished), so the dialog only collects what the user
+  // types — plus an idempotency key, so a double submit cannot duplicate.
+  const createTaskMutation = useMutation({
+    mutationFn: values => createTask(values, board),
+    onSuccess: (response, values) => {
+      $newTask.set(null)
+      toast('info', i18n.created(values.title))
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+      // Show the new task straight away: that is where its status made sense.
+      $openTaskId.set(response.task_id)
+    },
+    onError: error => {
+      const message = String((error && error.message) || error || '')
+      toast('error', /title is required/i.test(message) ? i18n.errTitleRequired : i18n.errCreate)
+    }
+  })
+
+  // ── re-parenting ──────────────────────────────────────────────────────────
+  // Candidacy comes from the core (node-tested), so a row only ever paints what
+  // the domain would accept: itself, its own subtree, another board, a finished
+  // task and an existing parent are all refused up front.
+  const boardOf = id => {
+    const task = allTasks.find(t => t.id === id)
+    if (task && task.board) return task.board
+    return board && board !== 'all' && board !== '*' ? board : undefined
+  }
+  const dropMap = useMemo(
+    () => (dragId ? new Map(dropCandidates(allTasks, dragId, boardOf(dragId)).map(c => [c.task.id, c])) : null),
+    [dragId, allTasks, board])
+
+  const reparentMutation = useMutation({
+    mutationFn: ({ childId, parentId, mode }) => setParent(childId, parentId, mode, board),
+    onSuccess: response => {
+      setPendingReparent(null)
+      const child = allTasks.find(t => t.id === response.task_id)
+      const parent = allTasks.find(t => t.id === response.parent_id)
+      const childName = child ? child.title : response.task_id
+      const parentName = parent ? parent.title : response.parent_id
+      // A re-parent can GATE the task (ready -> todo) — say so rather than let
+      // the status change appear on its own.
+      toast('info', response.gated ? i18n.gatedNotice(childName) : i18n.movedUnder(childName, parentName))
+      // Prefix invalidation: the tree (gantt snapshot) AND the open task's
+      // detail both refetch, so the moved task's row, its parent's row and the
+      // drawer's relations all repaint together.
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+    },
+    onError: error => {
+      setPendingReparent(null)
+      toast('error', humanReparentError(error, i18n))
+    }
+  })
+
+  const unlinkMutation = useMutation({
+    mutationFn: ({ childId, parentId }) => removeParent(childId, parentId, board),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+    },
+    onError: error => toast('error', humanReparentError(error, i18n))
+  })
+
+  const handleDragStart = id => {
+    setDragId(id)
+  }
+
+  const handleDropOn = targetId => {
+    const childId = dragId
+    setDragId(null)
+    if (!childId || childId === targetId) return
+    const candidate = dropMap ? dropMap.get(targetId) : null
+    if (candidate && !candidate.allowed) {
+      toast('error', reasonLabel(candidate.reason, i18n))
+      return
+    }
+    const child = allTasks.find(t => t.id === childId)
+    const parents = (child && child.parents) || []
+    // Already parented: ask (add vs replace) instead of guessing.
+    if (parents.length > 0) {
+      setPendingReparent({ childId, parentId: targetId })
+      return
+    }
+    reparentMutation.mutate({ childId, parentId: targetId, mode: 'add' })
+  }
+
+  // Same decision path as a drop, reached from the drawer's "move under…" item.
+  const handlePickParent = parentId => {
+    const childId = moveUnderId
+    $moveUnderId.set(null)
+    if (!childId || childId === parentId) return
+    const candidate = dropCandidates(allTasks, childId, boardOf(childId)).find(c => c.task.id === parentId)
+    if (candidate && !candidate.allowed) {
+      toast('error', reasonLabel(candidate.reason, i18n))
+      return
+    }
+    const child = allTasks.find(t => t.id === childId)
+    if (((child && child.parents) || []).length > 0) {
+      setPendingReparent({ childId, parentId })
+      return
+    }
+    reparentMutation.mutate({ childId, parentId, mode: 'add' })
+  }
 
   const handleToggleCheck = (id, checked, nativeEvent) => {
     setSelectedIds(prev => {
@@ -1440,7 +1670,14 @@ export function KanbanGanttPage() {
     isChecked: selectedIds.has(row.task.id),
     onToggleCheck: handleToggleCheck,
     isEven: idx % 2 === 0,
-    showBoardBadge: isAllBoards
+    showBoardBadge: isAllBoards,
+    // Drop feedback only for rows that are not the dragged one.
+    dragState: !dropMap || row.task.id === dragId
+      ? null
+      : (dropMap.get(row.task.id)?.allowed ? 'ok' : 'no'),
+    onDragStartTask: handleDragStart,
+    onDragEndTask: () => setDragId(null),
+    onDropOn: handleDropOn
   }, row.task.id))
 
   // Determine dominant status priority for the top task count badge:
@@ -1554,7 +1791,17 @@ export function KanbanGanttPage() {
                 }),
                 jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${Math.round(zoom * 100)}%` })
               ] }),
-              jsx(Button, { size: 'xs', onClick: () => void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] }), children: i18n.refresh })
+              jsx(Button, { size: 'xs', onClick: () => void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] }), children: i18n.refresh }),
+              // Far right: the board's only creation verb.
+              jsx(Button, {
+                size: 'xs',
+                variant: 'default',
+                onClick: () => $newTask.set({ parentId: '' }),
+                children: jsxs('span', { className: 'flex items-center gap-1', children: [
+                  jsx(Codicon, { name: 'add', size: '0.85rem' }),
+                  i18n.newTask
+                ] })
+              })
             ]
           })
         ]
@@ -1653,6 +1900,9 @@ export function KanbanGanttPage() {
             taskId: openTaskId,
             board,
             assignees: derived.allAssignees || [],
+            // Unfiltered snapshot: a parent hidden by the current filter must
+            // still be listed in the drawer's relations.
+            tasks: data?.tasks || [],
             onClose: () => $openTaskId.set(null),
             docked: dockDrawer,
             onToggleDock: () => {
@@ -1661,7 +1911,54 @@ export function KanbanGanttPage() {
               if (getStorage()) getStorage().set('drawerDocked', next ? '1' : '0')
             }
           })
-        : null
+        : null,
+      // Creation dialog (toolbar button, or "create a sub-task" from a task).
+      jsx(NewTaskDialog, {
+        open: Boolean(newTask),
+        boardSlug: board && board !== 'all' && board !== '*' ? board : undefined,
+        assignees: (() => {
+          const fromBoard = (derived && derived.allAssignees) || []
+          const fromProfiles = (profilesData && profilesData.profiles) || []
+          return Array.from(new Set([...fromProfiles, ...fromBoard])).sort()
+        })(),
+        tasks: (data && data.tasks) || [],
+        projects: (projectsData && projectsData.projects) || [],
+        defaultParentId: newTask ? newTask.parentId : '',
+        busy: createTaskMutation.isPending,
+        onSubmit: values => createTaskMutation.mutate(values),
+        onClose: () => $newTask.set(null),
+        i18n
+      }),
+      // Asked only when the dropped task already has parents: add vs replace.
+      jsx(ReparentChoiceDialog, {
+        open: Boolean(pendingReparent),
+        targetTitle: (() => {
+          if (!pendingReparent) return ''
+          const target = allTasks.find(t => t.id === pendingReparent.parentId)
+          return target ? target.title : pendingReparent.parentId
+        })(),
+        parents: pendingReparent ? relationsOf(allTasks, pendingReparent.childId).parents : [],
+        busy: reparentMutation.isPending || unlinkMutation.isPending,
+        onAdd: () => reparentMutation.mutate({ ...pendingReparent, mode: 'add' }),
+        onReplace: () => reparentMutation.mutate({ ...pendingReparent, mode: 'replace' }),
+        onRemoveParent: parentId => unlinkMutation.mutate({ childId: pendingReparent.childId, parentId }),
+        onClose: () => setPendingReparent(null),
+        i18n
+      }),
+      // "Move under…" picker (drawer action menu): the whole board, refusals
+      // greyed with their reason rather than hidden.
+      jsx(MoveUnderDialog, {
+        open: Boolean(moveUnderId),
+        draggedTitle: (() => {
+          const task = moveUnderId ? allTasks.find(t => t.id === moveUnderId) : null
+          return task ? task.title : (moveUnderId || '')
+        })(),
+        candidates: moveUnderId ? dropCandidates(allTasks, moveUnderId, boardOf(moveUnderId)) : [],
+        busy: reparentMutation.isPending,
+        onPick: handlePickParent,
+        onClose: () => $moveUnderId.set(null),
+        i18n
+      })
     ]
   })
 }

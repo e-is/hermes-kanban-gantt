@@ -6,3 +6,9 @@ node_modules/
 .DS_Store
 .env
 .idea/
+
+# Agent skills refreshed from skills-lock.json by `npm install` (postinstall,
+# `skills update`); .claude/skills is a tracked symlink to .agents/skills.
+# hermes-plugin-development is not published upstream: it is vendored here.
+.agents/skills/*
+!.agents/skills/hermes-plugin-development/
