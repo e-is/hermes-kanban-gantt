@@ -233,49 +233,88 @@ async def ensure_local_gateway(ui: Desktop):
     legacy route, which is the remote — a probe that looks like an answer but
     reports the wrong gateway. Hence the mouse click and the pinned probe.
     """
-    label = await ui.ev("""(() => {
-      const c = [...document.querySelectorAll('button')].find(e =>
-        /registered gateways/i.test(e.getAttribute('aria-label') || ''));
-      return c ? (c.getAttribute('aria-label') || '') : '';
-    })()""")
-    if not label:
-        raise Dead("could not find the « Registered gateways » chip in the status bar")
-    print(f"  gateway chip: {label}")
+    # The chip only names the active gateway once one is applied, which is after
+    # the boot settles — a run started too early used to bail out here.
+    conn = ""
+    for _ in range(20):
+        conn = str(await ui.ev("""(async () => {
+          try { const c = await window.hermesDesktop.getConnection(); return c.mode + ' ' + c.baseUrl; }
+          catch (e) { return 'ERR ' + e.message; }
+        })()""") or "")
+        if conn and not conn.startswith("ERR"):
+            break
+        await asyncio.sleep(3)
+    print(f"  connection: {conn}")
+    if conn.startswith("ERR"):
+        raise Dead(f"the desktop never reported its connection ({conn})")
 
-    chip_box = await ui.ev("""(() => {
-      const c = [...document.querySelectorAll('button')].find(e =>
-        /registered gateways/i.test(e.getAttribute('aria-label') || ''));
-      if (!c) return null;
-      const r = c.getBoundingClientRect();
-      return JSON.stringify([Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)]);
-    })()""")
-    if not chip_box or chip_box == "null":
-        raise Dead("could not locate the gateway chip's position")
-    cx, cy = json.loads(chip_box)
-    await ui.click_xy(cx, cy)  # a real pointer click: the menu ignores .click()
-    await asyncio.sleep(1.0)
+    if not conn.startswith("local"):
+        label = await ui.ev("""(() => {
+          const c = [...document.querySelectorAll('button')].find(e =>
+            /registered gateways|connexions/i.test(e.getAttribute('aria-label') || ''));
+          return c ? (c.getAttribute('aria-label') || '') : '';
+        })()""")
+        if not label:
+            raise Dead("could not find the « Registered gateways » chip in the status bar")
+        print(f"  gateway chip: {label}")
 
-    box = await ui.ev("""(() => {
-      const item = [...document.querySelectorAll('[role=menuitemradio],[role=menuitem]')]
-        .find(e => /this device|cet appareil/i.test(e.textContent.trim()));
-      if (!item) return null;
-      const r = item.getBoundingClientRect();
-      return JSON.stringify([Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)]);
-    })()""")
-    if not box or box == "null":
-        raise Dead("no « This device » entry in the gateway menu — pick it by hand, then rerun")
-    x, y = json.loads(box)
-    await ui.click_xy(x, y)
-    await asyncio.sleep(2.5)
+        chip_box = await ui.ev("""(() => {
+          const c = [...document.querySelectorAll('button')].find(e =>
+            /registered gateways|connexions/i.test(e.getAttribute('aria-label') || ''));
+          if (!c) return null;
+          const r = c.getBoundingClientRect();
+          return JSON.stringify([Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)]);
+        })()""")
+        if not chip_box or chip_box == "null":
+            raise Dead("could not locate the gateway chip's position")
+        cx, cy = json.loads(chip_box)
+        await ui.click_xy(cx, cy)  # a real pointer click: the menu ignores .click()
 
-    after = await ui.ev("""(() => {
-      const c = [...document.querySelectorAll('button')].find(e =>
-        /registered gateways/i.test(e.getAttribute('aria-label') || ''));
-      return c ? (c.getAttribute('aria-label') || '') : '';
-    })()""")
-    print(f"  gateway chip now: {after}")
-    if "fixe13" in after.lower():
-        raise Dead(f"the gateway did not switch ({after}) — switch it by hand, then rerun")
+        # the menu renders asynchronously; its items are language-dependent
+        box = None
+        for _ in range(8):
+            await asyncio.sleep(0.5)
+            box = await ui.ev("""(() => {
+              const item = [...document.querySelectorAll('[role=menuitemradio],[role=menuitem]')]
+                .find(e => /this device|cet appareil/i.test(e.textContent.trim()));
+              if (!item) return null;
+              const r = item.getBoundingClientRect();
+              return JSON.stringify([Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)]);
+            })()""")
+            if box and box != "null":
+                break
+        if not box or box == "null":
+            raise Dead("no « This device » entry in the gateway menu — pick it by hand, then rerun")
+        x, y = json.loads(box)
+        await ui.click_xy(x, y)
+        await asyncio.sleep(3)
+
+        # Switching asks for confirmation in the UI ("Switch to this device?").
+        confirm = await ui.ev("""(() => {
+          const d = [...document.querySelectorAll('[role=alertdialog],[role=dialog]')]
+            .filter(e => e.getBoundingClientRect().width > 100).pop();
+          if (!d) return null;
+          const b = [...d.querySelectorAll('button')]
+            .find(e => /switch|basculer|confirm|confirmer/i.test(e.textContent.trim()));
+          if (!b) return null;
+          const r = b.getBoundingClientRect();
+          return JSON.stringify([Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)]);
+        })()""")
+        if confirm and confirm != "null":
+            x, y = json.loads(confirm)
+            await ui.click_xy(x, y)
+            print("  confirmed the gateway switch")
+            await asyncio.sleep(9)
+        else:
+            await asyncio.sleep(6)
+
+    after = str(await ui.ev("""(async () => {
+      try { const c = await window.hermesDesktop.getConnection(); return c.mode + ' ' + c.baseUrl; }
+      catch (e) { return 'ERR'; }
+    })()""") or "")
+    print(f"  connection now: {after}")
+    if not after.startswith("local"):
+        raise Dead(f"still not on « This device » ({after}) — switch it by hand, then rerun")
 
     # Pinned to the local connection: this is the route the plugin's own calls use.
     boards = await ui.ev("""(async () => {
@@ -379,7 +418,10 @@ async def run_scenario(ui: Desktop, *, make_gif: bool):
     await ui.ev("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
     await asyncio.sleep(0.6)
 
-    # the drag: refused target first (red), then the accepted drop
+    # The move: refused target first (red), then the accepted drop. The screencast
+    # owns the surface while it runs — Page.captureScreenshot returns no frame
+    # during a screencast — so the stills are all taken before it starts and the
+    # last one only after it stops.
     if make_gif:
         await ui.start_screencast()
     await ui.ev(f"""(() => {{
@@ -396,9 +438,10 @@ async def run_scenario(ui: Desktop, *, make_gif: bool):
       return true;
     }})()""")
     await asyncio.sleep(2.0)
-    await ui.shot("screenshot-en-04-move")
     if make_gif:
         await ui.stop_screencast()
+    await asyncio.sleep(0.6)
+    await ui.shot("screenshot-en-04-move")
 
 
 def encode_animation():
@@ -407,14 +450,23 @@ def encode_animation():
         print("  no frames — no animation produced")
         return
     ANIM.mkdir(parents=True, exist_ok=True)
-    mp4 = ANIM / "kanban-gantt.gif"
+    gif = ANIM / "kanban-gantt.gif"
+    mp4 = ANIM / "kanban-gantt.mp4"
     palette = FRAMES / "palette.png"
     pattern = str(FRAMES / "frame-%05d.jpg")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "8", "-i", pattern,
                     "-vf", "scale=1280:-1:flags=lanczos,palettegen", str(palette)], check=True)
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "8", "-i", pattern,
-                    "-i", str(palette), "-lavfi", "paletteuse", str(mp4)], check=True)
-    print(f"  ✓ {mp4.relative_to(REPO)}  ({mp4.stat().st_size // 1024} kB, {len(frames)} frames)")
+                    "-i", str(palette), "-lavfi", "paletteuse", str(gif)], check=True)
+    print(f"  ✓ {gif.relative_to(REPO)}  ({gif.stat().st_size // 1024} kB, {len(frames)} frames)")
+    # MP4 as well: easier to review than a GIF, and what a release page embeds.
+    try:
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "8", "-i", pattern,
+                        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-crf", "20", str(mp4)], check=True)
+        print(f"  ✓ {mp4.relative_to(REPO)}  ({mp4.stat().st_size // 1024} kB)")
+    except subprocess.CalledProcessError as exc:
+        print(f"  (no MP4: {exc})")
 
 
 async def notify(ui: Desktop, message: str):
