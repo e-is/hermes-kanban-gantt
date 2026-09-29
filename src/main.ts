@@ -1922,11 +1922,25 @@ export function KanbanGanttPage() {
                 }),
                 jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${Math.round(zoom * 100)}%` })
               ] }),
-              // No Refresh button by design: the update path is the /events push
-              // (verified live: an out-of-UI write reached the page in ~1 s with
-              // zero /gantt requests). The 60 s poll remains the safety net for a
-              // gateway with the push disabled, a client that opted out, or a dead
-              // socket — so nobody needs a manual reload any more.
+              // The Refresh button is back, but only when the page is KNOWINGLY on
+              // the 60 s poll: the push is off (KANBAN_GANTT_WS=0 on the gateway, or
+              // this client's `ws` flag) or the socket gave up (it re-arms within
+              // WS_REARM_MS). While the push is live — and during the seconds it
+              // takes to connect, which resolves itself — the timeline follows on
+              // its own, so the button stays out of the way.
+              wsState === WS_STATE.off || wsState === WS_STATE.dead
+                ? jsx('span', {
+                    title: i18n.refreshWhy,
+                    children: jsx(Button, {
+                      size: 'xs',
+                      onClick: () => void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] }),
+                      children: jsxs('span', { className: 'flex items-center gap-1', children: [
+                        jsx(Codicon, { name: 'refresh', size: '0.85rem' }),
+                        i18n.refresh
+                      ] })
+                    })
+                  })
+                : null,
               // Far right: the board's only creation verb.
               jsx(Button, {
                 size: 'xs',
