@@ -29,6 +29,9 @@ export const $openTaskId = atom(null)
 /** "New task" dialog: null = closed, { parentId } = open (prefilled parent). */
 export const $newTask = atom(null)
 
+/** Task whose "move under…" picker is open (the page owns the dialog). */
+export const $moveUnderId = atom(null)
+
 const apiBase = () => ($baseUrl.get() || '').trim().replace(/\/+$/, '')
 
 /** GET/POST/PATCH through the plugin namespace, or an absolute custom base. */
@@ -68,6 +71,18 @@ const fetchProjects = () => apiFetch('/projects')
 /** Hermes profiles, offered as assignees before any task is assigned. */
 const fetchProfiles = () => apiFetch('/profiles')
 
+/** Link `parentId -> id` (mode 'replace' drops the task's other parents first). */
+const setParent = (id, parentId, mode, board) =>
+  apiFetch(
+    `/tasks/${encodeURIComponent(id)}/parent${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+    { method: 'POST', body: { parentId, mode: mode || 'add' } })
+
+const removeParent = (id, parentId, board) =>
+  apiFetch(
+    `/tasks/${encodeURIComponent(id)}/parent/${encodeURIComponent(parentId)}` +
+    `${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+    { method: 'DELETE' })
+
 export function setPluginDoors(restFn, storageObj) {
   rest = restFn
   storage = storageObj
@@ -75,5 +90,7 @@ export function setPluginDoors(restFn, storageObj) {
 export const getStorage = () => storage
 
 export {
-  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, createTask, fetchProjects, fetchProfiles, applyBase
+  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
+  createTask, fetchProjects, fetchProfiles,
+  setParent, removeParent, applyBase
 }

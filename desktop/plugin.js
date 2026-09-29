@@ -8,9 +8,10 @@
 // src/main.ts
 import {
   Badge,
-  Button as Button3,
-  cn as cn2,
-  Codicon as Codicon3,
+  Button as Button4,
+  cn as cn3,
+  Codicon as Codicon4,
+  ConfirmDialog,
   Contribute,
   DropdownMenu as DropdownMenu3,
   DropdownMenuContent as DropdownMenuContent3,
@@ -33,8 +34,8 @@ import {
   SIDEBAR_NAV_AREA,
   WORKSPACE_PAGE_HEADER_AREA
 } from "@hermes/plugin-sdk";
-import { useMemo as useMemo2, useRef as useRef2, useEffect as useEffect2, useState as useState2 } from "react";
-import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
+import { useMemo as useMemo2, useRef as useRef2, useEffect as useEffect2, useState as useState3 } from "react";
+import { jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
 
 // src/state.ts
 import { atom } from "@hermes/plugin-sdk";
@@ -52,6 +53,7 @@ var DRAWER_W_MIN = 320;
 var DRAWER_W_MAX = 720;
 var $openTaskId = atom(null);
 var $newTask = atom(null);
+var $moveUnderId = atom(null);
 var apiBase = () => ($baseUrl.get() || "").trim().replace(/\/+$/, "");
 var apiFetch = (path, init) => {
   const base = apiBase();
@@ -74,6 +76,15 @@ var createTask = (values, board) => apiFetch(
   { method: "POST", body: values }
 );
 var fetchProjects = () => apiFetch("/projects");
+var fetchProfiles = () => apiFetch("/profiles");
+var setParent = (id, parentId, mode, board) => apiFetch(
+  `/tasks/${encodeURIComponent(id)}/parent${board ? `?board=${encodeURIComponent(board)}` : ""}`,
+  { method: "POST", body: { parentId, mode: mode || "add" } }
+);
+var removeParent = (id, parentId, board) => apiFetch(
+  `/tasks/${encodeURIComponent(id)}/parent/${encodeURIComponent(parentId)}${board ? `?board=${encodeURIComponent(board)}` : ""}`,
+  { method: "DELETE" }
+);
 function setPluginDoors(restFn, storageObj) {
   rest = restFn;
   storage = storageObj;
@@ -155,6 +166,33 @@ var GANTT_LOCALES = {
     barBlockedWaiting: (name) => `${name} · blocked — waiting for action`,
     barNotStarted: (name) => `${name} · not started`,
     copyHint: (id) => `${id} — click [...] to copy`,
+    parents: "Parents",
+    children: "Children",
+    noParents: "No parent",
+    noChildren: "No child",
+    removeParentLink: (title) => `Remove the link to ${title}`,
+    openTask: (title) => `Open ${title}`,
+    reparentTitle: (n) => `This task already has ${n} parent${n > 1 ? "s" : ""}. What do you want to do?`,
+    reparentCurrent: "Current parents",
+    reparentTarget: (title) => `New parent: ${title}`,
+    moveUnderTitle: (title) => `Move ${title} under…`,
+    reasonLinked: "Already a parent",
+    reparentAdd: "Add a new parent",
+    reparentReplace: "Replace with this single parent",
+    removeParentConfirmTitle: (title) => `Remove the link to ${title}?`,
+    removeParentConfirmDesc: "Only this parent link is dropped — the task keeps its other relationships.",
+    cancel: "Cancel",
+    moveUnder: "Move under…",
+    moveUnderSearch: "Search a task…",
+    moveUnderEmpty: "No task matches",
+    movedUnder: (child, parent) => `${child} moved under ${parent}`,
+    gatedNotice: (child) => `${child} went back to todo: its new parent is not finished yet.`,
+    errSelf: "A task cannot be moved under itself.",
+    errCycle: "That move would create a cycle.",
+    errRunning: "A running task cannot be moved under another task.",
+    errOtherBoard: "Both tasks must belong to the same board.",
+    errTerminal: "A finished task cannot take a parent.",
+    errReparent: "The move was refused by the kanban board.",
     newTask: "New task",
     newTaskTitle: "Title",
     newTaskTitlePlaceholder: "What needs to be done?",
@@ -279,6 +317,33 @@ var GANTT_LOCALES = {
     barBlockedWaiting: (name) => `${name} · bloquée — en attente d’action`,
     barNotStarted: (name) => `${name} · non démarrée`,
     copyHint: (id) => `${id} — cliquer sur [...] pour copier`,
+    parents: "Parents",
+    children: "Enfants",
+    noParents: "Aucun parent",
+    noChildren: "Aucun enfant",
+    removeParentLink: (title) => `Retirer le lien avec ${title}`,
+    openTask: (title) => `Ouvrir ${title}`,
+    reparentTitle: (n) => `Cette tâche a déjà ${n} parent${n > 1 ? "s" : ""}. Que voulez-vous faire ?`,
+    reparentCurrent: "Parents actuels",
+    reparentTarget: (title) => `Nouveau parent : ${title}`,
+    moveUnderTitle: (title) => `Déplacer ${title} sous…`,
+    reasonLinked: "Déjà parent",
+    reparentAdd: "Ajouter un nouveau parent",
+    reparentReplace: "Remplacer par ce parent unique",
+    removeParentConfirmTitle: (title) => `Retirer le lien avec ${title} ?`,
+    removeParentConfirmDesc: "Seul ce lien de parenté est retiré — la tâche conserve ses autres relations.",
+    cancel: "Annuler",
+    moveUnder: "Déplacer sous…",
+    moveUnderSearch: "Rechercher une tâche…",
+    moveUnderEmpty: "Aucune tâche ne correspond",
+    movedUnder: (child, parent) => `${child} déplacée sous ${parent}`,
+    gatedNotice: (child) => `${child} repasse en todo : son nouveau parent n’est pas terminé.`,
+    errSelf: "Une tâche ne peut pas être déplacée sous elle-même.",
+    errCycle: "Ce déplacement créerait un cycle.",
+    errRunning: "Une tâche en cours d’exécution ne peut pas être déplacée sous une autre.",
+    errOtherBoard: "Les deux tâches doivent appartenir au même board.",
+    errTerminal: "Une tâche terminée ne peut pas recevoir de parent.",
+    errReparent: "Le déplacement a été refusé par le board kanban.",
     newTask: "Nouvelle tâche",
     newTaskTitle: "Titre",
     newTaskTitlePlaceholder: "Que faut-il faire ?",
@@ -353,7 +418,7 @@ import { jsx, jsxs } from "react/jsx-runtime";
 function TitlebarBoardSwitcher() {
   const board = useValue($boardSlug);
   const i18n = useGanttI18n();
-  const queryClient2 = useQueryClient();
+  const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ["kanban-gantt", "boards", apiBase()],
     queryFn: () => apiFetch("/boards"),
@@ -365,7 +430,7 @@ function TitlebarBoardSwitcher() {
   const setBoard = (slug) => {
     $boardSlug.set(slug);
     if (getStorage()) getStorage().set("board", slug);
-    void queryClient2.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
+    void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
   };
   return /* @__PURE__ */ jsxs(DropdownMenu, { children: [
     /* @__PURE__ */ jsx(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx(
@@ -439,6 +504,58 @@ var STATUS_TONE = {
 };
 function statusTone(status) {
   return STATUS_TONE[status] || "var(--ui-text-secondary)";
+}
+var STATUS_ICON = {
+  triage: "question",
+  todo: "circle-large-outline",
+  scheduled: "clock",
+  ready: "play-circle",
+  running: "pulse",
+  blocked: "warning",
+  review: "eye",
+  done: "check",
+  archived: "archive"
+};
+function statusIcon(status) {
+  return STATUS_ICON[status] || "circle-large-outline";
+}
+var TERMINAL_STATUSES = ["done", "archived"];
+function isTerminal(status) {
+  return TERMINAL_STATUSES.indexOf(status) !== -1;
+}
+function descendantsOf(tasks, rootId) {
+  const adj = /* @__PURE__ */ new Map();
+  for (const t of tasks) adj.set(t.id, t.children || []);
+  const out = /* @__PURE__ */ new Set();
+  const stack = [...adj.get(rootId) || []];
+  while (stack.length) {
+    const id = stack.pop();
+    if (out.has(id)) continue;
+    out.add(id);
+    stack.push(...adj.get(id) || []);
+  }
+  return out;
+}
+function relationsOf(tasks, taskId) {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const task = byId.get(taskId);
+  if (!task) return { parents: [], children: [] };
+  const pick = (ids) => (ids || []).map((id) => byId.get(id)).filter(Boolean);
+  return { parents: pick(task.parents), children: pick(task.children) };
+}
+function dropCandidates(tasks, draggedId, boardSlug) {
+  const dragged = tasks.find((t) => t.id === draggedId);
+  const below = descendantsOf(tasks, draggedId);
+  const alreadyLinked = new Set(dragged && dragged.parents || []);
+  return tasks.map((task) => {
+    let reason = null;
+    if (task.id === draggedId) reason = "self";
+    else if (below.has(task.id)) reason = "descendant";
+    else if (boardSlug && task.board && task.board !== boardSlug) reason = "other-board";
+    else if (isTerminal(task.status)) reason = "terminal";
+    else if (alreadyLinked.has(task.id)) reason = "linked";
+    return { task, allowed: reason === null, reason };
+  });
 }
 function barRange(task, now, minBarSec) {
   const min = minBarSec || MIN_BAR;
@@ -909,6 +1026,188 @@ function NewTaskDialog({
   ] }) });
 }
 
+// src/ui/TaskRelations.tsx
+import { Codicon as Codicon3, cn as cn2 } from "@hermes/plugin-sdk";
+import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
+function TaskRelations({
+  heading,
+  tasks,
+  emptyLabel,
+  onOpen,
+  onRemove,
+  removeLabel,
+  openLabel,
+  disabled = false,
+  disabledIds,
+  reasonOf,
+  className
+}) {
+  if (tasks.length === 0 && !emptyLabel) return null;
+  return /* @__PURE__ */ jsxs3("div", { className: cn2("flex flex-col gap-0.5", className), children: [
+    heading ? /* @__PURE__ */ jsx3("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: heading }) : null,
+    tasks.length === 0 ? /* @__PURE__ */ jsx3("div", { className: "text-[10.5px] italic text-(--ui-text-quaternary)", children: emptyLabel }) : tasks.map((task) => {
+      const inert = Boolean(disabledIds && disabledIds.has(task.id));
+      const reason = inert && reasonOf ? reasonOf(task.id) : null;
+      const clickable = Boolean(onOpen) && !disabled && !inert;
+      return /* @__PURE__ */ jsxs3("div", { className: "group flex items-center gap-1 min-w-0", title: reason || void 0, children: [
+        /* @__PURE__ */ jsxs3(
+          "button",
+          {
+            type: "button",
+            disabled: !clickable,
+            onClick: () => onOpen?.(task.id),
+            "aria-label": openLabel ? openLabel(task.title) : void 0,
+            className: cn2(
+              "flex min-w-0 flex-1 items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors",
+              "bg-transparent border-0 text-[11px] text-(--ui-text-secondary)",
+              inert && "cursor-default opacity-45 line-through",
+              clickable ? "cursor-pointer hover:bg-(--ui-row-hover-background)" : !inert && "cursor-default"
+            ),
+            children: [
+              /* @__PURE__ */ jsx3(
+                Codicon3,
+                {
+                  className: "shrink-0",
+                  name: statusIcon(task.status),
+                  size: "0.8rem",
+                  style: { color: statusTone(task.status) }
+                }
+              ),
+              /* @__PURE__ */ jsx3("span", { className: "min-w-0 flex-1 truncate", children: task.title })
+            ]
+          }
+        ),
+        onRemove && !inert && /* @__PURE__ */ jsx3(
+          "button",
+          {
+            type: "button",
+            disabled,
+            onClick: () => onRemove(task.id),
+            "aria-label": removeLabel ? removeLabel(task.title) : void 0,
+            className: cn2(
+              "shrink-0 inline-flex items-center justify-center rounded border-0 bg-transparent p-0.5",
+              "text-(--ui-text-quaternary) opacity-0 transition-opacity",
+              disabled ? "cursor-default" : "cursor-pointer hover:text-(--ui-text-primary) group-hover:opacity-100"
+            ),
+            children: /* @__PURE__ */ jsx3(Codicon3, { name: "close", size: "0.75rem" })
+          }
+        )
+      ] }, task.id);
+    })
+  ] });
+}
+
+// src/ui/ReparentChooser.tsx
+import { useState as useState2 } from "react";
+import {
+  Button as Button3,
+  Dialog as Dialog2,
+  DialogContent as DialogContent2,
+  DialogDescription,
+  DialogFooter as DialogFooter2,
+  DialogHeader as DialogHeader2,
+  DialogTitle as DialogTitle2,
+  Input as Input2
+} from "@hermes/plugin-sdk";
+import { jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
+function ReparentChoiceDialog({
+  open,
+  targetTitle,
+  parents,
+  onAdd,
+  onReplace,
+  onRemoveParent,
+  onClose,
+  i18n,
+  busy = false
+}) {
+  return /* @__PURE__ */ jsx4(Dialog2, { open, onOpenChange: (next) => {
+    if (!next) onClose();
+  }, children: /* @__PURE__ */ jsxs4(DialogContent2, { className: "max-w-md", children: [
+    /* @__PURE__ */ jsxs4(DialogHeader2, { children: [
+      /* @__PURE__ */ jsx4(DialogTitle2, { children: i18n.reparentTitle(parents.length) }),
+      /* @__PURE__ */ jsx4(DialogDescription, { children: i18n.reparentTarget(targetTitle) })
+    ] }),
+    /* @__PURE__ */ jsx4(
+      TaskRelations,
+      {
+        heading: i18n.reparentCurrent,
+        tasks: parents,
+        onRemove: onRemoveParent,
+        removeLabel: i18n.removeParentLink,
+        disabled: busy
+      }
+    ),
+    /* @__PURE__ */ jsxs4(DialogFooter2, { className: "gap-2", children: [
+      /* @__PURE__ */ jsx4(Button3, { variant: "ghost", onClick: onClose, disabled: busy, children: i18n.cancel }),
+      /* @__PURE__ */ jsx4(Button3, { variant: "secondary", onClick: onReplace, disabled: busy, children: i18n.reparentReplace }),
+      /* @__PURE__ */ jsx4(Button3, { onClick: onAdd, disabled: busy, children: i18n.reparentAdd })
+    ] })
+  ] }) });
+}
+function reasonLabel(reason, i18n) {
+  switch (reason) {
+    case "self":
+      return i18n.errSelf;
+    case "descendant":
+      return i18n.errCycle;
+    case "other-board":
+      return i18n.errOtherBoard;
+    case "terminal":
+      return i18n.errTerminal;
+    case "linked":
+      return i18n.reasonLinked;
+    default:
+      return i18n.errReparent;
+  }
+}
+function MoveUnderDialog({
+  open,
+  draggedTitle,
+  candidates,
+  onPick,
+  onClose,
+  i18n,
+  busy = false
+}) {
+  const [query, setQuery] = useState2("");
+  if (!open) return null;
+  const visible = candidates.filter((c) => matchesSearch(c.task, query));
+  const disabledIds = new Set(visible.filter((c) => !c.allowed).map((c) => c.task.id));
+  const byId = new Map(candidates.map((c) => [c.task.id, c]));
+  return /* @__PURE__ */ jsx4(Dialog2, { open: true, onOpenChange: (next) => {
+    if (!next) onClose();
+  }, children: /* @__PURE__ */ jsxs4(DialogContent2, { className: "max-w-lg", children: [
+    /* @__PURE__ */ jsx4(DialogHeader2, { children: /* @__PURE__ */ jsx4(DialogTitle2, { children: i18n.moveUnderTitle(draggedTitle) }) }),
+    /* @__PURE__ */ jsx4(
+      Input2,
+      {
+        autoFocus: true,
+        value: query,
+        placeholder: i18n.moveUnderSearch,
+        onChange: (event) => setQuery(event.target.value)
+      }
+    ),
+    /* @__PURE__ */ jsx4("div", { className: "max-h-72 overflow-y-auto", children: visible.length === 0 ? /* @__PURE__ */ jsx4("div", { className: "px-1 py-2 text-[11px] italic text-(--ui-text-quaternary)", children: i18n.moveUnderEmpty }) : /* @__PURE__ */ jsx4(
+      TaskRelations,
+      {
+        heading: "",
+        tasks: visible.map((c) => c.task),
+        disabledIds,
+        reasonOf: (id) => {
+          const c = byId.get(id);
+          return c && c.reason ? reasonLabel(c.reason, i18n) : null;
+        },
+        onOpen: (id) => {
+          if (!disabledIds.has(id)) onPick(id);
+        },
+        openLabel: i18n.openTask,
+        disabled: busy
+      }
+    ) })
+  ] }) });
+}
+
 // src/main.ts
 var ID2 = "kanban-gantt";
 var ROW_H = 28;
@@ -917,6 +1216,14 @@ var MIN_BAR_SEC = 2 * 3600;
 var ZOOM_MIN = 0.2;
 var ZOOM_MAX = 1.8;
 var ZOOM_STEP = 0.05;
+function humanReparentError(error, i18n) {
+  const message = String(error && error.message || error || "");
+  if (/cycle/i.test(message)) return i18n.errCycle;
+  if (/running/i.test(message)) return i18n.errRunning;
+  if (/not on board/i.test(message)) return i18n.errOtherBoard;
+  if (/own parent|itself/i.test(message)) return i18n.errSelf;
+  return i18n.errReparent;
+}
 function toast(kind, message) {
   try {
     if (host && typeof host.notify === "function" && message) {
@@ -930,7 +1237,7 @@ function Ruler({ min, max, pxPerSec }) {
   const tickValues = ticks(min, max, unit);
   const dayWidth = pxPerSec * DAY;
   const showWeekday = unit === "day" && dayWidth >= 50;
-  return jsxs3("div", {
+  return jsxs5("div", {
     className: "relative border-b border-(--ui-stroke-secondary) select-none text-[10px]",
     style: { height: showWeekday ? "32px" : "24px" },
     children: tickValues.map((t) => {
@@ -938,13 +1245,13 @@ function Ruler({ min, max, pxPerSec }) {
       const d = new Date(t * 1e3);
       const label = unit === "month" ? d.toLocaleDateString(void 0, { month: "short", year: "2-digit" }) : d.toLocaleDateString(void 0, { month: "short", day: "numeric" });
       const weekday = showWeekday ? d.toLocaleDateString(void 0, { weekday: "short" }).replace(/\./g, "").slice(0, 3).toUpperCase() : null;
-      return jsxs3("div", {
+      return jsxs5("div", {
         className: "absolute top-0 flex flex-col",
         style: { left: `${left}px` },
         children: [
-          jsx3("div", { className: "h-1.5 w-px bg-(--ui-stroke-tertiary)" }),
-          weekday ? jsx3("div", { className: "pl-0.5 text-[8.5px] font-semibold text-(--ui-text-tertiary) leading-none pt-0.5", children: weekday }) : null,
-          jsx3("div", { className: "pl-0.5 text-(--ui-text-tertiary) leading-tight", children: label })
+          jsx5("div", { className: "h-1.5 w-px bg-(--ui-stroke-tertiary)" }),
+          weekday ? jsx5("div", { className: "pl-0.5 text-[8.5px] font-semibold text-(--ui-text-tertiary) leading-none pt-0.5", children: weekday }) : null,
+          jsx5("div", { className: "pl-0.5 text-(--ui-text-tertiary) leading-tight", children: label })
         ]
       });
     })
@@ -985,7 +1292,7 @@ function Bar({ task, bar, pxPerSec, min, onOpen }) {
   }
   const children = [];
   if (bar.kind === "progress") {
-    children.push(jsx3("div", {
+    children.push(jsx5("div", {
       className: "absolute rounded-sm",
       style: {
         left: 0,
@@ -997,14 +1304,14 @@ function Bar({ task, bar, pxPerSec, min, onOpen }) {
       }
     }));
     if (task.status === "running") {
-      children.push(jsx3("div", { className: "kg-arc", style: { "--kanban-tone": tone } }));
+      children.push(jsx5("div", { className: "kg-arc", style: { "--kanban-tone": tone } }));
     }
   }
   const onClick = onOpen ? () => onOpen(task.id) : void 0;
   if (bar.kind === "done" || bar.kind === "done-instant") {
-    return jsx3("div", { className: "absolute rounded-sm kg-bar hover:brightness-110 transition-all", style, title, onClick });
+    return jsx5("div", { className: "absolute rounded-sm kg-bar hover:brightness-110 transition-all", style, title, onClick });
   }
-  return jsxs3("div", { className: "absolute rounded-sm kg-bar hover:brightness-110 transition-all", style, title, onClick, children });
+  return jsxs5("div", { className: "absolute rounded-sm kg-bar hover:brightness-110 transition-all", style, title, onClick, children });
 }
 function cleanTitle(title, label) {
   if (!title) return "(sans titre)";
@@ -1038,7 +1345,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   };
-  return jsx3("div", {
+  return jsx5("div", {
     onPointerDown,
     onDoubleClick: (e) => {
       e.preventDefault();
@@ -1046,7 +1353,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
       set(resetTo);
       if (getStorage()) getStorage().set(storageKey, String(resetTo));
     },
-    className: cn2(
+    className: cn3(
       "absolute z-40 touch-none transition-colors hover:bg-(--ui-accent)/30 active:bg-(--ui-accent)/50 cursor-col-resize"
     ),
     style: {
@@ -1061,13 +1368,13 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
     "aria-orientation": "vertical"
   });
 }
-function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge }) {
+function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
   const i18n = useGanttI18n();
   const labelW = useValue2($labelW);
   const bars = taskBars(task, now);
   const label = task.label ? `[${task.label}]` : "";
   const name = cleanTitle(task.title, task.label);
-  const connector = isChild ? jsx3("span", {
+  const connector = isChild ? jsx5("span", {
     className: "absolute",
     style: {
       // Drawn BEFORE the checkbox (visually left of it) and sized so its
@@ -1083,21 +1390,10 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     }
   }) : null;
   const dotColor = (bars.length > 0 ? bars[bars.length - 1]?.tone : null) || statusTone(task.status);
-  const STATUS_ICON = {
-    triage: "question",
-    todo: "circle-large-outline",
-    scheduled: "clock",
-    ready: "play-circle",
-    running: "pulse",
-    blocked: "warning",
-    review: "eye",
-    done: "check",
-    archived: "archive"
-  };
-  const statusIcon = STATUS_ICON[task.status] || "circle-large-outline";
+  const icon = statusIcon(task.status);
   const statusTitle = i18n.col?.[task.status] || task.status;
-  return jsxs3("div", {
-    className: cn2(
+  return jsxs5("div", {
+    className: cn3(
       "group grid items-center border-b border-(--ui-stroke-tertiary)/40 transition-colors cursor-pointer",
       isSelected ? "bg-(--ui-accent)/12 font-semibold" : isChecked ? "bg-(--ui-accent)/6" : isEven ? "bg-black/[0.02] dark:bg-white/[0.02]" : "bg-transparent",
       "hover:bg-(--ui-accent)/8"
@@ -1112,8 +1408,8 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
       }
     },
     children: [
-      jsxs3("div", {
-        className: cn2(
+      jsxs5("div", {
+        className: cn3(
           "relative flex items-center gap-1.5 min-w-0 sticky left-0 z-10 self-stretch",
           isSelected ? "font-semibold text-(--ui-accent)" : ""
         ),
@@ -1128,7 +1424,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
         },
         children: [
           connector,
-          jsx3("input", {
+          jsx5("input", {
             type: "checkbox",
             checked: Boolean(isChecked),
             onChange: (e) => onToggleCheck(task.id, e.target.checked, e.nativeEvent),
@@ -1136,44 +1432,68 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             className: "shrink-0 rounded cursor-pointer mr-1",
             "aria-label": i18n.selectTask(name)
           }),
-          jsx3("span", {
+          jsx5("span", {
             className: "inline-flex items-center justify-center shrink-0 self-center",
             style: { color: dotColor },
             title: statusTitle,
             "aria-label": statusTitle,
-            children: task.status === "running" ? jsxs3("span", {
+            children: task.status === "running" ? jsxs5("span", {
               className: "relative inline-flex items-center justify-center",
               children: [
-                jsx3("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }),
-                jsx3(Codicon3, { name: statusIcon, size: "0.85rem" })
+                jsx5("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }),
+                jsx5(Codicon4, { name: icon, size: "0.85rem" })
               ]
-            }) : jsx3(Codicon3, { name: statusIcon, size: "0.85rem" })
+            }) : jsx5(Codicon4, { name: icon, size: "0.85rem" })
           }),
-          showBoardBadge && task.board ? jsx3(Badge, {
+          showBoardBadge && task.board ? jsx5(Badge, {
             size: "xs",
             variant: "outline",
             className: "shrink-0 font-mono text-[9px] px-1 py-0 h-3.5 max-w-[80px] truncate leading-tight",
             title: `${i18n.board} ${task.board}`,
             children: task.board
           }) : null,
-          jsxs3("span", {
-            className: cn2(
+          jsxs5("span", {
+            className: cn3(
               "relative inline-flex items-center min-w-0 flex-1 whitespace-nowrap overflow-hidden text-ellipsis text-[11px] text-left select-none px-1 py-0.5 rounded",
               task.status === "running" && "font-medium",
-              isSelected ? "font-bold text-(--ui-accent)" : ""
+              isSelected ? "font-bold text-(--ui-accent)" : "",
+              // Drop feedback while another row is being dragged over this one.
+              dragState === "ok" && "ring-1 ring-inset ring-(--ui-accent) bg-(--ui-accent)/10",
+              dragState === "no" && "ring-1 ring-inset ring-red-500/60 bg-red-500/10"
             ),
             title: `${showBoardBadge && task.board ? `[${task.board}] ` : ""}${name} (${task.id}) — ${i18n.clickForDetail}`,
+            // Drag handle = the name cell only: the checkbox, the bars and the
+            // width handles keep their own gestures, and a plain click still
+            // opens the detail (native DnD needs actual movement to start).
+            draggable: true,
+            onDragStart: (event) => {
+              event.dataTransfer.setData("text/plain", task.id);
+              event.dataTransfer.effectAllowed = "move";
+              onDragStartTask(task.id);
+            },
+            onDragEnd: () => onDragEndTask(),
+            onDragOver: (event) => {
+              if (!onDropOn) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = dragState === "ok" ? "move" : "none";
+            },
+            onDrop: (event) => {
+              if (!onDropOn) return;
+              event.preventDefault();
+              event.stopPropagation();
+              onDropOn(task.id);
+            },
             children: [
-              task.status === "running" ? jsx3("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }) : null,
+              task.status === "running" ? jsx5("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }) : null,
               name
             ]
           })
         ]
       }),
-      jsxs3("div", {
+      jsxs5("div", {
         className: "relative overflow-hidden",
         style: { height: `${ROW_H}px` },
-        children: bars.length > 0 ? bars.map((b, idx) => jsx3(Bar, { key: b.runId || idx, task, bar: b, pxPerSec, min, onOpen })) : [jsx3("div", { key: "empty", className: "text-(--ui-text-quaternary) text-[10px]", children: "—" })]
+        children: bars.length > 0 ? bars.map((b, idx) => jsx5(Bar, { key: b.runId || idx, task, bar: b, pxPerSec, min, onOpen })) : [jsx5("div", { key: "empty", className: "text-(--ui-text-quaternary) text-[10px]", children: "—" })]
       })
     ]
   });
@@ -1184,7 +1504,7 @@ function ProfileAvatar({ name, size = "1rem" }) {
     const parts = (name || "?").split(/[\s_\-./]+/).filter(Boolean);
     return `${parts[0]?.[0] ?? "?"}${parts[1]?.[0] ?? ""}`.toUpperCase();
   })();
-  return jsx3("span", {
+  return jsx5("span", {
     className: "grid shrink-0 place-items-center rounded-full font-semibold select-none text-[8px]",
     style: {
       backgroundColor: color ? profileColorSoft(color, 22) : "var(--ui-bg-quaternary, rgba(150,150,150,0.15))",
@@ -1209,68 +1529,68 @@ function FilterDropdown({
 }) {
   const i18n = useGanttI18n();
   const active = selectedAssignees.size > 0 || disabledStatuses.size > 0 || showArchived;
-  return jsxs3(DropdownMenu3, {
+  return jsxs5(DropdownMenu3, {
     children: [
-      jsx3(DropdownMenuTrigger3, {
+      jsx5(DropdownMenuTrigger3, {
         asChild: true,
-        children: jsx3(Button3, {
+        children: jsx5(Button4, {
           size: "icon-xs",
           variant: "ghost",
-          className: cn2(active && "bg-(--ui-control-active-background) text-(--ui-accent)"),
+          className: cn3(active && "bg-(--ui-control-active-background) text-(--ui-accent)"),
           "aria-label": i18n.filters,
-          children: jsx3(Codicon3, { name: "filter", size: "0.85rem" })
+          children: jsx5(Codicon4, { name: "filter", size: "0.85rem" })
         })
       }),
-      jsxs3(DropdownMenuContent3, {
+      jsxs5(DropdownMenuContent3, {
         align: "start",
         className: "min-w-[12rem] p-1",
         children: [
-          jsx3("div", { className: "px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)", children: i18n.profiles }),
-          jsxs3(DropdownMenuItem3, {
+          jsx5("div", { className: "px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)", children: i18n.profiles }),
+          jsxs5(DropdownMenuItem3, {
             onClick: onClearAssignees,
             className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
             children: [
-              jsx3("span", { className: "flex-1 font-medium", children: i18n.allProfiles }),
-              selectedAssignees.size === 0 ? jsx3(Codicon3, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
+              jsx5("span", { className: "flex-1 font-medium", children: i18n.allProfiles }),
+              selectedAssignees.size === 0 ? jsx5(Codicon4, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
             ]
           }),
           assignees.map((name) => {
             const isChecked = selectedAssignees.has(name);
-            return jsxs3(DropdownMenuItem3, {
+            return jsxs5(DropdownMenuItem3, {
               key: name,
               onClick: () => onToggleAssignee(name),
               className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
               children: [
-                jsx3(ProfileAvatar, { name, size: "1rem" }),
-                jsx3("span", { className: "flex-1", children: name }),
-                isChecked ? jsx3(Codicon3, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
+                jsx5(ProfileAvatar, { name, size: "1rem" }),
+                jsx5("span", { className: "flex-1", children: name }),
+                isChecked ? jsx5(Codicon4, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
               ]
             });
           }),
-          jsx3(DropdownMenuSeparator3, {}),
-          jsx3("div", { className: "px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)", children: i18n.statuses }),
+          jsx5(DropdownMenuSeparator3, {}),
+          jsx5("div", { className: "px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)", children: i18n.statuses }),
           ALL_STATUS_KEYS.map((s) => {
             const isVisible = !disabledStatuses.has(s);
             const meta = STATUS_META[s] || { tone: "var(--ui-text-secondary)", label: s };
             const label = i18n.col?.[s] || meta.label;
-            return jsxs3(DropdownMenuItem3, {
+            return jsxs5(DropdownMenuItem3, {
               key: s,
               onClick: () => onToggleStatus(s),
               className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
               children: [
-                jsx3("span", { className: "h-2 w-2 rounded-full shrink-0", style: { backgroundColor: meta.tone } }),
-                jsx3("span", { className: cn2("flex-1", !isVisible && "line-through opacity-50"), children: label }),
-                isVisible ? jsx3(Codicon3, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
+                jsx5("span", { className: "h-2 w-2 rounded-full shrink-0", style: { backgroundColor: meta.tone } }),
+                jsx5("span", { className: cn3("flex-1", !isVisible && "line-through opacity-50"), children: label }),
+                isVisible ? jsx5(Codicon4, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
               ]
             });
           }),
-          jsx3(DropdownMenuSeparator3, {}),
-          jsxs3(DropdownMenuItem3, {
+          jsx5(DropdownMenuSeparator3, {}),
+          jsxs5(DropdownMenuItem3, {
             onClick: () => onToggleArchived(!showArchived),
             className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
             children: [
-              jsx3("span", { className: "flex-1", children: i18n.showArchived }),
-              showArchived ? jsx3(Codicon3, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
+              jsx5("span", { className: "flex-1", children: i18n.showArchived }),
+              showArchived ? jsx5(Codicon4, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
             ]
           })
         ]
@@ -1283,24 +1603,24 @@ function Legend({ disabledStatuses, onToggleStatus }) {
   const item = (statusKey, color, txt) => {
     const isExcluded = disabledStatuses ? disabledStatuses.has(statusKey) : false;
     const label = i18n.col?.[statusKey] || txt;
-    return jsxs3("button", {
+    return jsxs5("button", {
       type: "button",
       onClick: onToggleStatus ? () => onToggleStatus(statusKey) : void 0,
-      className: cn2(
+      className: cn3(
         "inline-flex items-center gap-1.5 text-[10px] cursor-pointer bg-transparent border-0 p-0 select-none transition-opacity hover:opacity-100",
         isExcluded ? "opacity-40 line-through text-(--ui-text-quaternary)" : "text-(--ui-text-tertiary)"
       ),
       title: isExcluded ? i18n.legendShow(label) : i18n.legendHide(label),
       children: [
-        jsx3("div", {
+        jsx5("div", {
           className: "h-2 w-3 rounded-xs shrink-0",
           style: { backgroundColor: color, opacity: isExcluded ? 0.3 : 1 }
         }),
-        jsx3("span", { children: label })
+        jsx5("span", { children: label })
       ]
     });
   };
-  return jsxs3("div", {
+  return jsxs5("div", {
     className: "flex flex-wrap items-center gap-3 pt-2 border-t border-(--ui-stroke-tertiary)/50 shrink-0 mt-auto select-none",
     children: [
       item("ready", "#60a5fa", "Ready"),
@@ -1325,14 +1645,14 @@ function WeekendBands({ min, max, pxPerSec }) {
     if (dayOfWeek === 0 || dayOfWeek === 6) {
       const left = Math.round((t - min) * pxPerSec);
       const width = Math.round(DAY * pxPerSec);
-      bands.push(jsx3("div", {
+      bands.push(jsx5("div", {
         className: "absolute top-0 bottom-0 pointer-events-none bg-black/15 dark:bg-black/25",
         style: { left: `${left}px`, width: `${width}px` }
       }, t));
     }
     t += step;
   }
-  return jsxs3("div", { className: "absolute inset-0 pointer-events-none z-0", children: bands });
+  return jsxs5("div", { className: "absolute inset-0 pointer-events-none z-0", children: bands });
 }
 var STATUS_META = {
   triage: { tone: "var(--ui-text-tertiary)", label: "Triage" },
@@ -1360,42 +1680,42 @@ var ACTION_MATRIX = {
 function AssigneeBadge({ assignee, assignees = [], onAssign, disabled }) {
   const i18n = useGanttI18n();
   const current = assignee || i18n.unassigned;
-  return jsxs3(DropdownMenu3, { children: [
-    jsx3(DropdownMenuTrigger3, {
+  return jsxs5(DropdownMenu3, { children: [
+    jsx5(DropdownMenuTrigger3, {
       asChild: true,
       disabled,
-      children: jsx3("button", {
+      children: jsx5("button", {
         type: "button",
         className: "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium cursor-pointer border border-(--ui-stroke-secondary) bg-(--ui-bg-subtle, transparent) hover:bg-(--chrome-action-hover)",
         children: [
-          assignee ? jsx3(ProfileAvatar, { name: assignee, size: "0.9rem" }) : jsx3("span", { className: "text-(--ui-text-tertiary)", children: "👤" }),
-          jsx3("span", { children: current }),
-          jsx3("span", { className: "text-[9px] opacity-60", children: "▾" })
+          assignee ? jsx5(ProfileAvatar, { name: assignee, size: "0.9rem" }) : jsx5("span", { className: "text-(--ui-text-tertiary)", children: "👤" }),
+          jsx5("span", { children: current }),
+          jsx5("span", { className: "text-[9px] opacity-60", children: "▾" })
         ]
       })
     }),
-    jsxs3(DropdownMenuContent3, {
+    jsxs5(DropdownMenuContent3, {
       align: "start",
       className: "min-w-[10rem] p-1",
       children: [
-        jsx3(DropdownMenuItem3, {
+        jsx5(DropdownMenuItem3, {
           className: "flex items-center gap-2 px-2.5 py-1 text-[11px] text-(--ui-text-tertiary)",
           onClick: () => onAssign(""),
           children: [
-            jsx3("span", { className: "flex-1", children: i18n.unassignedEmpty }),
-            !assignee ? jsx3("span", { className: "opacity-60", children: "✓" }) : null
+            jsx5("span", { className: "flex-1", children: i18n.unassignedEmpty }),
+            !assignee ? jsx5("span", { className: "opacity-60", children: "✓" }) : null
           ]
         }),
         assignees.map((name) => {
           const isCur = name === assignee;
-          return jsx3(DropdownMenuItem3, {
+          return jsx5(DropdownMenuItem3, {
             key: name,
             className: "flex items-center gap-2 px-2.5 py-1 text-[11px]",
             onClick: () => onAssign(name),
             children: [
-              jsx3(ProfileAvatar, { name, size: "0.9rem" }),
-              jsx3("span", { className: "flex-1", children: name }),
-              isCur ? jsx3("span", { className: "opacity-60", children: "✓" }) : null
+              jsx5(ProfileAvatar, { name, size: "0.9rem" }),
+              jsx5("span", { className: "flex-1", children: name }),
+              isCur ? jsx5("span", { className: "opacity-60", children: "✓" }) : null
             ]
           }, name);
         })
@@ -1414,40 +1734,40 @@ function SelectionBar({
   busy = false
 }) {
   const i18n = useGanttI18n();
-  const [menu, setMenu] = useState2(null);
-  const [customAssignee, setCustomAssignee] = useState2("");
+  const [menu, setMenu] = useState3(null);
+  const [customAssignee, setCustomAssignee] = useState3("");
   if (selected.size === 0) return null;
-  return jsx3("div", {
+  return jsx5("div", {
     className: "pointer-events-none absolute inset-x-0 bottom-12 z-40 flex justify-center px-4 animate-in fade-in slide-in-from-bottom-2 duration-150",
-    children: jsxs3("div", {
+    children: jsxs5("div", {
       className: "pointer-events-auto flex items-center gap-1.5 rounded-lg border border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) py-1.5 pr-1.5 pl-3.5 shadow-xl",
       children: [
-        jsx3("span", { className: "mr-1 text-xs tabular-nums font-medium text-(--ui-text-secondary)", children: i18n.nSelected(selected.size) }),
+        jsx5("span", { className: "mr-1 text-xs tabular-nums font-medium text-(--ui-text-secondary)", children: i18n.nSelected(selected.size) }),
         // Move to dropdown
-        jsxs3(DropdownMenu3, {
+        jsxs5(DropdownMenu3, {
           open: menu === "move",
           onOpenChange: (open) => setMenu(open ? "move" : null),
           children: [
-            jsx3(DropdownMenuTrigger3, {
+            jsx5(DropdownMenuTrigger3, {
               asChild: true,
-              children: jsxs3(Button3, {
+              children: jsxs5(Button4, {
                 disabled: busy,
                 size: "xs",
                 variant: "ghost",
                 className: "gap-1 text-xs",
                 children: [
-                  jsx3("span", { children: i18n.moveToShort }),
-                  jsx3(Codicon3, { name: "chevron-down", size: "0.7rem" })
+                  jsx5("span", { children: i18n.moveToShort }),
+                  jsx5(Codicon4, { name: "chevron-down", size: "0.7rem" })
                 ]
               })
             }),
-            jsx3(DropdownMenuContent3, {
+            jsx5(DropdownMenuContent3, {
               align: "center",
               className: "min-w-[9rem] p-1",
               children: STATUS_ORDER.map((s) => {
                 const meta = STATUS_META[s] || { tone: "var(--ui-text-secondary)", label: s };
                 const label = i18n.col?.[s] || meta.label;
-                return jsxs3(DropdownMenuItem3, {
+                return jsxs5(DropdownMenuItem3, {
                   key: s,
                   onClick: () => {
                     setMenu(null);
@@ -1455,8 +1775,8 @@ function SelectionBar({
                   },
                   className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
                   children: [
-                    jsx3("span", { className: "h-2 w-2 rounded-full shrink-0", style: { backgroundColor: meta.tone } }),
-                    jsx3("span", { className: "flex-1", children: label })
+                    jsx5("span", { className: "h-2 w-2 rounded-full shrink-0", style: { backgroundColor: meta.tone } }),
+                    jsx5("span", { className: "flex-1", children: label })
                   ]
                 });
               })
@@ -1464,28 +1784,28 @@ function SelectionBar({
           ]
         }),
         // Assign dropdown
-        jsxs3(DropdownMenu3, {
+        jsxs5(DropdownMenu3, {
           open: menu === "assign",
           onOpenChange: (open) => setMenu(open ? "assign" : null),
           children: [
-            jsx3(DropdownMenuTrigger3, {
+            jsx5(DropdownMenuTrigger3, {
               asChild: true,
-              children: jsxs3(Button3, {
+              children: jsxs5(Button4, {
                 disabled: busy,
                 size: "xs",
                 variant: "ghost",
                 className: "gap-1 text-xs",
                 children: [
-                  jsx3("span", { children: i18n.assignLabel.replace(":", "") }),
-                  jsx3(Codicon3, { name: "chevron-down", size: "0.7rem" })
+                  jsx5("span", { children: i18n.assignLabel.replace(":", "") }),
+                  jsx5(Codicon4, { name: "chevron-down", size: "0.7rem" })
                 ]
               })
             }),
-            jsxs3(DropdownMenuContent3, {
+            jsxs5(DropdownMenuContent3, {
               align: "center",
               className: "min-w-[10rem] p-1",
               children: [
-                assignees.map((name) => jsx3(DropdownMenuItem3, {
+                assignees.map((name) => jsx5(DropdownMenuItem3, {
                   key: name,
                   onClick: () => {
                     setMenu(null);
@@ -1493,12 +1813,12 @@ function SelectionBar({
                   },
                   className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
                   children: [
-                    jsx3(ProfileAvatar, { name, size: "0.85rem" }),
-                    jsx3("span", { className: "flex-1", children: name })
+                    jsx5(ProfileAvatar, { name, size: "0.85rem" }),
+                    jsx5("span", { className: "flex-1", children: name })
                   ]
                 })),
-                assignees.length > 0 ? jsx3(DropdownMenuSeparator3, {}) : null,
-                jsx3(DropdownMenuItem3, {
+                assignees.length > 0 ? jsx5(DropdownMenuSeparator3, {}) : null,
+                jsx5(DropdownMenuItem3, {
                   onClick: () => {
                     setMenu(null);
                     onAssign("");
@@ -1511,7 +1831,7 @@ function SelectionBar({
           ]
         }),
         // Archive button
-        jsx3(Button3, {
+        jsx5(Button4, {
           disabled: busy,
           onClick: onArchive,
           size: "xs",
@@ -1520,7 +1840,7 @@ function SelectionBar({
           children: i18n.actions.archive
         }),
         // Delete button
-        jsx3(Button3, {
+        jsx5(Button4, {
           disabled: busy,
           onClick: onDelete,
           size: "xs",
@@ -1529,13 +1849,13 @@ function SelectionBar({
           children: i18n.delete
         }),
         // Clear button (✕)
-        jsx3(Button3, {
+        jsx5(Button4, {
           "aria-label": i18n.clearSelection,
           onClick: onClear,
           size: "icon-xs",
           variant: "ghost",
           className: "ml-1 text-(--ui-text-quaternary) hover:text-(--ui-text-primary)",
-          children: jsx3(Codicon3, { name: "close", size: "0.8rem" })
+          children: jsx5(Codicon4, { name: "close", size: "0.8rem" })
         })
       ]
     })
@@ -1546,48 +1866,49 @@ function StatusBadge({ status, onPick, disabled }) {
   const meta = STATUS_META[status] || STATUS_META.todo;
   const label = i18n.col?.[status] || meta.label;
   const isRunning = status === "running";
-  return jsxs3(DropdownMenu3, { children: [
-    jsx3(DropdownMenuTrigger3, {
+  return jsxs5(DropdownMenu3, { children: [
+    jsx5(DropdownMenuTrigger3, {
       asChild: true,
       disabled,
-      children: jsx3("button", {
+      children: jsx5("button", {
         type: "button",
         className: "relative inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium cursor-pointer",
         style: { background: `color-mix(in srgb, ${meta.tone} 18%, transparent)`, color: "inherit", border: `1px solid color-mix(in srgb, ${meta.tone} 45%, transparent)` },
         children: [
-          isRunning ? jsx3("div", { className: "kg-arc", style: { "--kanban-tone": meta.tone } }) : null,
-          jsx3("span", { className: "h-2 w-2 rounded-full", style: { backgroundColor: meta.tone } }),
-          jsx3("span", { children: label }),
-          jsx3("span", { className: "text-[9px] opacity-60", children: "▾" })
+          isRunning ? jsx5("div", { className: "kg-arc", style: { "--kanban-tone": meta.tone } }) : null,
+          jsx5("span", { className: "h-2 w-2 rounded-full", style: { backgroundColor: meta.tone } }),
+          jsx5("span", { children: label }),
+          jsx5("span", { className: "text-[9px] opacity-60", children: "▾" })
         ]
       })
     }),
-    jsxs3(DropdownMenuContent3, {
+    jsxs5(DropdownMenuContent3, {
       align: "start",
       className: "min-w-[9rem] p-1",
       children: STATUS_ORDER.map((s) => {
         const m = STATUS_META[s];
         const current = s === status;
         const l = i18n.col?.[s] || m.label;
-        return jsx3(DropdownMenuItem3, {
+        return jsx5(DropdownMenuItem3, {
           className: "flex items-center gap-2 px-2.5 py-1 text-[11px]",
           onClick: () => {
             if (!current) onPick(s);
           },
           disabled: current,
           children: [
-            jsx3("span", { className: "h-2 w-2 rounded-full shrink-0", style: { backgroundColor: m.tone } }),
-            jsx3("span", { className: "flex-1", children: l }),
-            current ? jsx3("span", { className: "opacity-60", children: "✓" }) : null
+            jsx5("span", { className: "h-2 w-2 rounded-full shrink-0", style: { backgroundColor: m.tone } }),
+            jsx5("span", { className: "flex-1", children: l }),
+            current ? jsx5("span", { className: "opacity-60", children: "✓" }) : null
           ]
         }, s);
       })
     })
   ] });
 }
-function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, onToggleDock }) {
+function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked = false, onToggleDock }) {
   const drawerW = useValue2($drawerW);
   const i18n = useGanttI18n();
+  const queryClient = useQueryClient2();
   const scrollContainerRef = useRef2(null);
   const prevTaskIdRef = useRef2(null);
   const { data, isLoading, isError, refetch } = useQuery2({
@@ -1603,11 +1924,13 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
       }
     }
   }, [taskId]);
-  const [comment, setComment] = useState2("");
-  const [actionError, setActionError] = useState2(null);
-  const [runsOpen, setRunsOpen] = useState2(false);
-  const [commentsOpen, setCommentsOpen] = useState2(true);
-  const [showAllComments, setShowAllComments] = useState2(false);
+  const [comment, setComment] = useState3("");
+  const [actionError, setActionError] = useState3(null);
+  const [runsOpen, setRunsOpen] = useState3(false);
+  const [commentsOpen, setCommentsOpen] = useState3(true);
+  const [showAllComments, setShowAllComments] = useState3(false);
+  const [pendingUnlink, setPendingUnlink] = useState3(null);
+  const relations = useMemo2(() => relationsOf(tasks, taskId), [tasks, taskId]);
   const statusMutation = useMutation({
     mutationFn: (payload) => apiFetch(
       `/tasks/${encodeURIComponent(taskId)}/status${board ? `?board=${encodeURIComponent(board)}` : ""}`,
@@ -1643,18 +1966,27 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
     },
     onError: (error) => setActionError(String(error?.message || error))
   });
+  const unlinkMutation = useMutation({
+    mutationFn: (parentId) => removeParent(taskId, parentId, board),
+    onSuccess: () => {
+      setActionError(null);
+      void refetch();
+      void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
+    },
+    onError: (error) => setActionError(String(error?.message || error))
+  });
   const st = data?.task?.status || "todo";
   const matrix = ACTION_MATRIX[st] || { primary: [], more: [] };
   const more = matrix.more || [];
   const actionLabel = (a) => i18n.actions?.[a] || a;
-  return jsxs3("div", {
+  return jsxs5("div", {
     className: docked ? "relative flex flex-col h-full min-h-0 border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) pt-3.5 px-4" : "absolute inset-y-0 right-0 z-50 max-w-full border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) shadow-xl flex flex-col pt-3.5 px-4",
     "data-glass-opaque": true,
     role: "dialog",
     "aria-label": i18n.taskDetail,
     style: { width: `${drawerW}px` },
     children: [
-      jsx3(ResizeHandle, {
+      jsx5(ResizeHandle, {
         get: () => $drawerW.get(),
         set: (w) => $drawerW.set(w),
         min: DRAWER_W_MIN,
@@ -1664,15 +1996,15 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
         growDirection: "left"
       }),
       // Pinned top section: header, actions and title with bottom separator
-      jsxs3("div", {
+      jsxs5("div", {
         className: "flex flex-col gap-2 pb-3 border-b border-(--ui-stroke-tertiary) shrink-0",
         children: [
           // Top row: status, assignee, task id, [...] menu, close
-          jsxs3("div", {
+          jsxs5("div", {
             className: "flex items-center justify-between gap-1.5",
             children: [
-              jsxs3("div", { className: "flex flex-wrap items-center gap-1.5 min-w-0", children: [
-                jsx3(Button3, { size: "icon-xs", variant: "ghost", onClick: onToggleDock, "aria-label": docked ? i18n.undockDrawer : i18n.dockDrawer, title: docked ? i18n.undockDrawer : i18n.dockDrawer, children: docked ? "»" : "«" }),
+              jsxs5("div", { className: "flex flex-wrap items-center gap-1.5 min-w-0", children: [
+                jsx5(Button4, { size: "icon-xs", variant: "ghost", onClick: onToggleDock, "aria-label": docked ? i18n.undockDrawer : i18n.dockDrawer, title: docked ? i18n.undockDrawer : i18n.dockDrawer, children: docked ? "»" : "«" }),
                 StatusBadge({
                   status: data?.task?.status,
                   disabled: statusMutation.isPending,
@@ -1681,65 +2013,75 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                     if (action) statusMutation.mutate({ action });
                   }
                 }),
-                jsx3(AssigneeBadge, {
+                jsx5(AssigneeBadge, {
                   assignee: data?.task?.assignee,
                   assignees,
                   disabled: assignMutation.isPending,
                   onAssign: (profile) => assignMutation.mutate(profile)
                 }),
-                jsx3("span", {
+                jsx5("span", {
                   className: "text-[11px] font-mono text-(--ui-text-quaternary) hover:text-(--ui-text-secondary) cursor-help select-all",
                   title: i18n.copyHint(taskId),
                   children: shortId(taskId)
                 })
               ] }),
-              jsxs3("div", { className: "flex items-center gap-1 shrink-0", children: [
-                jsxs3(DropdownMenu3, { children: [
-                  jsx3(DropdownMenuTrigger3, {
+              jsxs5("div", { className: "flex items-center gap-1 shrink-0", children: [
+                jsxs5(DropdownMenu3, { children: [
+                  jsx5(DropdownMenuTrigger3, {
                     asChild: true,
-                    children: jsx3("button", {
+                    children: jsx5("button", {
                       type: "button",
                       className: "inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent",
                       "aria-label": i18n.actionsMenu,
-                      children: jsx3(Codicon3, { name: "ellipsis", size: "0.9rem" })
+                      children: jsx5(Codicon4, { name: "ellipsis", size: "0.9rem" })
                     })
                   }),
-                  jsxs3(DropdownMenuContent3, {
+                  jsxs5(DropdownMenuContent3, {
                     align: "end",
                     className: "min-w-[11rem] p-1 text-xs",
                     children: [
-                      jsx3(DropdownMenuItem3, {
+                      jsx5(DropdownMenuItem3, {
                         className: "flex items-center gap-2 px-3 py-1.5",
                         onClick: () => void navigator.clipboard.writeText(taskId),
                         children: i18n.copyTaskId
                       }),
-                      jsx3(DropdownMenuItem3, {
+                      jsx5(DropdownMenuItem3, {
                         className: "flex items-center gap-2 px-3 py-1.5",
                         onClick: () => {
                           if (data?.task?.title) void navigator.clipboard.writeText(data.task.title);
                         },
                         children: i18n.copyTitle
                       }),
-                      jsx3(DropdownMenuSeparator3, {}),
+                      jsx5(DropdownMenuSeparator3, {}),
                       // Creation verb reachable from a task: the new task starts
                       // as a child of this one.
-                      jsx3(DropdownMenuItem3, {
+                      jsx5(DropdownMenuItem3, {
                         className: "flex items-center gap-2 px-3 py-1.5",
                         onClick: () => $newTask.set({ parentId: taskId }),
-                        children: jsxs3("span", { className: "flex items-center gap-2", children: [
-                          jsx3(Codicon3, { name: "add", size: "0.85rem" }),
+                        children: jsxs5("span", { className: "flex items-center gap-2", children: [
+                          jsx5(Codicon4, { name: "add", size: "0.85rem" }),
                           i18n.createSubtask
                         ] })
                       }),
-                      more.length ? jsx3(DropdownMenuSeparator3, {}) : null,
-                      more.map((a) => jsx3(DropdownMenuItem3, {
+                      // Keyboard-reachable twin of the drag & drop: opens the
+                      // page's task picker for this task.
+                      jsx5(DropdownMenuItem3, {
+                        className: "flex items-center gap-2 px-3 py-1.5",
+                        onClick: () => $moveUnderId.set(taskId),
+                        children: jsxs5("span", { className: "flex items-center gap-2", children: [
+                          jsx5(Codicon4, { name: "move", size: "0.85rem" }),
+                          i18n.moveUnder
+                        ] })
+                      }),
+                      more.length ? jsx5(DropdownMenuSeparator3, {}) : null,
+                      more.map((a) => jsx5(DropdownMenuItem3, {
                         key: a,
                         className: "flex items-center gap-2 px-3 py-1.5",
                         onClick: () => statusMutation.mutate({ action: a }),
                         children: actionLabel(a)
                       })),
-                      jsx3(DropdownMenuSeparator3, {}),
-                      jsx3(DropdownMenuItem3, {
+                      jsx5(DropdownMenuSeparator3, {}),
+                      jsx5(DropdownMenuItem3, {
                         className: "flex items-center gap-2 px-3 py-1.5 text-red-500 hover:bg-red-500/10",
                         onClick: () => {
                           if (confirm(i18n.confirmDelete(taskId))) {
@@ -1752,14 +2094,14 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                     ]
                   })
                 ] }),
-                jsx3(Button3, { size: "icon-xs", variant: "ghost", onClick: onClose, "aria-label": i18n.close, children: "✕" })
+                jsx5(Button4, { size: "icon-xs", variant: "ghost", onClick: onClose, "aria-label": i18n.close, children: "✕" })
               ] })
             ]
           }),
           // Primary actions bar placed ABOVE the title
-          (matrix.primary || []).length ? jsxs3("div", { className: "flex flex-wrap items-center gap-1.5 py-0.5", children: [
-            jsx3("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary) mr-1", children: i18n.action }),
-            (matrix.primary || []).map((a) => jsx3(Button3, {
+          (matrix.primary || []).length ? jsxs5("div", { className: "flex flex-wrap items-center gap-1.5 py-0.5", children: [
+            jsx5("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary) mr-1", children: i18n.action }),
+            (matrix.primary || []).map((a) => jsx5(Button4, {
               key: a,
               size: "xs",
               disabled: statusMutation.isPending,
@@ -1768,61 +2110,78 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
             }))
           ] }) : null,
           // Title kept always visible
-          jsx3("div", { className: "text-base font-semibold leading-snug", children: cleanTitle(data?.task?.title, data?.task?.label) })
+          jsx5("div", { className: "text-base font-semibold leading-snug", children: cleanTitle(data?.task?.title, data?.task?.label) })
         ]
       }),
-      actionError ? jsx3("div", { className: "text-[10px] text-red-500 bg-red-500/10 border border-red-500/20 rounded p-1.5 shrink-0", children: actionError }) : null,
+      actionError ? jsx5("div", { className: "text-[10px] text-red-500 bg-red-500/10 border border-red-500/20 rounded p-1.5 shrink-0", children: actionError }) : null,
       // Scrollable content underneath the pinned header + title
-      isLoading ? jsx3("div", { className: "py-8 flex justify-center", children: jsx3(Loader, {}) }) : isError ? jsx3(ErrorState, { title: i18n.taskUnreadable, description: i18n.taskUnreadableDesc }) : jsxs3("div", { ref: scrollContainerRef, className: "flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pt-1", children: [
-        (data?.task?.dependencies || []).length ? jsxs3("div", { className: "text-[11px]", children: [
-          jsx3("span", { className: "text-[10px] uppercase text-(--ui-text-tertiary)", children: i18n.dependencies }),
-          ...(data.task.dependencies || []).map((d, i) => jsxs3("span", { title: d.id, children: [
-            i > 0 ? " · " : null,
-            jsx3("span", { className: "text-(--ui-text-secondary)", children: `${d.relation === "parent" ? "⬅" : "➡"} ${d.title}` })
-          ] }, i))
-        ] }) : null,
+      isLoading ? jsx5("div", { className: "py-8 flex justify-center", children: jsx5(Loader, {}) }) : isError ? jsx5(ErrorState, { title: i18n.taskUnreadable, description: i18n.taskUnreadableDesc }) : jsxs5("div", { ref: scrollContainerRef, className: "flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pt-1", children: [
+        // 0. Relations — parents (removable, behind a confirmation) and
+        //    children (read-only for now: removing that link means
+        //    re-parenting the child itself). Clicking a name opens that
+        //    task's detail, which also selects its row in the gantt.
+        jsx5(TaskRelations, {
+          heading: i18n.parents,
+          tasks: relations.parents,
+          emptyLabel: relations.parents.length === 0 ? i18n.noParents : void 0,
+          onOpen: (id) => $openTaskId.set(id),
+          onRemove: (id) => {
+            const parent = relations.parents.find((t) => t.id === id);
+            setPendingUnlink({ id, title: parent ? parent.title : id });
+          },
+          removeLabel: i18n.removeParentLink,
+          openLabel: i18n.openTask,
+          disabled: unlinkMutation.isPending
+        }),
+        jsx5(TaskRelations, {
+          heading: i18n.children,
+          tasks: relations.children,
+          emptyLabel: relations.children.length === 0 ? i18n.noChildren : void 0,
+          onOpen: (id) => $openTaskId.set(id),
+          openLabel: i18n.openTask
+        }),
         // 1. Description (no max-h clamp)
-        data?.task?.body ? jsxs3("div", { className: "flex flex-col gap-1", children: [
-          jsx3("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.description }),
-          jsx3("div", {
+        data?.task?.body ? jsxs5("div", { className: "flex flex-col gap-1", children: [
+          jsx5("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.description }),
+          jsx5("div", {
             className: "text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
-            children: jsx3(Streamdown, { children: data.task.body })
+            children: jsx5(Streamdown, { children: data.task.body })
           })
         ] }) : null,
         // 2. Result (no max-h clamp)
-        data?.task?.result ? jsxs3("div", { className: "flex flex-col gap-1", children: [
-          jsx3("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.result }),
-          jsx3("div", {
+        data?.task?.result ? jsxs5("div", { className: "flex flex-col gap-1", children: [
+          jsx5("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.result }),
+          jsx5("div", {
             className: "text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
-            children: jsx3(Streamdown, { children: data.task.result })
+            children: jsx5(Streamdown, { children: data.task.result })
           })
         ] }) : null,
         // 3. Latest summary (highlighted when blocked or done/completed)
-        data?.task?.latest_summary ? jsxs3("div", { className: "flex flex-col gap-1", children: [
-          jsx3("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.latestSummary }),
-          jsx3("div", {
-            className: cn2(
+        data?.task?.latest_summary ? jsxs5("div", { className: "flex flex-col gap-1", children: [
+          jsx5("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.latestSummary }),
+          jsx5("div", {
+            className: cn3(
               "text-[11px] prose prose-sm kg-prose max-w-none rounded p-2.5 transition-colors",
               data?.task?.status === "blocked" ? "border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300" : data?.task?.status === "done" || data?.task?.status === "archived" ? "border border-emerald-500/35 bg-emerald-500/10" : "border border-(--ui-stroke-tertiary) bg-(--ui-bg-subtle, transparent)"
             ),
-            children: jsx3(Streamdown, { children: data.task.latest_summary })
+            children: jsx5(Streamdown, { children: data.task.latest_summary })
           })
         ] }) : null,
         // 4. Run history (Collapsible section, collapsed by default, no internal scrollbar)
-        (data?.task?.runs || []).length ? jsxs3("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5", children: [
-          jsxs3("button", {
+        (data?.task?.runs || []).length ? jsxs5("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5", children: [
+          jsxs5("button", {
             type: "button",
             className: "flex items-center justify-between w-full text-left py-1 px-1 -mx-1 rounded hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent text-(--ui-text-primary)",
             onClick: () => setRunsOpen((o) => !o),
             children: [
-              jsxs3("div", { className: "flex items-center gap-1.5", children: [
-                jsx3("span", { className: "text-[10px] text-(--ui-text-tertiary) select-none", children: runsOpen ? "▼" : "▶" }),
-                jsx3("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.runs(data.task.runs.length) })
+              jsxs5("div", { className: "flex items-center gap-1.5", children: [
+                jsx5("span", { className: "text-[10px] text-(--ui-text-tertiary) select-none", children: runsOpen ? "▼" : "▶" }),
+                jsx5("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.runs(data.task.runs.length) })
               ] }),
-              jsx3("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: runsOpen ? i18n.hide : i18n.show })
+              jsx5("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: runsOpen ? i18n.hide : i18n.show })
             ]
           }),
-          runsOpen ? jsx3("div", { className: "flex flex-col gap-2 pt-1", children: data.task.runs.map((r, i) => {
+          runsOpen ? jsx5("div", { className: "flex flex-col gap-2 pt-1", children: data.task.runs.map((r, i) => {
             const failed = ["crashed", "failed", "timed_out", "gave_up"].includes(r.outcome || r.status);
             const isDiffProfile = r.profile && data?.task?.assignee && r.profile !== data.task.assignee;
             const durationStr = (() => {
@@ -1836,21 +2195,21 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
               return m > 0 ? `${h}h ${m}m` : `${h}h`;
             })();
             const dateStr = r.started_at ? new Intl.DateTimeFormat(void 0, { dateStyle: "medium", timeStyle: "short" }).format(new Date(r.started_at * 1e3)) : "";
-            return jsxs3("div", {
+            return jsxs5("div", {
               key: r.id || i,
               className: "flex flex-col gap-1 text-[11px] border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
               children: [
-                jsxs3("div", { className: "flex flex-wrap items-center gap-1.5 text-[10px]", children: [
-                  jsx3(Badge, { size: "xs", variant: failed ? "destructive" : r.ended_at ? "muted" : "secondary", children: r.outcome || r.status || "run" }),
-                  r.profile ? jsxs3("span", { className: cn2("font-medium", isDiffProfile ? "text-amber-500 font-semibold" : "text-(--ui-text-secondary)"), children: [
+                jsxs5("div", { className: "flex flex-wrap items-center gap-1.5 text-[10px]", children: [
+                  jsx5(Badge, { size: "xs", variant: failed ? "destructive" : r.ended_at ? "muted" : "secondary", children: r.outcome || r.status || "run" }),
+                  r.profile ? jsxs5("span", { className: cn3("font-medium", isDiffProfile ? "text-amber-500 font-semibold" : "text-(--ui-text-secondary)"), children: [
                     "👤 ",
                     r.profile,
-                    isDiffProfile ? jsx3("span", { className: "text-[9px] text-(--ui-text-quaternary) ml-1", children: i18n.reassigned }) : null
+                    isDiffProfile ? jsx5("span", { className: "text-[9px] text-(--ui-text-quaternary) ml-1", children: i18n.reassigned }) : null
                   ] }) : null,
-                  durationStr ? jsx3("span", { className: "text-(--ui-text-tertiary)", children: `⏱ ${durationStr}` }) : null,
-                  dateStr ? jsx3("span", { className: "text-(--ui-text-quaternary) ml-auto text-[9.5px]", children: dateStr }) : null
+                  durationStr ? jsx5("span", { className: "text-(--ui-text-tertiary)", children: `⏱ ${durationStr}` }) : null,
+                  dateStr ? jsx5("span", { className: "text-(--ui-text-quaternary) ml-auto text-[9.5px]", children: dateStr }) : null
                 ] }),
-                r.summary ? jsx3("div", { className: "prose prose-sm kg-prose max-w-none text-[11px] mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50", children: jsx3(Streamdown, { children: r.summary }) }) : null
+                r.summary ? jsx5("div", { className: "prose prose-sm kg-prose max-w-none text-[11px] mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50", children: jsx5(Streamdown, { children: r.summary }) }) : null
               ]
             });
           }) }) : null
@@ -1861,8 +2220,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
           const totalComments = commentsList.length;
           const visibleComments = showAllComments ? commentsList : commentsList.slice(-3);
           const hiddenCount = totalComments - visibleComments.length;
-          return jsxs3("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5", children: [
-            jsxs3("button", {
+          return jsxs5("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5", children: [
+            jsxs5("button", {
               type: "button",
               className: "flex items-center justify-between w-full text-left py-1 px-1 -mx-1 rounded hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent text-(--ui-text-primary)",
               onClick: () => {
@@ -1872,15 +2231,15 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                 });
               },
               children: [
-                jsxs3("div", { className: "flex items-center gap-1.5", children: [
-                  jsx3("span", { className: "text-[10px] text-(--ui-text-tertiary) select-none", children: commentsOpen ? "▼" : "▶" }),
-                  jsx3("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.comments(totalComments) })
+                jsxs5("div", { className: "flex items-center gap-1.5", children: [
+                  jsx5("span", { className: "text-[10px] text-(--ui-text-tertiary) select-none", children: commentsOpen ? "▼" : "▶" }),
+                  jsx5("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.comments(totalComments) })
                 ] }),
-                jsx3("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: commentsOpen ? i18n.hide : i18n.show })
+                jsx5("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: commentsOpen ? i18n.hide : i18n.show })
               ]
             }),
-            commentsOpen ? jsxs3("div", { className: "flex flex-col gap-1.5 pt-1", children: [
-              hiddenCount > 0 ? jsx3("button", {
+            commentsOpen ? jsxs5("div", { className: "flex flex-col gap-1.5 pt-1", children: [
+              hiddenCount > 0 ? jsx5("button", {
                 type: "button",
                 className: "text-[10.5px] text-(--ui-accent) hover:underline cursor-pointer border-0 bg-transparent text-left py-0.5 select-none",
                 onClick: () => setShowAllComments(true),
@@ -1888,20 +2247,20 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
               }) : null,
               visibleComments.map((c, i) => {
                 const dateStr = c.created_at ? new Intl.DateTimeFormat(void 0, { dateStyle: "medium", timeStyle: "short" }).format(new Date(c.created_at * 1e3)) : "";
-                return jsxs3("div", {
+                return jsxs5("div", {
                   key: c.id || i,
                   className: "text-[11px] border border-(--ui-stroke-tertiary)/60 rounded p-1.5 bg-(--ui-bg-subtle, transparent)",
                   children: [
-                    jsxs3("div", { className: "flex items-center gap-1.5 text-[10px] text-(--ui-text-tertiary) mb-0.5", children: [
-                      jsx3("span", { className: "font-medium text-(--ui-text-secondary)", children: c.author || "?" }),
-                      dateStr ? jsx3("span", { className: "ml-auto text-(--ui-text-quaternary)", children: dateStr }) : null
+                    jsxs5("div", { className: "flex items-center gap-1.5 text-[10px] text-(--ui-text-tertiary) mb-0.5", children: [
+                      jsx5("span", { className: "font-medium text-(--ui-text-secondary)", children: c.author || "?" }),
+                      dateStr ? jsx5("span", { className: "ml-auto text-(--ui-text-quaternary)", children: dateStr }) : null
                     ] }),
-                    jsx3("div", { className: "prose prose-sm kg-prose max-w-none text-[11px]", children: jsx3(Streamdown, { children: c.body || "" }) })
+                    jsx5("div", { className: "prose prose-sm kg-prose max-w-none text-[11px]", children: jsx5(Streamdown, { children: c.body || "" }) })
                   ]
                 });
               }),
-              jsxs3("div", { className: "flex gap-1.5 mt-1", children: [
-                jsx3("input", {
+              jsxs5("div", { className: "flex gap-1.5 mt-1", children: [
+                jsx5("input", {
                   type: "text",
                   value: comment,
                   placeholder: i18n.addCommentPlaceholder,
@@ -1914,7 +2273,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                     }
                   }
                 }),
-                jsx3(Button3, {
+                jsx5(Button4, {
                   size: "xs",
                   disabled: !comment.trim() || commentMutation.isPending,
                   onClick: () => {
@@ -1928,25 +2287,38 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
           ] });
         })(),
         // 6. Activité (Derniers événements)
-        (data?.task?.events || []).length ? jsxs3("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1", children: [
-          jsx3("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.activity(data.task.events.length) }),
-          jsx3("div", { className: "flex flex-col gap-0.5 max-h-32 overflow-auto", children: data.task.events.slice(-12).reverse().map((e, i) => jsx3("div", {
+        (data?.task?.events || []).length ? jsxs5("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1", children: [
+          jsx5("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.activity(data.task.events.length) }),
+          jsx5("div", { className: "flex flex-col gap-0.5 max-h-32 overflow-auto", children: data.task.events.slice(-12).reverse().map((e, i) => jsx5("div", {
             key: i,
             className: "text-[10px] text-(--ui-text-tertiary)",
             children: String(e.kind || "event")
           }, i)) })
         ] }) : null
-      ] })
+      ] }),
+      // Drops a parent link — behind a confirmation, so a stray click on the
+      // row's ✕ never silently rewires the tree.
+      jsx5(ConfirmDialog, {
+        open: Boolean(pendingUnlink),
+        onClose: () => setPendingUnlink(null),
+        onConfirm: () => unlinkMutation.mutateAsync(pendingUnlink.id),
+        title: i18n.removeParentConfirmTitle(pendingUnlink ? pendingUnlink.title : ""),
+        description: i18n.removeParentConfirmDesc,
+        confirmLabel: i18n.removeParentLink(pendingUnlink ? pendingUnlink.title : ""),
+        cancelLabel: i18n.cancel,
+        destructive: true
+      })
     ]
   });
 }
 function KanbanGanttPage() {
   const i18n = useGanttI18n();
-  const queryClient2 = useQueryClient2();
+  const queryClient = useQueryClient2();
   const base = useValue2($baseUrl);
   const board = useValue2($boardSlug);
   const openTaskId = useValue2($openTaskId);
   const newTask = useValue2($newTask);
+  const moveUnderId = useValue2($moveUnderId);
   const labelW = useValue2($labelW);
   const drawerW = useValue2($drawerW);
   const drawerDocked = useValue2($drawerDocked);
@@ -1970,23 +2342,26 @@ function KanbanGanttPage() {
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ""}`),
     refetchInterval: 6e4
   });
-  const [showArchived, setShowArchived] = useState2(false);
-  const [selectedAssignees, setSelectedAssignees] = useState2(() => /* @__PURE__ */ new Set());
-  const [disabledStatuses, setDisabledStatuses] = useState2(() => {
+  const [showArchived, setShowArchived] = useState3(false);
+  const [dragId, setDragId] = useState3(null);
+  const [pendingReparent, setPendingReparent] = useState3(null);
+  const allTasks = data?.tasks || [];
+  const [selectedAssignees, setSelectedAssignees] = useState3(() => /* @__PURE__ */ new Set());
+  const [disabledStatuses, setDisabledStatuses] = useState3(() => {
     const saved = getStorage() ? getStorage().get("disabledStatuses", null) : null;
     return Array.isArray(saved) ? new Set(saved) : /* @__PURE__ */ new Set();
   });
-  const [search, setSearch] = useState2("");
-  const [selectedIds, setSelectedIds] = useState2(() => /* @__PURE__ */ new Set());
-  const [bulkAssignee, setBulkAssignee] = useState2("");
+  const [search, setSearch] = useState3("");
+  const [selectedIds, setSelectedIds] = useState3(() => /* @__PURE__ */ new Set());
+  const [bulkAssignee, setBulkAssignee] = useState3("");
   const lastCheckedIdRef = useRef2(null);
-  const [zoom, setZoom] = useState2(() => {
+  const [zoom, setZoom] = useState3(() => {
     const saved = getStorage() ? getStorage().get("zoom", null) : null;
     return saved != null && Number.isFinite(Number(saved)) ? Number(saved) : 1;
   });
   const containerRef = useRef2(null);
   const scrollerRef = useRef2(null);
-  const [trackW, setTrackW] = useState2(0);
+  const [trackW, setTrackW] = useState3(0);
   const handleToggleAssignee = (name) => {
     setSelectedAssignees((prev) => {
       const next = new Set(prev);
@@ -2030,7 +2405,7 @@ function KanbanGanttPage() {
     onSuccess: (response, values) => {
       $newTask.set(null);
       toast("info", i18n.created(values.title));
-      void queryClient2.invalidateQueries({ queryKey: ["kanban-gantt"] });
+      void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
       $openTaskId.set(response.task_id);
     },
     onError: (error) => {
@@ -2038,6 +2413,74 @@ function KanbanGanttPage() {
       toast("error", /title is required/i.test(message) ? i18n.errTitleRequired : i18n.errCreate);
     }
   });
+  const boardOf = (id) => {
+    const task = allTasks.find((t) => t.id === id);
+    if (task && task.board) return task.board;
+    return board && board !== "all" && board !== "*" ? board : void 0;
+  };
+  const dropMap = useMemo2(
+    () => dragId ? new Map(dropCandidates(allTasks, dragId, boardOf(dragId)).map((c) => [c.task.id, c])) : null,
+    [dragId, allTasks, board]
+  );
+  const reparentMutation = useMutation({
+    mutationFn: ({ childId, parentId, mode }) => setParent(childId, parentId, mode, board),
+    onSuccess: (response) => {
+      setPendingReparent(null);
+      const child = allTasks.find((t) => t.id === response.task_id);
+      const parent = allTasks.find((t) => t.id === response.parent_id);
+      const childName = child ? child.title : response.task_id;
+      const parentName = parent ? parent.title : response.parent_id;
+      toast("info", response.gated ? i18n.gatedNotice(childName) : i18n.movedUnder(childName, parentName));
+      void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
+    },
+    onError: (error) => {
+      setPendingReparent(null);
+      toast("error", humanReparentError(error, i18n));
+    }
+  });
+  const unlinkMutation = useMutation({
+    mutationFn: ({ childId, parentId }) => removeParent(childId, parentId, board),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
+    },
+    onError: (error) => toast("error", humanReparentError(error, i18n))
+  });
+  const handleDragStart = (id) => {
+    setDragId(id);
+  };
+  const handleDropOn = (targetId) => {
+    const childId = dragId;
+    setDragId(null);
+    if (!childId || childId === targetId) return;
+    const candidate = dropMap ? dropMap.get(targetId) : null;
+    if (candidate && !candidate.allowed) {
+      toast("error", reasonLabel(candidate.reason, i18n));
+      return;
+    }
+    const child = allTasks.find((t) => t.id === childId);
+    const parents = child && child.parents || [];
+    if (parents.length > 0) {
+      setPendingReparent({ childId, parentId: targetId });
+      return;
+    }
+    reparentMutation.mutate({ childId, parentId: targetId, mode: "add" });
+  };
+  const handlePickParent = (parentId) => {
+    const childId = moveUnderId;
+    $moveUnderId.set(null);
+    if (!childId || childId === parentId) return;
+    const candidate = dropCandidates(allTasks, childId, boardOf(childId)).find((c) => c.task.id === parentId);
+    if (candidate && !candidate.allowed) {
+      toast("error", reasonLabel(candidate.reason, i18n));
+      return;
+    }
+    const child = allTasks.find((t) => t.id === childId);
+    if ((child && child.parents || []).length > 0) {
+      setPendingReparent({ childId, parentId });
+      return;
+    }
+    reparentMutation.mutate({ childId, parentId, mode: "add" });
+  };
   const handleToggleCheck = (id, checked, nativeEvent) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -2078,7 +2521,7 @@ function KanbanGanttPage() {
     onSuccess: () => {
       setSelectedIds(/* @__PURE__ */ new Set());
       setBulkAssignee("");
-      void queryClient2.invalidateQueries({ queryKey: ["kanban-gantt"] });
+      void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
     }
   });
   const handleZoomChange = (val) => {
@@ -2089,7 +2532,7 @@ function KanbanGanttPage() {
     $boardSlug.set(slug);
     if (getStorage()) getStorage().set("board", slug);
     setSearch("");
-    void queryClient2.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
+    void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
   };
   useEffect2(() => {
     if (!board && boardsData?.boards?.length) {
@@ -2130,16 +2573,16 @@ function KanbanGanttPage() {
     }
   }, [board, derived, trackW]);
   if (isLoading && !data) {
-    return jsx3("div", { className: "flex h-full items-center justify-center p-8", children: jsx3(Loader, {}) });
+    return jsx5("div", { className: "flex h-full items-center justify-center p-8", children: jsx5(Loader, {}) });
   }
   if (isError) {
-    return jsx3("div", { className: "p-6", children: jsx3(ErrorState, {
+    return jsx5("div", { className: "p-6", children: jsx5(ErrorState, {
       title: i18n.cannotLoadBoard,
       description: i18n.cannotLoadBoardDesc(base)
     }) });
   }
   if (!derived || !derived.domain) {
-    return jsx3("div", { className: "p-6", children: jsx3(EmptyState, { title: i18n.emptyBoard, description: i18n.emptyBoardDesc(boardLabel(board)) }) });
+    return jsx5("div", { className: "p-6", children: jsx5(EmptyState, { title: i18n.emptyBoard, description: i18n.emptyBoardDesc(boardLabel(board)) }) });
   }
   const now = Date.now() / 1e3;
   const { rows, domain } = derived;
@@ -2148,7 +2591,7 @@ function KanbanGanttPage() {
   const basePerSec = baseDayWidth / DAY;
   const pxPerSec = basePerSec * zoom;
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec));
-  const grid = rows.map((row, idx) => jsx3(TaskRow, {
+  const grid = rows.map((row, idx) => jsx5(TaskRow, {
     ...row,
     now,
     pxPerSec,
@@ -2159,7 +2602,12 @@ function KanbanGanttPage() {
     isChecked: selectedIds.has(row.task.id),
     onToggleCheck: handleToggleCheck,
     isEven: idx % 2 === 0,
-    showBoardBadge: isAllBoards
+    showBoardBadge: isAllBoards,
+    // Drop feedback only for rows that are not the dragged one.
+    dragState: !dropMap || row.task.id === dragId ? null : dropMap.get(row.task.id)?.allowed ? "ok" : "no",
+    onDragStartTask: handleDragStart,
+    onDragEndTask: () => setDragId(null),
+    onDropOn: handleDropOn
   }, row.task.id));
   const STATUS_PRIORITY = ["blocked", "running", "review", "ready", "scheduled", "todo", "triage", "done", "archived"];
   const blockedCount = derived.tasks.filter((t) => t.status === "blocked").length;
@@ -2172,34 +2620,34 @@ function KanbanGanttPage() {
   })();
   const dominantTone = statusTone(dominantStatus);
   const dockDrawer = Boolean(openTaskId && drawerDocked);
-  return jsxs3("div", {
+  return jsxs5("div", {
     ref: containerRef,
     // No root padding: the desktop shell already insets plugin pages, and the
     // demo adds its own body padding (tests/demo.html).
-    className: cn2("relative h-full flex", dockDrawer ? "flex-row gap-3" : "flex-col"),
+    className: cn3("relative h-full flex", dockDrawer ? "flex-row gap-3" : "flex-col"),
     children: [
       // Page-header chrome: exists exactly while this page is mounted — the
       // board switcher is projected into the workspace page-header band (the
       // tab row above the page), like the official kanban plugin's switcher
       // (WORKSPACE_PAGE_HEADER_AREA, NOT titleBar.center).
-      jsx3(Contribute, { area: WORKSPACE_PAGE_HEADER_AREA, id: "kanban-gantt:board-switcher", children: jsx3(TitlebarBoardSwitcher, {}) }),
+      jsx5(Contribute, { area: WORKSPACE_PAGE_HEADER_AREA, id: "kanban-gantt:board-switcher", children: jsx5(TitlebarBoardSwitcher, {}) }),
       // Main column (header + chart + legend). When the drawer is docked it
       // becomes a flex sibling of this column, so the gantt shrinks to make
       // room instead of being covered. Carries the view padding (the desktop
       // shell already insets contributed pages; the demo adds its own).
-      jsxs3("div", {
+      jsxs5("div", {
         className: "flex flex-col flex-1 min-h-0 min-w-0 pl-3 py-2",
         children: [
           // Top header row: Left title + task count badge + blocked badge + filter + search, Center board switcher, Right refresh
-          jsxs3("div", {
+          jsxs5("div", {
             className: "flex flex-wrap items-center justify-between gap-2 mb-2",
             children: [
               // Left: Title + Task Count Badge + Blocked Badge + Filter + Search Field
-              jsxs3("div", {
+              jsxs5("div", {
                 className: "inline-flex items-center gap-2 text-sm font-medium",
                 children: [
-                  jsx3("span", { className: "font-semibold", children: i18n.title }),
-                  jsx3("span", {
+                  jsx5("span", { className: "font-semibold", children: i18n.title }),
+                  jsx5("span", {
                     className: "inline-flex items-center justify-center rounded-full px-2 py-0.2 text-[10.5px] font-semibold tracking-tight shadow-xs cursor-help",
                     title: i18n.nTasksTotal(derived.total, dominantStatus),
                     style: {
@@ -2210,15 +2658,15 @@ function KanbanGanttPage() {
                     },
                     children: `${derived.total}`
                   }),
-                  blockedCount > 0 ? jsxs3("span", {
+                  blockedCount > 0 ? jsxs5("span", {
                     className: "inline-flex items-center gap-1 rounded-full px-2 py-0.2 text-[10.5px] font-semibold tracking-tight shadow-xs text-[#f87171] border border-[#f87171]/40 bg-[#f87171]/18 cursor-help",
                     title: i18n.nBlockedWarning(blockedCount),
                     children: [
-                      jsx3(Codicon3, { name: "warning", size: "0.8rem" }),
-                      jsx3("span", { children: `${blockedCount}` })
+                      jsx5(Codicon4, { name: "warning", size: "0.8rem" }),
+                      jsx5("span", { children: `${blockedCount}` })
                     ]
                   }) : null,
-                  jsx3(FilterDropdown, {
+                  jsx5(FilterDropdown, {
                     assignees: derived.allAssignees || [],
                     selectedAssignees,
                     onToggleAssignee: handleToggleAssignee,
@@ -2228,11 +2676,11 @@ function KanbanGanttPage() {
                     showArchived,
                     onToggleArchived: setShowArchived
                   }),
-                  jsxs3("div", {
+                  jsxs5("div", {
                     className: "inline-flex items-center gap-1.5 border-b border-transparent focus-within:border-(--ui-stroke-secondary) px-1 py-0.5 ml-1",
                     children: [
-                      jsx3(Codicon3, { name: "search", size: "0.85rem", className: "text-(--ui-text-quaternary)" }),
-                      jsx3("input", {
+                      jsx5(Codicon4, { name: "search", size: "0.85rem", className: "text-(--ui-text-quaternary)" }),
+                      jsx5("input", {
                         type: "search",
                         value: search,
                         placeholder: i18n.filterCards,
@@ -2246,11 +2694,11 @@ function KanbanGanttPage() {
               // Board switcher moved to the desktop titlebar band (titleBar.center)
               // — see TitlebarBoardSwitcher above.
               // Right: Refresh button + Zoom control
-              jsxs3("div", {
+              jsxs5("div", {
                 className: "inline-flex items-center gap-3",
                 children: [
-                  jsxs3("span", { className: "inline-flex items-center gap-1.5", children: [
-                    jsx3("input", {
+                  jsxs5("span", { className: "inline-flex items-center gap-1.5", children: [
+                    jsx5("input", {
                       type: "range",
                       min: String(ZOOM_MIN),
                       max: String(ZOOM_MAX),
@@ -2260,16 +2708,16 @@ function KanbanGanttPage() {
                       className: "w-24",
                       "aria-label": i18n.zoomTimeline
                     }),
-                    jsx3("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${Math.round(zoom * 100)}%` })
+                    jsx5("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${Math.round(zoom * 100)}%` })
                   ] }),
-                  jsx3(Button3, { size: "xs", onClick: () => void queryClient2.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] }), children: i18n.refresh }),
+                  jsx5(Button4, { size: "xs", onClick: () => void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] }), children: i18n.refresh }),
                   // Far right: the board's only creation verb.
-                  jsx3(Button3, {
+                  jsx5(Button4, {
                     size: "xs",
                     variant: "default",
                     onClick: () => $newTask.set({ parentId: "" }),
-                    children: jsxs3("span", { className: "flex items-center gap-1", children: [
-                      jsx3(Codicon3, { name: "add", size: "0.85rem" }),
+                    children: jsxs5("span", { className: "flex items-center gap-1", children: [
+                      jsx5(Codicon4, { name: "add", size: "0.85rem" }),
                       i18n.newTask
                     ] })
                   })
@@ -2277,13 +2725,13 @@ function KanbanGanttPage() {
               })
             ]
           }),
-          rows.length === 0 ? jsx3("div", {
+          rows.length === 0 ? jsx5("div", {
             className: "py-10",
-            children: jsx3(EmptyState, { title: i18n.nothingToDisplay, description: i18n.noTasksMatch })
-          }) : jsxs3("div", {
+            children: jsx5(EmptyState, { title: i18n.nothingToDisplay, description: i18n.noTasksMatch })
+          }) : jsxs5("div", {
             className: "mt-2 border border-(--ui-stroke-tertiary) rounded-md overflow-hidden flex-1 min-h-0 flex flex-col relative",
             children: [
-              jsx3(SelectionBar, {
+              jsx5(SelectionBar, {
                 selected: selectedIds,
                 onClear: () => setSelectedIds(/* @__PURE__ */ new Set()),
                 onStatus: (status) => bulkMutation.mutate({ action: status, ids: [...selectedIds] }),
@@ -2297,21 +2745,21 @@ function KanbanGanttPage() {
                 assignees: derived.allAssignees || [],
                 busy: bulkMutation.isPending
               }),
-              jsxs3("div", {
+              jsxs5("div", {
                 ref: scrollerRef,
                 className: "overflow-auto flex-1 min-h-0 relative",
                 children: [
-                  jsxs3("div", {
+                  jsxs5("div", {
                     className: "grid w-max sticky top-0 z-20 bg-(--ui-bg-chrome)",
                     "data-glass-opaque": true,
                     style: { gridTemplateColumns: `${labelW}px ${timelineW}px` },
                     children: [
-                      jsxs3("div", {
+                      jsxs5("div", {
                         className: "sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center px-2 gap-1.5",
                         "data-glass-opaque": true,
                         style: { height: pxPerSec * DAY >= 50 && tickUnit(domain.max - domain.min) === "day" ? "32px" : "24px" },
                         children: [
-                          jsx3("input", {
+                          jsx5("input", {
                             type: "checkbox",
                             checked: Boolean(derived.rows.length > 0 && selectedIds.size === derived.rows.length),
                             ref: (el) => {
@@ -2327,8 +2775,8 @@ function KanbanGanttPage() {
                             className: "rounded cursor-pointer",
                             "aria-label": i18n.selectAll
                           }),
-                          jsx3("span", { className: "text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", children: i18n.tasksColumn }),
-                          jsx3(ResizeHandle, {
+                          jsx5("span", { className: "text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", children: i18n.tasksColumn }),
+                          jsx5(ResizeHandle, {
                             get: () => $labelW.get(),
                             set: (w) => $labelW.set(w),
                             min: LABEL_W_MIN,
@@ -2338,16 +2786,16 @@ function KanbanGanttPage() {
                           })
                         ]
                       }),
-                      jsx3(Ruler, { min: domain.min, max: domain.max, pxPerSec })
+                      jsx5(Ruler, { min: domain.min, max: domain.max, pxPerSec })
                     ]
                   }),
-                  jsxs3("div", {
+                  jsxs5("div", {
                     className: "relative flex flex-col w-max",
                     children: [
-                      jsx3("div", {
+                      jsx5("div", {
                         className: "absolute top-0 bottom-0 pointer-events-none z-0",
                         style: { left: `${labelW}px`, width: `${timelineW}px` },
-                        children: jsx3(WeekendBands, { min: domain.min, max: domain.max, pxPerSec })
+                        children: jsx5(WeekendBands, { min: domain.min, max: domain.max, pxPerSec })
                       }),
                       grid
                     ]
@@ -2356,15 +2804,18 @@ function KanbanGanttPage() {
               })
             ]
           }),
-          jsx3("div", {
-            children: jsx3(Legend, { disabledStatuses, onToggleStatus: handleToggleStatus })
+          jsx5("div", {
+            children: jsx5(Legend, { disabledStatuses, onToggleStatus: handleToggleStatus })
           })
         ]
       }),
-      openTaskId ? jsx3(TaskDrawer, {
+      openTaskId ? jsx5(TaskDrawer, {
         taskId: openTaskId,
         board,
         assignees: derived.allAssignees || [],
+        // Unfiltered snapshot: a parent hidden by the current filter must
+        // still be listed in the drawer's relations.
+        tasks: data?.tasks || [],
         onClose: () => $openTaskId.set(null),
         docked: dockDrawer,
         onToggleDock: () => {
@@ -2374,7 +2825,7 @@ function KanbanGanttPage() {
         }
       }) : null,
       // Creation dialog (toolbar button, or "create a sub-task" from a task).
-      jsx3(NewTaskDialog, {
+      jsx5(NewTaskDialog, {
         open: Boolean(newTask),
         boardSlug: board && board !== "all" && board !== "*" ? board : void 0,
         assignees: (() => {
@@ -2388,6 +2839,36 @@ function KanbanGanttPage() {
         busy: createTaskMutation.isPending,
         onSubmit: (values) => createTaskMutation.mutate(values),
         onClose: () => $newTask.set(null),
+        i18n
+      }),
+      // Asked only when the dropped task already has parents: add vs replace.
+      jsx5(ReparentChoiceDialog, {
+        open: Boolean(pendingReparent),
+        targetTitle: (() => {
+          if (!pendingReparent) return "";
+          const target = allTasks.find((t) => t.id === pendingReparent.parentId);
+          return target ? target.title : pendingReparent.parentId;
+        })(),
+        parents: pendingReparent ? relationsOf(allTasks, pendingReparent.childId).parents : [],
+        busy: reparentMutation.isPending || unlinkMutation.isPending,
+        onAdd: () => reparentMutation.mutate({ ...pendingReparent, mode: "add" }),
+        onReplace: () => reparentMutation.mutate({ ...pendingReparent, mode: "replace" }),
+        onRemoveParent: (parentId) => unlinkMutation.mutate({ childId: pendingReparent.childId, parentId }),
+        onClose: () => setPendingReparent(null),
+        i18n
+      }),
+      // "Move under…" picker (drawer action menu): the whole board, refusals
+      // greyed with their reason rather than hidden.
+      jsx5(MoveUnderDialog, {
+        open: Boolean(moveUnderId),
+        draggedTitle: (() => {
+          const task = moveUnderId ? allTasks.find((t) => t.id === moveUnderId) : null;
+          return task ? task.title : moveUnderId || "";
+        })(),
+        candidates: moveUnderId ? dropCandidates(allTasks, moveUnderId, boardOf(moveUnderId)) : [],
+        busy: reparentMutation.isPending,
+        onPick: handlePickParent,
+        onClose: () => $moveUnderId.set(null),
         i18n
       })
     ]
@@ -2470,7 +2951,7 @@ var plugin = {
         id: "page",
         area: ROUTES_AREA,
         data: { path: "/kanban-gantt" },
-        render: () => jsx3(KanbanGanttPage, {})
+        render: () => jsx5(KanbanGanttPage, {})
       },
       {
         id: "nav",

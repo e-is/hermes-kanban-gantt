@@ -15,6 +15,61 @@ var STATUS_TONE = {
 function statusTone(status) {
   return STATUS_TONE[status] || "var(--ui-text-secondary)";
 }
+var STATUS_ICON = {
+  triage: "question",
+  todo: "circle-large-outline",
+  scheduled: "clock",
+  ready: "play-circle",
+  running: "pulse",
+  blocked: "warning",
+  review: "eye",
+  done: "check",
+  archived: "archive"
+};
+function statusIcon(status) {
+  return STATUS_ICON[status] || "circle-large-outline";
+}
+var TERMINAL_STATUSES = ["done", "archived"];
+function isTerminal(status) {
+  return TERMINAL_STATUSES.indexOf(status) !== -1;
+}
+function descendantsOf(tasks, rootId) {
+  const adj = /* @__PURE__ */ new Map();
+  for (const t of tasks) adj.set(t.id, t.children || []);
+  const out = /* @__PURE__ */ new Set();
+  const stack = [...adj.get(rootId) || []];
+  while (stack.length) {
+    const id = stack.pop();
+    if (out.has(id)) continue;
+    out.add(id);
+    stack.push(...adj.get(id) || []);
+  }
+  return out;
+}
+function isDescendant(tasks, ancestorId, candidateId) {
+  return descendantsOf(tasks, ancestorId).has(candidateId);
+}
+function relationsOf(tasks, taskId) {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const task = byId.get(taskId);
+  if (!task) return { parents: [], children: [] };
+  const pick = (ids) => (ids || []).map((id) => byId.get(id)).filter(Boolean);
+  return { parents: pick(task.parents), children: pick(task.children) };
+}
+function dropCandidates(tasks, draggedId, boardSlug) {
+  const dragged = tasks.find((t) => t.id === draggedId);
+  const below = descendantsOf(tasks, draggedId);
+  const alreadyLinked = new Set(dragged && dragged.parents || []);
+  return tasks.map((task) => {
+    let reason = null;
+    if (task.id === draggedId) reason = "self";
+    else if (below.has(task.id)) reason = "descendant";
+    else if (boardSlug && task.board && task.board !== boardSlug) reason = "other-board";
+    else if (isTerminal(task.status)) reason = "terminal";
+    else if (alreadyLinked.has(task.id)) reason = "linked";
+    return { task, allowed: reason === null, reason };
+  });
+}
 function barRange(task, now, minBarSec) {
   const min = minBarSec || MIN_BAR;
   const rs = task.run_started_at;
@@ -177,11 +232,18 @@ function ticks(min, max, unit) {
 export {
   DAY,
   MIN_BAR,
+  TERMINAL_STATUSES,
   barRange,
   buildRows,
   computeDomain,
+  descendantsOf,
+  dropCandidates,
+  isDescendant,
+  isTerminal,
   matchesSearch,
+  relationsOf,
   shortId,
+  statusIcon,
   statusTone,
   taskBars,
   tickUnit,

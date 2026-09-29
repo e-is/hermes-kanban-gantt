@@ -819,6 +819,129 @@ def create_task(payload: NewTaskBody, board: Optional[str] = Query(None)):
         conn.close()
 
 
+# ---------------------------------------------------------------------------
+# Parent links (re-parenting). The DOMAIN owns every invariant: no self-link,
+# no cycle, both tasks must exist, a *running* child is refused (that is a
+# property of the child, not of the new parent), a `ready` child whose new
+# parent is not terminal is GATED back to `todo`, and unlinking runs
+# `recompute_ready` so a child freed by the move is promoted in the same call.
+# These routes only resolve the board, delegate, and surface both effects.
+# ---------------------------------------------------------------------------
+
+def _board_for_task(task_id: str, board: Optional[str]) -> str:
+    """Slug owning ``task_id`` — the /all-view resolution the write routes use."""
+    slug = _resolve_board(board)
+    if slug in ("all", "*"):
+        slug = _find_task_board(task_id) or _resolve_board(None)
+        if slug in ("all", "*"):
+            slug = "default"
+    return slug
+
+
+def _parent_ids(conn: sqlite3.Connection, task_id: str) -> list[str]:
+    return [r[0] for r in conn.execute(
+        "SELECT parent_id FROM task_links WHERE child_id = ? ORDER BY parent_id",
+        (task_id,),
+    )]
+
+
+def _status_of(conn: sqlite3.Connection, task_id: str) -> Optional[str]:
+    row = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    return row[0] if row else None
+
+
+class ParentBody(BaseModel):
+    parentId: str
+    mode: Optional[str] = "add"      # add | replace
+
+
+@router.post("/tasks/{task_id}/parent")
+def add_parent(task_id: str, payload: ParentBody, board: Optional[str] = Query(None)):
+    """Link ``payload.parentId -> task_id``, optionally replacing its parents.
+
+    ``mode='replace'`` unlinks the task's other parents first (what "drop this
+    task under that one" means when the tree must stay single-parent).
+    """
+    from hermes_cli import kanban_db
+
+    parent_id = (payload.parentId or "").strip()
+    mode = (payload.mode or "add").strip().lower()
+    if not parent_id:
+        raise HTTPException(status_code=400, detail="parentId is required")
+    if mode not in ("add", "replace"):
+        raise HTTPException(status_code=400, detail=f"unknown mode: {mode}")
+    if parent_id == task_id:
+        raise HTTPException(status_code=400, detail="a task cannot be its own parent")
+
+    slug = _board_for_task(task_id, board)
+    conn = _connect(slug, ro=False)
+    try:
+        if kanban_db.get_task(conn, task_id) is None:
+            raise HTTPException(status_code=404, detail=f"task {task_id} not found")
+        if kanban_db.get_task(conn, parent_id) is None:
+            # Almost always a cross-board drop: task_links lives in the board's
+            # own sqlite file, so a task from another board cannot be a parent.
+            raise HTTPException(
+                status_code=409,
+                detail=f"parent {parent_id} is not on board {slug}",
+            )
+
+        status_before = _status_of(conn, task_id)
+        unlinked: list[str] = []
+        if mode == "replace":
+            for existing in _parent_ids(conn, task_id):
+                if existing != parent_id and kanban_db.unlink_tasks(conn, existing, task_id):
+                    unlinked.append(existing)
+
+        try:
+            gated = kanban_db.link_tasks(conn, parent_id, task_id)
+        except ValueError as exc:
+            # self-link / cycle / running child / unknown task
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+        status_after = _status_of(conn, task_id)
+        return {
+            "ok": True,
+            "task_id": task_id,
+            "parent_id": parent_id,
+            "mode": mode,
+            "gated": bool(gated),
+            "unlinked": unlinked,
+            "status_before": status_before,
+            "status_after": status_after,
+            "parents": _parent_ids(conn, task_id),
+        }
+    finally:
+        conn.close()
+
+
+@router.delete("/tasks/{task_id}/parent/{parent_id}")
+def remove_parent(task_id: str, parent_id: str, board: Optional[str] = Query(None)):
+    """Drop one parent link (``unlink_tasks`` also re-gates the freed child)."""
+    from hermes_cli import kanban_db
+
+    slug = _board_for_task(task_id, board)
+    conn = _connect(slug, ro=False)
+    try:
+        if kanban_db.get_task(conn, task_id) is None:
+            raise HTTPException(status_code=404, detail=f"task {task_id} not found")
+        status_before = _status_of(conn, task_id)
+        if not kanban_db.unlink_tasks(conn, parent_id, task_id):
+            raise HTTPException(status_code=404,
+                                detail=f"no link {parent_id} -> {task_id}")
+        status_after = _status_of(conn, task_id)
+        return {
+            "ok": True,
+            "task_id": task_id,
+            "parent_id": parent_id,
+            "status_before": status_before,
+            "status_after": status_after,
+            "parents": _parent_ids(conn, task_id),
+        }
+    finally:
+        conn.close()
+
+
 @router.get("/meta")
 def _meta():
     return {
