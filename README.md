@@ -19,6 +19,7 @@ TÂCHES        │ LUN 7 ── MAR 8 ── MER 9 ── JEU 10 ── VEN 11 �
 - **Board switcher** projected into the desktop page-header band (`WORKSPACE_PAGE_HEADER_AREA`), styled like the official kanban switcher, with an "All boards" aggregate mode; per-board badges on rows in aggregate view. Requires Hermes ≥ 0.21.5.
 - **Real timeline bars** — from the kanban tasks' actual timestamps (created / started / review / done), with live-activity arc on running tasks, weekend shading, zoom (7 days at 100%), auto-scroll to "now".
 - **Dependencies** — parent → child links drawn as tree connectors in the task column and dependency chains in the timeline.
+- **Create tasks** — “New task” at the right end of the toolbar (title, assignee, priority, optional parent, triage), and “Create a sub-task” from a task's ⋯ menu (labels come from the locale bundles). The status is derived by the kanban domain — `ready`, or `todo` while the chosen parent is unfinished, `triage` when asked — and an idempotency key per submit means a double click cannot duplicate the task.
 - **Task detail drawer** — status transitions (action matrix), assignee, comments, runs, attachments; dockable (`«` / `»`) beside the gantt instead of overlaying, resizable, position persisted.
 - **Bulk operations** — multi-select rows (header checkbox, shift-click) → move status, assign, archive, delete.
 - **Filters** — by assignee, by status, show/hide archived, text search.
