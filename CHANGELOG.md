@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.2 — Refresh stays reachable when the push is off
+
+Removing the Refresh button was right while the push is live, but it left anyone who
+turned the push off without a verb: with `KANBAN_GANTT_WS=0` on the gateway — or the
+`ws` flag set to `0` in the plugin's storage — the page falls back to the 60 s poll.
+The button now renders only for the two states where the page is knowingly on the
+poll (`WS_STATE.off` and `WS_STATE.dead`, the latter while the socket waits to
+re-arm) and stays hidden while it is connecting, so it does not flicker at load.
+Both labels carry a tooltip saying why it is there. Verified on the running desktop
+by flipping the storage flag: `wsState live` → no button, `ws='0'` → one button
+labelled Refresh, restored → gone again.
+
+`plugin.yaml` declares that switch as `optional_env` (`KANBAN_GANTT_WS`), the
+manifest field the setup wizard and `hermes plugins info` read, instead of leaving
+it to folklore.
+
 ## 1.3.1 — live without a Refresh button, and fewer ways to be stranded
 
 **The page updates itself.** The gantt subscribes to the plugin's `/events`

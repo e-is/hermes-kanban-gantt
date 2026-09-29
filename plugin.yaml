@@ -1,7 +1,16 @@
 name: kanban-gantt
-version: "1.3.1"
+version: "1.3.2"
 description: "Gantt timeline view for the Hermes kanban boards — a full /kanban-gantt desktop page with board switching, real-time status bars (created/started/done timestamps), dependencies, filters, bulk actions and a task detail drawer. Zero API keys."
 author: e-is
 kind: standalone
 requires_hermes: ">=0.21.5"
 platforms: []
+# The plugin needs no credentials. This is the one switch it reads, declared so the
+# setup wizard and `hermes plugins info` describe it instead of it being folklore:
+# with the push route off, the page falls back to its 60 s poll and the Refresh
+# button appears again.
+optional_env:
+  - name: KANBAN_GANTT_WS
+    description: "Set to 0 on the gateway to disable the plugin's /events push route; the page then falls back to its 60 s poll and shows a Refresh button again."
+    prompt: "Leave it unset for live updates."
+    password: false
