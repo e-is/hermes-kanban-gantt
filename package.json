@@ -9,7 +9,8 @@
     "check": "node --check desktop/plugin.js && node --check desktop/gantt-core.js",
     "test": "node --test tests/gantt-core.test.mjs tests/rest-method.test.mjs && node tests/ui/esm-render.mjs && bash tests/run_tests.sh",
     "skills:update": "skills update -p -y || echo 'skills:update failed (ignored)'",
-    "postinstall": "npm run --silent skills:update"
+    "postinstall": "npm run --silent skills:update",
+    "shots": "python3 scripts/shots.py"
   },
   "devDependencies": {
     "esbuild": "^0.27.2",

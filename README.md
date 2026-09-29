@@ -125,6 +125,23 @@ over CDP (`HERMES_DESKTOP_CDP_PORT=9223 hermes desktop`).
 
 ## Screenshots
 
+`npm run shots` (Python + CDP) drives the real desktop: it forces the UI to
+English, switches the active gateway to « This device », collapses the sidebar's
+Pinned/Sessions sections, opens the plugin on the `gantt-demo` board and walks a
+scenario — writing `docs/screenshot-en-*.png` (what the catalog entry pins) plus
+a GIF in `docs/animations/` assembled with ffmpeg. The desktop has to expose a
+CDP port first:
+
+```bash
+pkill -f 'release/linux-unpacked/Hermes'
+~/.hermes/hermes-agent/apps/desktop/release/linux-unpacked/Hermes \
+    --ozone-platform=wayland --remote-debugging-port=9222
+```
+
+Seed the board it captures with `.agents/plans/seed-demo-board.py` (parents there
+are prerequisites — a parent task must be finished before its children run, never
+a container).
+
 ![](docs/screenshot-en-01.png)
 ![](docs/screenshot-en-02-details.png)
 
