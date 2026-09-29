@@ -1,0 +1,8 @@
+pin stripped (baseline harness)
+  GET /gantt?board=sumaris-pod -> 200 (982 B) board='sumaris-pod' tasks=3 first ids=['t_35794328', 't_662d7998', 't_6821c02b']
+  server saw HERMES_KANBAN_DB=/home/blavenie/.hermes/kanban/boards/gantt-demo/kanban.db
+  GET /gantt?board=all -> 200 (11668 B) tasks per board={'gantt-demo': 20, 'sumaris-pod': 3}
+HERMES_KANBAN_DB set (worker env)
+  GET /gantt?board=sumaris-pod -> 200 (10785 B) board='sumaris-pod' tasks=20 first ids=['t_1456885b', 't_433725ba', 't_5608e109']
+  server saw HERMES_KANBAN_DB=/home/blavenie/.hermes/kanban/boards/gantt-demo/kanban.db
+  GET /gantt?board=all -> 200 (32145 B) tasks per board={'gantt-demo': 20, 'obsventes': 20, 'sumaris-pod': 20}

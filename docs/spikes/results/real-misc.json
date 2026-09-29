@@ -1,0 +1,89 @@
+{
+  "label": "real-misc",
+  "home": "/home/blavenie/.hermes",
+  "meta": {
+    "name": "kanban-gantt",
+    "board": "gantt-demo",
+    "endpoint": "/gantt",
+    "writes": true
+  },
+  "boards": {
+    "boards": [
+      {
+        "slug": "gantt-demo",
+        "label": "Gantt Demo"
+      },
+      {
+        "slug": "obsventes",
+        "label": "obsventes"
+      },
+      {
+        "slug": "sumaris-pod",
+        "label": "sumaris-pod"
+      }
+    ],
+    "current": "gantt-demo"
+  },
+  "endpoints": {
+    "/tasks/t_433725ba?board=gantt-demo": {
+      "requests": 200,
+      "body_bytes": 1529,
+      "p50_ms": 1.05,
+      "p90_ms": 1.36,
+      "p99_ms": 1.79,
+      "max_ms": 2.34,
+      "mean_ms": 1.1,
+      "rps": 859.1,
+      "server_cpu_ms_per_req": 0.7
+    },
+    "/profiles": {
+      "requests": 200,
+      "body_bytes": 24,
+      "p50_ms": 1.19,
+      "p90_ms": 1.48,
+      "p99_ms": 1.99,
+      "max_ms": 93.67,
+      "mean_ms": 1.66,
+      "rps": 864.6,
+      "server_cpu_ms_per_req": 0.8
+    }
+  },
+  "cold": {
+    "/tasks/t_433725ba?board=gantt-demo": {
+      "requests": 30,
+      "p50_ms": 1.39,
+      "p99_ms": 8.55,
+      "max_ms": 8.55
+    }
+  },
+  "herd": [
+    {
+      "clients": 5,
+      "requests": 25,
+      "wall_ms": 34.3,
+      "p50_ms": 5.52,
+      "p99_ms": 8.37,
+      "max_ms": 8.37,
+      "path": "/gantt?board=gantt-demo"
+    },
+    {
+      "clients": 10,
+      "requests": 50,
+      "wall_ms": 77.0,
+      "p50_ms": 13.47,
+      "p99_ms": 17.7,
+      "max_ms": 17.7,
+      "path": "/gantt?board=gantt-demo"
+    },
+    {
+      "clients": 25,
+      "requests": 125,
+      "wall_ms": 232.7,
+      "p50_ms": 35.28,
+      "p99_ms": 95.93,
+      "max_ms": 97.07,
+      "path": "/gantt?board=gantt-demo"
+    }
+  ],
+  "warmup_requests": 200
+}

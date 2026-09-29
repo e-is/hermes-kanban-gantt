@@ -50,4 +50,12 @@ await build({
   outfile: join(root, 'desktop', 'gantt-core.js')
 })
 
+await build({
+  ...common,
+  // Pure client logic of the websocket prototype (spike t_64075faf): built
+  // standalone so tests/ws-core.test.mjs exercises the shipped decisions.
+  entryPoints: [join(root, 'src', 'core', 'ws-core.ts')],
+  outfile: join(root, 'desktop', 'ws-core.js')
+})
+
 console.log('build OK')

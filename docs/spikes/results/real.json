@@ -1,0 +1,95 @@
+{
+  "label": "real",
+  "home": "/home/blavenie/.hermes",
+  "meta": {
+    "name": "kanban-gantt",
+    "board": "gantt-demo",
+    "endpoint": "/gantt",
+    "writes": true
+  },
+  "boards": {
+    "boards": [
+      {
+        "slug": "gantt-demo",
+        "label": "Gantt Demo"
+      },
+      {
+        "slug": "obsventes",
+        "label": "obsventes"
+      },
+      {
+        "slug": "sumaris-pod",
+        "label": "sumaris-pod"
+      }
+    ],
+    "current": "gantt-demo"
+  },
+  "endpoints": {
+    "/meta": {
+      "requests": 200,
+      "body_bytes": 78,
+      "p50_ms": 0.45,
+      "p90_ms": 0.85,
+      "p99_ms": 1.05,
+      "max_ms": 1.27,
+      "mean_ms": 0.51,
+      "rps": 2685.0,
+      "server_cpu_ms_per_req": 0.15
+    },
+    "/boards": {
+      "requests": 200,
+      "body_bytes": 164,
+      "p50_ms": 0.42,
+      "p90_ms": 0.55,
+      "p99_ms": 0.79,
+      "max_ms": 0.94,
+      "mean_ms": 0.44,
+      "rps": 2051.8,
+      "server_cpu_ms_per_req": 0.2
+    },
+    "/gantt?board=gantt-demo": {
+      "requests": 200,
+      "body_bytes": 10764,
+      "p50_ms": 1.27,
+      "p90_ms": 1.48,
+      "p99_ms": 1.96,
+      "max_ms": 2.33,
+      "mean_ms": 1.28,
+      "rps": 705.7,
+      "server_cpu_ms_per_req": 0.95
+    },
+    "/gantt?board=all": {
+      "requests": 200,
+      "body_bytes": 11668,
+      "p50_ms": 2.24,
+      "p90_ms": 2.45,
+      "p99_ms": 2.75,
+      "max_ms": 2.95,
+      "mean_ms": 2.24,
+      "rps": 459.3,
+      "server_cpu_ms_per_req": 1.65
+    }
+  },
+  "cold": {
+    "/boards": {
+      "requests": 30,
+      "p50_ms": 0.86,
+      "p99_ms": 6.34,
+      "max_ms": 6.34
+    },
+    "/gantt?board=gantt-demo": {
+      "requests": 30,
+      "p50_ms": 1.67,
+      "p99_ms": 8.46,
+      "max_ms": 8.46
+    },
+    "/gantt?board=all": {
+      "requests": 30,
+      "p50_ms": 2.24,
+      "p99_ms": 8.87,
+      "max_ms": 8.87
+    }
+  },
+  "herd": [],
+  "warmup_requests": 200
+}

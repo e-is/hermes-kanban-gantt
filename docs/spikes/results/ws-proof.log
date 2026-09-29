@@ -1,0 +1,24 @@
+[18:09:31] sandbox boards root: /home/blavenie/.hermes/cache/scratch/kg-ws-proof-8ju7rgi_/kanban/boards
+[18:09:31] server on :46351 — KANBAN_GANTT_WS=1, /events registered: False
+[18:09:31] PASS P1 first frame is a full snapshot with the /gantt shape (R1/R8) — keys=['board', 'generated_at', 'labels', 'tasks', 'type', 'version'] tasks=1 version=1
+[18:09:31]   write 0 → frame v2 (2 tasks, 769 B) in 405 ms
+[18:09:32]   write 1 → frame v3 (3 tasks, 1088 B) in 383 ms
+[18:09:32]   write 2 → frame v4 (4 tasks, 1407 B) in 389 ms
+[18:09:33]   write 3 → frame v5 (5 tasks, 1726 B) in 381 ms
+[18:09:33]   write 4 → frame v6 (6 tasks, 2045 B) in 382 ms
+[18:09:33] PASS P2 five writes ⇒ five frames, versions strictly increasing (R4/R7) — versions=[2, 3, 4, 5, 6] (first frame was v1)
+[18:09:33] PASS P3 change→frame p95 ≤ 2000 ms (R4) — p50=383 ms p95=416 ms max=405 ms
+[18:09:33] PASS P3 payload within the 600 KB / 50 ms push budget (R3) — largest frame 2045 B
+[18:09:35] PASS P4 a 10-write burst coalesces into ≤2 frames (R5) — 1 frame(s) in 1.5 s, 1 DB read(s) (last at 1.62s after the burst)
+[18:09:38] PASS P6 heartbeats arrive while the board is idle (R18) — 2 heartbeat(s) in 3 s (interval set to 2 s)
+[18:09:38] PASS P5 two subscribers ⇒ ONE board read per change (R11) — reads=1 (join read 1), versions=9/9
+[18:09:38] PASS P10 the first frame after a reconnect is a full snapshot (R8) — v10 with 17 tasks
+[18:09:38] PASS P8 wrong/absent token is rejected (R13) — absent:InvalidStatus, wrong:InvalidStatus
+[18:09:38] PASS P8 standalone fallback is loopback-only (R16) — loopback=loopback remote=no_gate
+[18:09:38] PASS P9 path traversal slug refused (R10)
+[18:09:38] PASS P7 zero HTTP GET /gantt requests for the whole run — 0 request(s)
+[18:09:38] server on :59361 — KANBAN_GANTT_WS=0, /events registered: False
+[18:09:38] PASS P11 flag off ⇒ REST works and /events does not exist (reversibility) — GET /gantt=200 GET /events=404
+[18:09:38] latency over 7 frames: p50=383 ms max=1618 ms
+[18:09:38] DB reads (one per change per board): 11; HTTP /gantt requests: 1
+[18:09:38] RESULT: 13/13 checks passed

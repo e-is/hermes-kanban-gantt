@@ -969,6 +969,24 @@ def create_app(allow_cors: bool = True) -> FastAPI:
     return app
 
 
+# ---------------------------------------------------------------------------
+# Prototype: websocket push for the gantt snapshot loop (spike t_64075faf).
+# OFF unless KANBAN_GANTT_WS=1 — see dashboard/plugin_ws.py for the contract.
+# Registered last so the route set is identical to today's when the flag is off.
+# ---------------------------------------------------------------------------
+try:  # pragma: no cover - import guard only (bare copies of this file)
+    import plugin_ws
+except Exception as _ws_exc:  # noqa: BLE001 - never break the REST backend
+    print(f"kanban-gantt: websocket prototype unavailable ({_ws_exc})")
+    plugin_ws = None
+
+if plugin_ws is not None:
+    try:
+        plugin_ws.attach(router)
+    except Exception as _ws_exc:  # noqa: BLE001
+        print(f"kanban-gantt: websocket prototype failed to register ({_ws_exc})")
+
+
 def main() -> None:
     import argparse
 
