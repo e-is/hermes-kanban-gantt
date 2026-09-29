@@ -22,11 +22,6 @@
       "skillPath": "skills/software-development/hermes-agent-skill-authoring/SKILL.md",
       "computedHash": "b69d2298626791f9d2774709926ff4fc7c5b4c1689db547a01d84ab858bc7719"
     },
-    "hermes-plugin-development": {
-      "source": "../../.hermes/skills/software-development",
-      "sourceType": "local",
-      "computedHash": "0e49b4a844b1eddaff1d6d9095d4a21ac1a2888b13496796e14bdf8c149fbfd4"
-    },
     "inspecting-hermes-desktop-dom": {
       "source": "NousResearch/hermes-agent",
       "ref": "main",

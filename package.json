@@ -9,8 +9,8 @@
     "check": "node --check desktop/plugin.js && node --check desktop/gantt-core.js",
     "test": "node --test tests/gantt-core.test.mjs tests/test_sticky.mjs && bash tests/run_tests.sh",
     "demo": "node tests/demo-server.mjs",
-    "skills:sync": "node scripts/sync-skills.mjs",
-    "postinstall": "npm run --silent skills:sync"
+    "skills:update": "skills update -p -y || echo 'skills:update failed (ignored)'",
+    "postinstall": "npm run --silent skills:update"
   },
   "devDependencies": {
     "esbuild": "^0.27.2",
