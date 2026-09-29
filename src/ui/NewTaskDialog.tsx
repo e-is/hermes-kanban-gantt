@@ -40,12 +40,31 @@ export type TaskLike = {
   board?: string
 }
 
+/** A Hermes project (`hermes_cli.projects_db`) a task can be linked to. */
+export type ProjectLike = {
+  id: string
+  slug?: string
+  name: string
+  path?: string | null
+  board?: string | null
+}
+
+/** `kanban_db.VALID_WORKSPACE_KINDS` — what the worker gets for its files. */
+const WORKSPACE_KINDS = ['scratch', 'worktree', 'dir']
+
 export type NewTaskValues = {
   title: string
+  body?: string
   assignee?: string
   priority?: number
   parentId?: string
   triage?: boolean
+  projectId?: string
+  workspaceKind?: string
+  workspacePath?: string
+  skills?: string[]
+  modelOverride?: string
+  goalMode?: boolean
   /** One per dialog opening: a double submit then returns the SAME task. */
   idempotencyKey: string
 }
@@ -58,6 +77,8 @@ type Props = {
   assignees?: string[]
   /** Every task of the board, for the optional parent picker. */
   tasks: TaskLike[]
+  /** Projects offered (empty when the profile declares none). */
+  projects?: ProjectLike[]
   /** Pre-selected parent (opening from a row's "create sub-task"). */
   defaultParentId?: string
   busy?: boolean
@@ -66,16 +87,50 @@ type Props = {
   i18n: GanttI18n
 }
 
+/** Label + control pair, so every field shares one rhythm. */
+function Field({ label, children }: { label: string; children: any }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <span className="text-[10px] uppercase font-semibold text-(--ui-text-tertiary)">{label}</span>
+      {children}
+    </div>
+  )
+}
+
+/** Dropdown trigger shaped like an input, showing the current choice. */
+function Picker({ value, children, ariaLabel }: { value: any; children: any; ariaLabel: string }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          className="flex min-w-0 items-center gap-1.5 rounded border border-(--ui-stroke-tertiary) bg-transparent px-1.5 py-0.5 text-left text-[11px] text-(--ui-text-secondary) cursor-pointer"
+        >
+          <span className="min-w-0 flex-1 truncate">{value}</span>
+          <Codicon className="shrink-0 text-(--ui-text-quaternary)" name="chevron-down" size="0.75rem" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[13rem]">{children}</DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 /**
- * The board's first write that creates something rather than changing it: the
- * domain derives the status (gated to `todo` when the parent is not finished,
- * `triage` when asked), so this only collects what the user actually types.
+ * Creation form with the same coverage as the reference kanban dialog: title,
+ * description, project, workspace (kind + optional path), assignee, priority,
+ * skills, model override, parent, triage and goal mode.
+ *
+ * The STATUS is deliberately absent: the domain derives it (`ready`, `todo`
+ * while the parent is unfinished, `triage` when asked), so the form never
+ * promises a column it will not land in.
  */
 export function NewTaskDialog({
   open,
   boardSlug,
   assignees = [],
   tasks,
+  projects = [],
   defaultParentId,
   busy = false,
   onSubmit,
@@ -83,10 +138,17 @@ export function NewTaskDialog({
   i18n
 }: Props) {
   const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
   const [assignee, setAssignee] = useState('')
   const [priority, setPriority] = useState('0')
   const [parentId, setParentId] = useState('')
   const [triage, setTriage] = useState(false)
+  const [projectId, setProjectId] = useState('')
+  const [workspaceKind, setWorkspaceKind] = useState('scratch')
+  const [workspacePath, setWorkspacePath] = useState('')
+  const [skills, setSkills] = useState('')
+  const [modelOverride, setModelOverride] = useState('')
+  const [goalMode, setGoalMode] = useState(false)
   const keyRef = useRef('')
 
   // Fresh fields (and a fresh idempotency key) on each opening, so the previous
@@ -94,10 +156,17 @@ export function NewTaskDialog({
   useEffect(() => {
     if (!open) return
     setTitle('')
+    setBody('')
     setAssignee('')
     setPriority('0')
     setParentId(defaultParentId || '')
     setTriage(false)
+    setProjectId('')
+    setWorkspaceKind('scratch')
+    setWorkspacePath('')
+    setSkills('')
+    setModelOverride('')
+    setGoalMode(false)
     keyRef.current = `kg-new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   }, [open, defaultParentId])
 
@@ -111,55 +180,111 @@ export function NewTaskDialog({
     (task.status !== 'done' && task.status !== 'archived' &&
       (!boardSlug || !task.board || task.board === boardSlug)))
   const chosenParent = parentOptions.find(task => task.id === parentId)
+  const chosenProject = projects.find(project => project.id === projectId)
   const canSubmit = title.trim().length > 0 && !busy
 
   const submit = () => {
     if (!canSubmit) return
     onSubmit({
       title: title.trim(),
+      body: body.trim() || undefined,
       assignee: assignee.trim() || undefined,
       priority: Number(priority) || 0,
       parentId: parentId || undefined,
       triage,
+      projectId: projectId || undefined,
+      workspaceKind,
+      workspacePath: workspaceKind === 'scratch' ? undefined : (workspacePath.trim() || undefined),
+      skills: skills.split(',').map(s => s.trim()).filter(Boolean),
+      modelOverride: modelOverride.trim() || undefined,
+      goalMode,
       idempotencyKey: keyRef.current
     })
   }
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) onClose() }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[min(32rem,94vw)] max-w-none">
         <DialogHeader>
           <DialogTitle>{i18n.newTask}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col gap-2">
-          <Input
-            autoFocus
-            value={title}
-            placeholder={i18n.newTaskTitlePlaceholder}
-            aria-label={i18n.newTaskTitle}
-            onChange={event => setTitle(event.target.value)}
-            onKeyDown={event => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                submit()
-              }
-            }}
-          />
+        {/* The form owns its scroller so the dialog stays usable in a short
+            window; the footer keeps its two buttons pinned. */}
+        <div className="flex max-h-[min(66vh,36rem)] flex-col gap-2.5 overflow-y-auto pr-0.5">
+          <Field label={i18n.newTaskTitle}>
+            <Input
+              autoFocus
+              value={title}
+              placeholder={i18n.newTaskTitlePlaceholder}
+              onChange={event => setTitle(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  submit()
+                }
+              }}
+            />
+          </Field>
 
-          <div className="flex items-center gap-2">
-            {/* Assignee: the same profile chips the row badge uses. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="xs" variant="secondary">
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <Codicon className="shrink-0" name="account" size="0.8rem" />
-                    <span className="min-w-0 truncate">{assignee || i18n.unassigned}</span>
-                    <Codicon className="shrink-0" name="chevron-down" size="0.75rem" />
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+          <Field label={i18n.description}>
+            <textarea
+              rows={3}
+              value={body}
+              placeholder={i18n.newTaskDescriptionPlaceholder}
+              onChange={event => setBody(event.target.value)}
+              className="w-full resize-y bg-transparent border border-(--ui-stroke-tertiary) rounded px-1.5 py-1 text-[11px]"
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <Field label={i18n.newTaskProject}>
+              <Picker value={chosenProject ? chosenProject.name : i18n.newTaskNoProject} ariaLabel={i18n.newTaskProject}>
+                <DropdownMenuItem onSelect={() => setProjectId('')}>
+                  <span className="min-w-0 flex-1 truncate">{i18n.newTaskNoProject}</span>
+                  {!projectId && <Codicon className="ml-auto shrink-0" name="check" size="0.8rem" />}
+                </DropdownMenuItem>
+                {projects.length > 0 && <DropdownMenuSeparator />}
+                {projects.map(project => (
+                  <DropdownMenuItem key={project.id} onSelect={() => setProjectId(project.id)}>
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate">{project.name}</span>
+                      {project.path
+                        ? <span className="truncate font-mono text-[9.5px] text-(--ui-text-quaternary)">{project.path}</span>
+                        : null}
+                    </span>
+                    {projectId === project.id && <Codicon className="ml-auto shrink-0" name="check" size="0.8rem" />}
+                  </DropdownMenuItem>
+                ))}
+              </Picker>
+            </Field>
+
+            <Field label={i18n.newTaskWorkspace}>
+              <Picker value={workspaceKind} ariaLabel={i18n.newTaskWorkspace}>
+                {WORKSPACE_KINDS.map(kind => (
+                  <DropdownMenuItem key={kind} onSelect={() => setWorkspaceKind(kind)}>
+                    <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{kind}</span>
+                    {workspaceKind === kind && <Codicon className="ml-auto shrink-0" name="check" size="0.8rem" />}
+                  </DropdownMenuItem>
+                ))}
+              </Picker>
+            </Field>
+          </div>
+
+          {workspaceKind !== 'scratch' && (
+            <Field label={i18n.newTaskWorkspacePath}>
+              <Input
+                value={workspacePath}
+                placeholder={i18n.newTaskWorkspaceInherit}
+                onChange={event => setWorkspacePath(event.target.value)}
+              />
+              <span className="text-[10px] text-(--ui-text-quaternary)">{i18n.newTaskWorkspaceInheritHint}</span>
+            </Field>
+          )}
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <Field label={i18n.assignLabel}>
+              <Picker value={assignee || i18n.unassigned} ariaLabel={i18n.assignLabel}>
                 <DropdownMenuItem onSelect={() => setAssignee('')}>
                   <span className="min-w-0 flex-1 truncate">{i18n.unassigned}</span>
                   {!assignee && <Codicon className="ml-auto shrink-0" name="check" size="0.8rem" />}
@@ -171,62 +296,77 @@ export function NewTaskDialog({
                     {assignee === name && <Codicon className="ml-auto shrink-0" name="check" size="0.8rem" />}
                   </DropdownMenuItem>
                 ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </Picker>
+            </Field>
 
-            {/* Priority: the domain's integer (higher = sooner). */}
-            <label className="flex items-center gap-1.5 text-[11px] text-(--ui-text-tertiary)">
-              {i18n.newTaskPriority}
+            <Field label={i18n.newTaskPriority}>
               <input
                 type="number"
                 min="0"
                 step="1"
                 value={priority}
-                aria-label={i18n.newTaskPriority}
                 onChange={event => setPriority(event.target.value)}
-                className="w-16 bg-transparent border border-(--ui-stroke-tertiary) rounded px-1.5 py-0.5 text-[11px]"
+                className="bg-transparent border border-(--ui-stroke-tertiary) rounded px-1.5 py-0.5 text-[11px]"
               />
+            </Field>
+          </div>
+
+          <Field label={i18n.newTaskSkills}>
+            <Input
+              value={skills}
+              placeholder={i18n.newTaskSkillsPlaceholder}
+              onChange={event => setSkills(event.target.value)}
+            />
+          </Field>
+
+          <Field label={i18n.newTaskModel}>
+            <Input
+              value={modelOverride}
+              placeholder={i18n.newTaskModelInherit}
+              onChange={event => setModelOverride(event.target.value)}
+            />
+            <span className="text-[10px] text-(--ui-text-quaternary)">{i18n.newTaskModelHint}</span>
+          </Field>
+
+          <Field label={i18n.newTaskParent}>
+            <Picker
+              value={chosenParent
+                ? (
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <StatusDot status={chosenParent.status} />
+                    <span className="min-w-0 truncate">{chosenParent.title}</span>
+                  </span>
+                )
+                : i18n.newTaskNoParent}
+              ariaLabel={i18n.newTaskParent}
+            >
+              <DropdownMenuItem onSelect={() => setParentId('')}>
+                <span className="min-w-0 flex-1 truncate">{i18n.newTaskNoParent}</span>
+                {!parentId && <Codicon className="ml-auto shrink-0" name="check" size="0.8rem" />}
+              </DropdownMenuItem>
+              {parentOptions.length > 0 && <DropdownMenuSeparator />}
+              {parentOptions.map(task => (
+                <DropdownMenuItem key={task.id} onSelect={() => setParentId(task.id)}>
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <StatusDot status={task.status} />
+                    <span className="min-w-0 flex-1 truncate">{task.title}</span>
+                  </span>
+                  {parentId === task.id && <Codicon className="ml-auto shrink-0" name="check" size="0.8rem" />}
+                </DropdownMenuItem>
+              ))}
+            </Picker>
+          </Field>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2 text-[11px] text-(--ui-text-secondary)">
+              <Switch checked={triage} onCheckedChange={value => setTriage(Boolean(value))} />
+              {i18n.newTaskTriage}
+            </label>
+            <label className="flex items-center gap-2 text-[11px] text-(--ui-text-secondary)">
+              <Switch checked={goalMode} onCheckedChange={value => setGoalMode(Boolean(value))} />
+              {i18n.newTaskGoalMode}
             </label>
           </div>
-
-          {/* Optional parent: creating a sub-task without touching the tree. */}
-          <div className="flex items-center gap-2 text-[11px] text-(--ui-text-tertiary)">
-            <span className="shrink-0">{i18n.newTaskParent}</span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="xs" variant="ghost">
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    {chosenParent ? <StatusDot status={chosenParent.status} /> : null}
-                    <span className="min-w-0 truncate text-(--ui-text-secondary)">
-                      {chosenParent ? chosenParent.title : i18n.newTaskNoParent}
-                    </span>
-                    <Codicon className="shrink-0" name="chevron-down" size="0.75rem" />
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onSelect={() => setParentId('')}>
-                  <span className="min-w-0 flex-1 truncate">{i18n.newTaskNoParent}</span>
-                  {!parentId && <Codicon className="ml-auto shrink-0" name="check" size="0.8rem" />}
-                </DropdownMenuItem>
-                {parentOptions.length > 0 && <DropdownMenuSeparator />}
-                {parentOptions.map(task => (
-                  <DropdownMenuItem key={task.id} onSelect={() => setParentId(task.id)}>
-                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                      <StatusDot status={task.status} />
-                      <span className="min-w-0 flex-1 truncate">{task.title}</span>
-                    </span>
-                    {parentId === task.id && <Codicon className="ml-auto shrink-0" name="check" size="0.8rem" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          <label className="flex items-center gap-2 text-[11px] text-(--ui-text-secondary)">
-            <Switch checked={triage} onCheckedChange={value => setTriage(Boolean(value))} />
-            {i18n.newTaskTriage}
-          </label>
         </div>
 
         <DialogFooter className="gap-2">

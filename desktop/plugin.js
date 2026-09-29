@@ -73,6 +73,7 @@ var createTask = (values, board) => apiFetch(
   `/tasks${board ? `?board=${encodeURIComponent(board)}` : ""}`,
   { method: "POST", body: values }
 );
+var fetchProjects = () => apiFetch("/projects");
 function setPluginDoors(restFn, storageObj) {
   rest = restFn;
   storage = storageObj;
@@ -161,6 +162,19 @@ var GANTT_LOCALES = {
     newTaskParent: "Parent",
     newTaskNoParent: "No parent",
     newTaskTriage: "Send to triage",
+    newTaskDescriptionPlaceholder: "Optional description…",
+    newTaskProject: "Project",
+    newTaskNoProject: "No project",
+    newTaskWorkspace: "Workspace",
+    newTaskWorkspacePath: "Workspace path",
+    newTaskWorkspaceInherit: "Inherits the board/project directory",
+    newTaskWorkspaceInheritHint: "Leave empty to inherit the board or project directory.",
+    newTaskSkills: "Skills (comma-separated)",
+    newTaskSkillsPlaceholder: "skill-a, skill-b",
+    newTaskModel: "Model",
+    newTaskModelInherit: "Profile default",
+    newTaskModelHint: "Runs this task on a specific model; empty uses the assignee profile’s own.",
+    newTaskGoalMode: "Goal mode",
     create: "Create",
     creating: "Creating…",
     createSubtask: "Create a sub-task",
@@ -269,6 +283,19 @@ var GANTT_LOCALES = {
     newTaskParent: "Parent",
     newTaskNoParent: "Aucun parent",
     newTaskTriage: "Envoyer en triage",
+    newTaskDescriptionPlaceholder: "Description (facultative)…",
+    newTaskProject: "Projet",
+    newTaskNoProject: "Aucun projet",
+    newTaskWorkspace: "Workspace",
+    newTaskWorkspacePath: "Chemin du workspace",
+    newTaskWorkspaceInherit: "Hérite du dossier du board/projet",
+    newTaskWorkspaceInheritHint: "Laisser vide pour hériter du dossier du board ou du projet.",
+    newTaskSkills: "Skills (séparés par des virgules)",
+    newTaskSkillsPlaceholder: "skill-a, skill-b",
+    newTaskModel: "Modèle",
+    newTaskModelInherit: "Modèle du profil",
+    newTaskModelHint: "Exécute la tâche sur un modèle précis ; vide = le modèle du profil assigné.",
+    newTaskGoalMode: "Mode objectif",
     create: "Créer",
     creating: "Création…",
     createSubtask: "Créer une sous-tâche",
@@ -576,11 +603,36 @@ function StatusDot({ status }) {
     }
   );
 }
+var WORKSPACE_KINDS = ["scratch", "worktree", "dir"];
+function Field({ label, children }) {
+  return /* @__PURE__ */ jsxs2("div", { className: "flex min-w-0 flex-col gap-0.5", children: [
+    /* @__PURE__ */ jsx2("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: label }),
+    children
+  ] });
+}
+function Picker({ value, children, ariaLabel }) {
+  return /* @__PURE__ */ jsxs2(DropdownMenu2, { children: [
+    /* @__PURE__ */ jsx2(DropdownMenuTrigger2, { asChild: true, children: /* @__PURE__ */ jsxs2(
+      "button",
+      {
+        type: "button",
+        "aria-label": ariaLabel,
+        className: "flex min-w-0 items-center gap-1.5 rounded border border-(--ui-stroke-tertiary) bg-transparent px-1.5 py-0.5 text-left text-[11px] text-(--ui-text-secondary) cursor-pointer",
+        children: [
+          /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: value }),
+          /* @__PURE__ */ jsx2(Codicon2, { className: "shrink-0 text-(--ui-text-quaternary)", name: "chevron-down", size: "0.75rem" })
+        ]
+      }
+    ) }),
+    /* @__PURE__ */ jsx2(DropdownMenuContent2, { align: "start", className: "min-w-[13rem]", children })
+  ] });
+}
 function NewTaskDialog({
   open,
   boardSlug,
   assignees = [],
   tasks,
+  projects = [],
   defaultParentId,
   busy = false,
   onSubmit,
@@ -588,46 +640,67 @@ function NewTaskDialog({
   i18n
 }) {
   const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
   const [assignee, setAssignee] = useState("");
   const [priority, setPriority] = useState("0");
   const [parentId, setParentId] = useState("");
   const [triage, setTriage] = useState(false);
+  const [projectId, setProjectId] = useState("");
+  const [workspaceKind, setWorkspaceKind] = useState("scratch");
+  const [workspacePath, setWorkspacePath] = useState("");
+  const [skills, setSkills] = useState("");
+  const [modelOverride, setModelOverride] = useState("");
+  const [goalMode, setGoalMode] = useState(false);
   const keyRef = useRef("");
   useEffect(() => {
     if (!open) return;
     setTitle("");
+    setBody("");
     setAssignee("");
     setPriority("0");
     setParentId(defaultParentId || "");
     setTriage(false);
+    setProjectId("");
+    setWorkspaceKind("scratch");
+    setWorkspacePath("");
+    setSkills("");
+    setModelOverride("");
+    setGoalMode(false);
     keyRef.current = `kg-new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }, [open, defaultParentId]);
   const parentOptions = tasks.filter((task) => task.id === defaultParentId || task.status !== "done" && task.status !== "archived" && (!boardSlug || !task.board || task.board === boardSlug));
   const chosenParent = parentOptions.find((task) => task.id === parentId);
+  const chosenProject = projects.find((project) => project.id === projectId);
   const canSubmit = title.trim().length > 0 && !busy;
   const submit = () => {
     if (!canSubmit) return;
     onSubmit({
       title: title.trim(),
+      body: body.trim() || void 0,
       assignee: assignee.trim() || void 0,
       priority: Number(priority) || 0,
       parentId: parentId || void 0,
       triage,
+      projectId: projectId || void 0,
+      workspaceKind,
+      workspacePath: workspaceKind === "scratch" ? void 0 : workspacePath.trim() || void 0,
+      skills: skills.split(",").map((s) => s.trim()).filter(Boolean),
+      modelOverride: modelOverride.trim() || void 0,
+      goalMode,
       idempotencyKey: keyRef.current
     });
   };
   return /* @__PURE__ */ jsx2(Dialog, { open, onOpenChange: (next) => {
     if (!next) onClose();
-  }, children: /* @__PURE__ */ jsxs2(DialogContent, { className: "max-w-md", children: [
+  }, children: /* @__PURE__ */ jsxs2(DialogContent, { className: "w-[min(32rem,94vw)] max-w-none", children: [
     /* @__PURE__ */ jsx2(DialogHeader, { children: /* @__PURE__ */ jsx2(DialogTitle, { children: i18n.newTask }) }),
-    /* @__PURE__ */ jsxs2("div", { className: "flex flex-col gap-2", children: [
-      /* @__PURE__ */ jsx2(
+    /* @__PURE__ */ jsxs2("div", { className: "flex max-h-[min(66vh,36rem)] flex-col gap-2.5 overflow-y-auto pr-0.5", children: [
+      /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskTitle, children: /* @__PURE__ */ jsx2(
         Input,
         {
           autoFocus: true,
           value: title,
           placeholder: i18n.newTaskTitlePlaceholder,
-          "aria-label": i18n.newTaskTitle,
           onChange: (event) => setTitle(event.target.value),
           onKeyDown: (event) => {
             if (event.key === "Enter") {
@@ -636,51 +709,100 @@ function NewTaskDialog({
             }
           }
         }
-      ),
-      /* @__PURE__ */ jsxs2("div", { className: "flex items-center gap-2", children: [
-        /* @__PURE__ */ jsxs2(DropdownMenu2, { children: [
-          /* @__PURE__ */ jsx2(DropdownMenuTrigger2, { asChild: true, children: /* @__PURE__ */ jsx2(Button2, { size: "xs", variant: "secondary", children: /* @__PURE__ */ jsxs2("span", { className: "flex min-w-0 items-center gap-1.5", children: [
-            /* @__PURE__ */ jsx2(Codicon2, { className: "shrink-0", name: "account", size: "0.8rem" }),
-            /* @__PURE__ */ jsx2("span", { className: "min-w-0 truncate", children: assignee || i18n.unassigned }),
-            /* @__PURE__ */ jsx2(Codicon2, { className: "shrink-0", name: "chevron-down", size: "0.75rem" })
-          ] }) }) }),
-          /* @__PURE__ */ jsxs2(DropdownMenuContent2, { align: "start", children: [
-            /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setAssignee(""), children: [
-              /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: i18n.unassigned }),
-              !assignee && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
+      ) }),
+      /* @__PURE__ */ jsx2(Field, { label: i18n.description, children: /* @__PURE__ */ jsx2(
+        "textarea",
+        {
+          rows: 3,
+          value: body,
+          placeholder: i18n.newTaskDescriptionPlaceholder,
+          onChange: (event) => setBody(event.target.value),
+          className: "w-full resize-y bg-transparent border border-(--ui-stroke-tertiary) rounded px-1.5 py-1 text-[11px]"
+        }
+      ) }),
+      /* @__PURE__ */ jsxs2("div", { className: "grid grid-cols-2 gap-2.5", children: [
+        /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskProject, children: /* @__PURE__ */ jsxs2(Picker, { value: chosenProject ? chosenProject.name : i18n.newTaskNoProject, ariaLabel: i18n.newTaskProject, children: [
+          /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setProjectId(""), children: [
+            /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: i18n.newTaskNoProject }),
+            !projectId && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
+          ] }),
+          projects.length > 0 && /* @__PURE__ */ jsx2(DropdownMenuSeparator2, {}),
+          projects.map((project) => /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setProjectId(project.id), children: [
+            /* @__PURE__ */ jsxs2("span", { className: "flex min-w-0 flex-1 flex-col", children: [
+              /* @__PURE__ */ jsx2("span", { className: "truncate", children: project.name }),
+              project.path ? /* @__PURE__ */ jsx2("span", { className: "truncate font-mono text-[9.5px] text-(--ui-text-quaternary)", children: project.path }) : null
             ] }),
-            assignees.length > 0 && /* @__PURE__ */ jsx2(DropdownMenuSeparator2, {}),
-            assignees.map((name) => /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setAssignee(name), children: [
-              /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: name }),
-              assignee === name && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
-            ] }, name))
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxs2("label", { className: "flex items-center gap-1.5 text-[11px] text-(--ui-text-tertiary)", children: [
-          i18n.newTaskPriority,
-          /* @__PURE__ */ jsx2(
-            "input",
-            {
-              type: "number",
-              min: "0",
-              step: "1",
-              value: priority,
-              "aria-label": i18n.newTaskPriority,
-              onChange: (event) => setPriority(event.target.value),
-              className: "w-16 bg-transparent border border-(--ui-stroke-tertiary) rounded px-1.5 py-0.5 text-[11px]"
-            }
-          )
-        ] })
+            projectId === project.id && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
+          ] }, project.id))
+        ] }) }),
+        /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskWorkspace, children: /* @__PURE__ */ jsx2(Picker, { value: workspaceKind, ariaLabel: i18n.newTaskWorkspace, children: WORKSPACE_KINDS.map((kind) => /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setWorkspaceKind(kind), children: [
+          /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate font-mono text-[11px]", children: kind }),
+          workspaceKind === kind && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
+        ] }, kind)) }) })
       ] }),
-      /* @__PURE__ */ jsxs2("div", { className: "flex items-center gap-2 text-[11px] text-(--ui-text-tertiary)", children: [
-        /* @__PURE__ */ jsx2("span", { className: "shrink-0", children: i18n.newTaskParent }),
-        /* @__PURE__ */ jsxs2(DropdownMenu2, { children: [
-          /* @__PURE__ */ jsx2(DropdownMenuTrigger2, { asChild: true, children: /* @__PURE__ */ jsx2(Button2, { size: "xs", variant: "ghost", children: /* @__PURE__ */ jsxs2("span", { className: "flex min-w-0 items-center gap-1.5", children: [
-            chosenParent ? /* @__PURE__ */ jsx2(StatusDot, { status: chosenParent.status }) : null,
-            /* @__PURE__ */ jsx2("span", { className: "min-w-0 truncate text-(--ui-text-secondary)", children: chosenParent ? chosenParent.title : i18n.newTaskNoParent }),
-            /* @__PURE__ */ jsx2(Codicon2, { className: "shrink-0", name: "chevron-down", size: "0.75rem" })
-          ] }) }) }),
-          /* @__PURE__ */ jsxs2(DropdownMenuContent2, { align: "start", children: [
+      workspaceKind !== "scratch" && /* @__PURE__ */ jsxs2(Field, { label: i18n.newTaskWorkspacePath, children: [
+        /* @__PURE__ */ jsx2(
+          Input,
+          {
+            value: workspacePath,
+            placeholder: i18n.newTaskWorkspaceInherit,
+            onChange: (event) => setWorkspacePath(event.target.value)
+          }
+        ),
+        /* @__PURE__ */ jsx2("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: i18n.newTaskWorkspaceInheritHint })
+      ] }),
+      /* @__PURE__ */ jsxs2("div", { className: "grid grid-cols-2 gap-2.5", children: [
+        /* @__PURE__ */ jsx2(Field, { label: i18n.assignLabel, children: /* @__PURE__ */ jsxs2(Picker, { value: assignee || i18n.unassigned, ariaLabel: i18n.assignLabel, children: [
+          /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setAssignee(""), children: [
+            /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: i18n.unassigned }),
+            !assignee && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
+          ] }),
+          assignees.length > 0 && /* @__PURE__ */ jsx2(DropdownMenuSeparator2, {}),
+          assignees.map((name) => /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setAssignee(name), children: [
+            /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: name }),
+            assignee === name && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
+          ] }, name))
+        ] }) }),
+        /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskPriority, children: /* @__PURE__ */ jsx2(
+          "input",
+          {
+            type: "number",
+            min: "0",
+            step: "1",
+            value: priority,
+            onChange: (event) => setPriority(event.target.value),
+            className: "bg-transparent border border-(--ui-stroke-tertiary) rounded px-1.5 py-0.5 text-[11px]"
+          }
+        ) })
+      ] }),
+      /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskSkills, children: /* @__PURE__ */ jsx2(
+        Input,
+        {
+          value: skills,
+          placeholder: i18n.newTaskSkillsPlaceholder,
+          onChange: (event) => setSkills(event.target.value)
+        }
+      ) }),
+      /* @__PURE__ */ jsxs2(Field, { label: i18n.newTaskModel, children: [
+        /* @__PURE__ */ jsx2(
+          Input,
+          {
+            value: modelOverride,
+            placeholder: i18n.newTaskModelInherit,
+            onChange: (event) => setModelOverride(event.target.value)
+          }
+        ),
+        /* @__PURE__ */ jsx2("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: i18n.newTaskModelHint })
+      ] }),
+      /* @__PURE__ */ jsx2(Field, { label: i18n.newTaskParent, children: /* @__PURE__ */ jsxs2(
+        Picker,
+        {
+          value: chosenParent ? /* @__PURE__ */ jsxs2("span", { className: "flex min-w-0 items-center gap-1.5", children: [
+            /* @__PURE__ */ jsx2(StatusDot, { status: chosenParent.status }),
+            /* @__PURE__ */ jsx2("span", { className: "min-w-0 truncate", children: chosenParent.title })
+          ] }) : i18n.newTaskNoParent,
+          ariaLabel: i18n.newTaskParent,
+          children: [
             /* @__PURE__ */ jsxs2(DropdownMenuItem2, { onSelect: () => setParentId(""), children: [
               /* @__PURE__ */ jsx2("span", { className: "min-w-0 flex-1 truncate", children: i18n.newTaskNoParent }),
               !parentId && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
@@ -693,12 +815,18 @@ function NewTaskDialog({
               ] }),
               parentId === task.id && /* @__PURE__ */ jsx2(Codicon2, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
             ] }, task.id))
-          ] })
+          ]
+        }
+      ) }),
+      /* @__PURE__ */ jsxs2("div", { className: "flex flex-wrap items-center gap-4", children: [
+        /* @__PURE__ */ jsxs2("label", { className: "flex items-center gap-2 text-[11px] text-(--ui-text-secondary)", children: [
+          /* @__PURE__ */ jsx2(Switch, { checked: triage, onCheckedChange: (value) => setTriage(Boolean(value)) }),
+          i18n.newTaskTriage
+        ] }),
+        /* @__PURE__ */ jsxs2("label", { className: "flex items-center gap-2 text-[11px] text-(--ui-text-secondary)", children: [
+          /* @__PURE__ */ jsx2(Switch, { checked: goalMode, onCheckedChange: (value) => setGoalMode(Boolean(value)) }),
+          i18n.newTaskGoalMode
         ] })
-      ] }),
-      /* @__PURE__ */ jsxs2("label", { className: "flex items-center gap-2 text-[11px] text-(--ui-text-secondary)", children: [
-        /* @__PURE__ */ jsx2(Switch, { checked: triage, onCheckedChange: (value) => setTriage(Boolean(value)) }),
-        i18n.newTaskTriage
       ] })
     ] }),
     /* @__PURE__ */ jsxs2(DialogFooter, { className: "gap-2", children: [
@@ -1754,6 +1882,11 @@ function KanbanGanttPage() {
     queryFn: () => apiFetch("/boards"),
     refetchInterval: 5 * 6e4
   });
+  const { data: projectsData } = useQuery2({
+    queryKey: ["kanban-gantt", "projects", apiBase()],
+    queryFn: () => fetchProjects(),
+    staleTime: 6e4
+  });
   const { data, isLoading, isError } = useQuery2({
     queryKey: ["kanban-gantt", "gantt", apiBase(), board],
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ""}`),
@@ -2168,6 +2301,7 @@ function KanbanGanttPage() {
         boardSlug: board && board !== "all" && board !== "*" ? board : void 0,
         assignees: derived && derived.allAssignees || [],
         tasks: data && data.tasks || [],
+        projects: projectsData && projectsData.projects || [],
         defaultParentId: newTask ? newTask.parentId : "",
         busy: createTaskMutation.isPending,
         onSubmit: (values) => createTaskMutation.mutate(values),

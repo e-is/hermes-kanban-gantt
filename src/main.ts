@@ -57,7 +57,7 @@ import {
   setPluginDoors,
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
   $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $openTaskId, $newTask,
-  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, createTask, applyBase
+  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, createTask, fetchProjects, applyBase
 } from './state'
 import { getStorage } from './state'
 import { GANTT_LOCALES, useGanttI18n } from './i18n'
@@ -1257,6 +1257,13 @@ export function KanbanGanttPage() {
     queryFn: () => apiFetch('/boards'),
     refetchInterval: 5 * 60_000
   })
+  // Projects are only needed by the creation dialog; cached for a minute so
+  // opening it is instant.
+  const { data: projectsData } = useQuery({
+    queryKey: ['kanban-gantt', 'projects', apiBase()],
+    queryFn: () => fetchProjects(),
+    staleTime: 60_000
+  })
   const { data, isLoading, isError } = useQuery({
     queryKey: ['kanban-gantt', 'gantt', apiBase(), board],
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ''}`),
@@ -1722,6 +1729,7 @@ export function KanbanGanttPage() {
         boardSlug: board && board !== 'all' && board !== '*' ? board : undefined,
         assignees: (derived && derived.allAssignees) || [],
         tasks: (data && data.tasks) || [],
+        projects: (projectsData && projectsData.projects) || [],
         defaultParentId: newTask ? newTask.parentId : '',
         busy: createTaskMutation.isPending,
         onSubmit: values => createTaskMutation.mutate(values),

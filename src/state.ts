@@ -62,6 +62,9 @@ const createTask = (values, board) =>
     `/tasks${board ? `?board=${encodeURIComponent(board)}` : ''}`,
     { method: 'POST', body: values })
 
+/** Projects a task can be linked to (empty list when the profile has none). */
+const fetchProjects = () => apiFetch('/projects')
+
 export function setPluginDoors(restFn, storageObj) {
   rest = restFn
   storage = storageObj
@@ -69,5 +72,5 @@ export function setPluginDoors(restFn, storageObj) {
 export const getStorage = () => storage
 
 export {
-  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, createTask, applyBase
+  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, createTask, fetchProjects, applyBase
 }
