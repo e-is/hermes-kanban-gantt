@@ -13,3 +13,4 @@ tests/ui/.stubs/
 # hermes-plugin-development is not published upstream: it is vendored here.
 .agents/skills/*
 !.agents/skills/hermes-plugin-development/
+.agents/plans/
