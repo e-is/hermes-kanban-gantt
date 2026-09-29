@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "github": {
+      "source": "NousResearch/hermes-agent",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/software-development/github/SKILL.md",
+      "computedHash": "facd5ee9e933acdc04fe06f1d7fb3befb22a60d2334fbca4b6083a2cef6251c2"
+    },
+    "hermes-agent": {
+      "source": "NousResearch/hermes-agent",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/autonomous-ai-agents/hermes-agent/SKILL.md",
+      "computedHash": "538bd88a96655d144cfb6837d8600df39605b03bfd04f274b45b8343f8fe2fe6"
+    },
+    "hermes-agent-skill-authoring": {
+      "source": "NousResearch/hermes-agent",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/software-development/hermes-agent-skill-authoring/SKILL.md",
+      "computedHash": "b69d2298626791f9d2774709926ff4fc7c5b4c1689db547a01d84ab858bc7719"
+    },
+    "hermes-plugin-development": {
+      "source": "../../.hermes/skills/software-development",
+      "sourceType": "local",
+      "computedHash": "0e49b4a844b1eddaff1d6d9095d4a21ac1a2888b13496796e14bdf8c149fbfd4"
+    },
+    "inspecting-hermes-desktop-dom": {
+      "source": "NousResearch/hermes-agent",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/software-development/inspecting-hermes-desktop-dom/SKILL.md",
+      "computedHash": "263fab041e9b60d735eec8fbe4e771165c662ada6dc7c0e886b2659a4e096560"
+    },
+    "requesting-code-review": {
+      "source": "NousResearch/hermes-agent",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/software-development/requesting-code-review/SKILL.md",
+      "computedHash": "4c5b5109363bd1ff0652ac06096385ab7ab7997e078a8213e7cddf68bfd6823c"
+    },
+    "systematic-debugging": {
+      "source": "NousResearch/hermes-agent",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/software-development/systematic-debugging/SKILL.md",
+      "computedHash": "3af3a3fbf03fcbe9062ef5e6fc14a99eb3df96add873ff7fe4fc0d1627bb3141"
+    },
+    "test-driven-development": {
+      "source": "NousResearch/hermes-agent",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/software-development/test-driven-development/SKILL.md",
+      "computedHash": "95ed2d20a4206f5f0a4e4ec9272310d2fdad3dbb0b4777111482075949305cac"
+    }
+  }
+}

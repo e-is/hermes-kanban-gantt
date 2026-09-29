@@ -8,9 +8,12 @@
     "build": "node scripts/build.mjs",
     "check": "node --check desktop/plugin.js && node --check desktop/gantt-core.js",
     "test": "node --test tests/gantt-core.test.mjs tests/test_sticky.mjs && bash tests/run_tests.sh",
-    "demo": "node tests/demo-server.mjs"
+    "demo": "node tests/demo-server.mjs",
+    "skills:sync": "node scripts/sync-skills.mjs",
+    "postinstall": "npm run --silent skills:sync"
   },
   "devDependencies": {
-    "esbuild": "^0.27.2"
+    "esbuild": "^0.27.2",
+    "skills": "^1.7.0"
   }
 }
