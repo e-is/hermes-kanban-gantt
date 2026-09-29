@@ -68,7 +68,9 @@ var apiFetch = (path, init) => {
     });
   }
   if (!rest) return Promise.reject(new Error("backend not ready"));
-  return rest(path, init?.body != null ? { method: init.method, body: init.body } : void 0);
+  const opts = { method: init?.method || "GET" };
+  if (init?.body != null) opts.body = init.body;
+  return rest(path, opts);
 };
 var fetchTask = (id, board) => apiFetch(`/tasks/${encodeURIComponent(id)}${board ? `?board=${encodeURIComponent(board)}` : ""}`);
 var createTask = (values, board) => apiFetch(
@@ -1925,7 +1927,6 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     }
   }, [taskId]);
   const [comment, setComment] = useState3("");
-  const [actionError, setActionError] = useState3(null);
   const [runsOpen, setRunsOpen] = useState3(false);
   const [commentsOpen, setCommentsOpen] = useState3(true);
   const [showAllComments, setShowAllComments] = useState3(false);
@@ -1937,11 +1938,10 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       { method: "PATCH", body: payload }
     ),
     onSuccess: () => {
-      setActionError(null);
       void refetch();
       void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
     },
-    onError: (error) => setActionError(String(error?.message || error))
+    onError: (error) => toast("error", String(error?.message || error))
   });
   const commentMutation = useMutation({
     mutationFn: (body) => apiFetch(
@@ -1949,10 +1949,9 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       { method: "POST", body }
     ),
     onSuccess: () => {
-      setActionError(null);
       void refetch();
     },
-    onError: (error) => setActionError(String(error?.message || error))
+    onError: (error) => toast("error", String(error?.message || error))
   });
   const assignMutation = useMutation({
     mutationFn: (profile) => apiFetch(
@@ -1960,20 +1959,18 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       { method: "PATCH", body: { profile } }
     ),
     onSuccess: () => {
-      setActionError(null);
       void refetch();
       void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
     },
-    onError: (error) => setActionError(String(error?.message || error))
+    onError: (error) => toast("error", String(error?.message || error))
   });
   const unlinkMutation = useMutation({
     mutationFn: (parentId) => removeParent(taskId, parentId, board),
     onSuccess: () => {
-      setActionError(null);
       void refetch();
       void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
     },
-    onError: (error) => setActionError(String(error?.message || error))
+    onError: (error) => toast("error", String(error?.message || error))
   });
   const st = data?.task?.status || "todo";
   const matrix = ACTION_MATRIX[st] || { primary: [], more: [] };
@@ -2113,7 +2110,6 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
           jsx5("div", { className: "text-base font-semibold leading-snug", children: cleanTitle(data?.task?.title, data?.task?.label) })
         ]
       }),
-      actionError ? jsx5("div", { className: "text-[10px] text-red-500 bg-red-500/10 border border-red-500/20 rounded p-1.5 shrink-0", children: actionError }) : null,
       // Scrollable content underneath the pinned header + title
       isLoading ? jsx5("div", { className: "py-8 flex justify-center", children: jsx5(Loader, {}) }) : isError ? jsx5(ErrorState, { title: i18n.taskUnreadable, description: i18n.taskUnreadableDesc }) : jsxs5("div", { ref: scrollContainerRef, className: "flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pt-1", children: [
         // 0. Relations — parents (removable, behind a confirmation) and

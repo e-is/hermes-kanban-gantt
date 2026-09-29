@@ -48,9 +48,12 @@ const apiFetch = (path, init) => {
     })
   }
   if (!rest) return Promise.reject(new Error('backend not ready'))
-  return rest(path, init?.body != null
-    ? { method: init.method, body: init.body }
-    : undefined)
+  // The METHOD must travel even without a body: `ctx.rest` defaults to GET when
+  // the options object is missing, so a bodyless DELETE used to be sent as a
+  // GET and fell through to the backend's catch-all 404 (no route matches).
+  const opts = { method: init?.method || 'GET' }
+  if (init?.body != null) opts.body = init.body
+  return rest(path, opts)
 }
 
 const fetchBoards = () => apiFetch('/boards')

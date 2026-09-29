@@ -897,7 +897,6 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   }, [taskId])
 
   const [comment, setComment] = useState('')
-  const [actionError, setActionError] = useState(null)
   const [runsOpen, setRunsOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(true)
   const [showAllComments, setShowAllComments] = useState(false)
@@ -913,29 +912,27 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       `/tasks/${encodeURIComponent(taskId)}/status${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'PATCH', body: payload }),
     onSuccess: () => {
-      setActionError(null)
       void refetch()
       void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
     },
-    onError: error => setActionError(String(error?.message || error))
+    onError: error => toast('error', String(error?.message || error))
   })
   const commentMutation = useMutation({
     mutationFn: body => apiFetch(
       `/tasks/${encodeURIComponent(taskId)}/comments${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'POST', body }),
-    onSuccess: () => { setActionError(null); void refetch() },
-    onError: error => setActionError(String(error?.message || error))
+    onSuccess: () => { void refetch() },
+    onError: error => toast('error', String(error?.message || error))
   })
   const assignMutation = useMutation({
     mutationFn: profile => apiFetch(
       `/tasks/${encodeURIComponent(taskId)}/assignee${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'PATCH', body: { profile } }),
     onSuccess: () => {
-      setActionError(null)
       void refetch()
       void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
     },
-    onError: error => setActionError(String(error?.message || error))
+    onError: error => toast('error', String(error?.message || error))
   })
 
   // Dropping one parent link. The domain also re-evaluates the task's gate, so
@@ -943,11 +940,10 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const unlinkMutation = useMutation({
     mutationFn: parentId => removeParent(taskId, parentId, board),
     onSuccess: () => {
-      setActionError(null)
       void refetch()
       void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
     },
-    onError: error => setActionError(String(error?.message || error))
+    onError: error => toast('error', String(error?.message || error))
   })
 
   const st = data?.task?.status || 'todo'
@@ -1101,9 +1097,6 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
         ]
       }),
 
-      actionError
-        ? jsx('div', { className: 'text-[10px] text-red-500 bg-red-500/10 border border-red-500/20 rounded p-1.5 shrink-0', children: actionError })
-        : null,
 
       // Scrollable content underneath the pinned header + title
       isLoading
