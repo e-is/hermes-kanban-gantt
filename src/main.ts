@@ -2173,7 +2173,17 @@ const plugin = {
   border-radius: 9999px; transition: opacity 120ms ease;
 }
 .kg-resize-rest { width: 1px; background: var(--ui-stroke-secondary); opacity: 0.1; }
-.kg-resize-pill { width: 4px; background: var(--ui-sash-hover-border); opacity: 0; }
+/* Geometry comes from the same variable the shell's own sash reads
+   (w-(--vscode-sash-hover-size,0.25rem) on its hover layer), so a style that
+   resizes its separators resizes ours too instead of leaving 4px hard-coded. The
+   colour chain ends on the app's accent so a renamed token degrades to a visible
+   bar rather than to nothing (the plugin has already been bitten once by the
+   --ui-background to --ui-base rename). */
+.kg-resize-pill {
+  width: var(--vscode-sash-hover-size, 0.25rem);
+  background: var(--ui-sash-hover-border, var(--ui-accent, var(--accent)));
+  opacity: 0;
+}
 .kg-resize-handle:hover .kg-resize-rest,
 .kg-resize-handle:focus-visible .kg-resize-rest,
 .kg-resize-handle[data-dragging='true'] .kg-resize-rest { opacity: 1; }
