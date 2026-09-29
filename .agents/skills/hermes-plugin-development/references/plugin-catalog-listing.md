@@ -75,8 +75,19 @@ size differs (a new file vs a two-line re-pin).
 2. **Bump the manifest**: `version:` in `plugin.yaml`, and `requires_hermes:` when
    a newly used SDK area landed after the current floor. Commit it.
 3. **Tag the release commit**: `git tag -a v<ver> -m "…" && git push origin v<ver>`.
-   The tag itself satisfies the "released" bar; creating the GitHub Release page
-   needs `gh` and can be skipped.
+   The tag itself satisfies the "released" bar. The Release page is optional but
+   cheap and it is what users read: `POST /repos/<owner>/<repo>/releases` with
+   `tag_name`, `name` and an English `body` (what's new by feature, then the fixes,
+   then the under-the-hood notes, ending with the install/update commands). It needs
+   `Contents: write`, a DIFFERENT scope from opening a PR (`Pull requests: write`),
+   so probe the releases endpoint separately — a token that opens PRs on the repo
+   can still 403 there, and vice versa; `gh` is not required for either.
+   - **Moving a tag** already pushed (the release commit gained review-worthy
+     commits after tagging): `git tag -d v<ver>` → `git push origin :refs/tags/v<ver>`
+     → re-create on the new commit → push, then re-point EVERY sha-pinned URL in
+     the entry (screenshots included) at the new commit. A screenshot URL left on
+     the old sha renders a different revision than the one users install, and no
+     CI check catches it.
 4. **Validate locally** (same checks as admission CI):
    `hermes plugins validate <repo-root>` → the check list must end in
    `Validation passed`. `--json` prints the machine-readable per-check report
@@ -130,6 +141,23 @@ do not re-add it on a re-pin.
     answers 200) — verify that BEFORE opening the PR, since an unpushed tag or a
     local-only commit fails this gate with no useful message.
 
+Reproduce both jobs locally before opening the PR, and report their results per
+job in the PR body instead of asserting the CI will be green:
+
+```bash
+# structural — the CI installs ruamel.yaml; a throwaway pytest venv already has it
+/tmp/<name>-venv/bin/python scripts/validate_plugin_catalog.py plugin-catalog/   # "OK: N file(s) valid"
+
+# pinned-source — validate the CLONE's view: a detached worktree at the sha
+git worktree add --detach /tmp/<name>-pin <sha>
+(cd /tmp/<name>-pin && hermes plugins validate .)      # must end in "Validation passed"
+git worktree remove /tmp/<name>-pin --force            # always clean it up
+```
+
+Validating the WORKING tree proves less than it looks: any gitignored file there
+(a synced skill set, a build cache) is scanned locally and absent at the pinned
+commit, so a red local run can be a false alarm and a green one can be luck.
+
 ## Practicalities on this machine
 
 - The catalog is visible in the installed checkout: `ls ~/.hermes/hermes-agent/plugin-catalog/`
@@ -152,6 +180,20 @@ do not re-add it on a re-pin.
   `origin/main` of the plugin repo before assuming an update is unnecessary — a
   stale `requires_hermes` (e.g. `>=0.19` while the manifest needs `>=0.21.5`) is a
   real bug for users on the older floor.
+- **A fine-grained token is scoped PER REPOSITORY, and its scopes are PER
+  ENDPOINT.** One that opens PRs happily on the user's own org repos still answers
+  `403 Resource not accessible by personal access token` on
+  `NousResearch/hermes-agent` — probe THAT repo (invalid-payload `POST /pulls` →
+  403 vs 422) before promising the user you can open the catalog PR. On the repos
+  it does reach, probe each endpoint you need separately: releasing needs
+  `Contents: write` while PRs need `Pull requests: write`, and the `.env` can hold
+  several `GITHUB_TOKEN` lines where the first authenticates but lacks the scope —
+  collect the distinct values and probe each PER ENDPOINT, never assume the first
+  (or the one that read the repo) can write. The unblock is on their side: add
+  `NousResearch/hermes-agent` to the token's selected repositories with
+  `Pull requests: Read and write`. Until then the push to the fork is what you owe,
+  and the API `head` for a fork PR is `"<fork-owner>:<branch>"` — the same owner
+  prefix the compare URL needs; a bare `:branch` head never resolves.
 
 ## Checklist before submitting
 
