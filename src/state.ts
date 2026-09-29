@@ -26,6 +26,9 @@ export const DRAWER_W_MAX = 720
 /** Open task id in the drawer (null = closed). */
 export const $openTaskId = atom(null)
 
+/** "New task" dialog: null = closed, { parentId } = open (prefilled parent). */
+export const $newTask = atom(null)
+
 const apiBase = () => ($baseUrl.get() || '').trim().replace(/\/+$/, '')
 
 /** GET/POST/PATCH through the plugin namespace, or an absolute custom base. */
@@ -53,6 +56,12 @@ const fetchGantt = board =>
 const fetchTask = (id, board) =>
   apiFetch(`/tasks/${encodeURIComponent(id)}${board ? `?board=${encodeURIComponent(board)}` : ''}`)
 
+/** Create a task on the current board (the domain derives its status). */
+const createTask = (values, board) =>
+  apiFetch(
+    `/tasks${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+    { method: 'POST', body: values })
+
 export function setPluginDoors(restFn, storageObj) {
   rest = restFn
   storage = storageObj
@@ -60,5 +69,5 @@ export function setPluginDoors(restFn, storageObj) {
 export const getStorage = () => storage
 
 export {
-  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, applyBase
+  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, createTask, applyBase
 }

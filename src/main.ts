@@ -56,12 +56,13 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 import {
   setPluginDoors,
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
-  $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $openTaskId,
-  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, applyBase
+  $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $openTaskId, $newTask,
+  apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask, createTask, applyBase
 } from './state'
 import { getStorage } from './state'
 import { GANTT_LOCALES, useGanttI18n } from './i18n'
 import { TitlebarBoardSwitcher } from './ui/TitlebarBoardSwitcher'
+import { NewTaskDialog } from './ui/NewTaskDialog'
 
 const ID = 'kanban-gantt'
 
@@ -79,6 +80,19 @@ const ZOOM_STEP = 0.05
 
 
 import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, DAY, MIN_BAR } from './core/gantt-core.ts'
+
+
+/** Report through the desktop's own notification stack (auto-dismissing toast
+ *  outside the page layout). Silent when there is no bridge (plain browser). */
+function toast(kind, message) {
+  try {
+    if (host && typeof host.notify === 'function' && message) {
+      host.notify({ kind, message })
+    }
+  } catch {
+    /* no desktop bridge: drop it rather than crash the page */
+  }
+}
 
 
 /** Apply a new backend base URL and refetch everything. */
@@ -968,6 +982,17 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], docked = false, on
                         onClick: () => { if (data?.task?.title) void navigator.clipboard.writeText(data.task.title) },
                         children: i18n.copyTitle
                       }),
+                      jsx(DropdownMenuSeparator, {}),
+                      // Creation verb reachable from a task: the new task starts
+                      // as a child of this one.
+                      jsx(DropdownMenuItem, {
+                        className: 'flex items-center gap-2 px-3 py-1.5',
+                        onClick: () => $newTask.set({ parentId: taskId }),
+                        children: jsxs('span', { className: 'flex items-center gap-2', children: [
+                          jsx(Codicon, { name: 'add', size: '0.85rem' }),
+                          i18n.createSubtask
+                        ] })
+                      }),
                       more.length ? jsx(DropdownMenuSeparator, {}) : null,
                       more.map(a => jsx(DropdownMenuItem, {
                         key: a,
@@ -1222,6 +1247,7 @@ export function KanbanGanttPage() {
   const base = useValue($baseUrl)
   const board = useValue($boardSlug)
   const openTaskId = useValue($openTaskId)
+  const newTask = useValue($newTask)
   const labelW = useValue($labelW)
   const drawerW = useValue($drawerW)
   const drawerDocked = useValue($drawerDocked)
@@ -1295,6 +1321,24 @@ export function KanbanGanttPage() {
     const allAssignees = Array.from(new Set(data.tasks.map(t => t.assignee).filter(Boolean))).sort()
     return { rows, domain, total: visible.length, tasks: visible, allAssignees }
   }, [data, showArchived, disabledStatuses, selectedAssignees, search])
+
+  // Creating a task: the domain derives the status (ready, or todo when the
+  // chosen parent is not finished), so the dialog only collects what the user
+  // types — plus an idempotency key, so a double submit cannot duplicate.
+  const createTaskMutation = useMutation({
+    mutationFn: values => createTask(values, board),
+    onSuccess: (response, values) => {
+      $newTask.set(null)
+      toast('info', i18n.created(values.title))
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+      // Show the new task straight away: that is where its status made sense.
+      $openTaskId.set(response.task_id)
+    },
+    onError: error => {
+      const message = String((error && error.message) || error || '')
+      toast('error', /title is required/i.test(message) ? i18n.errTitleRequired : i18n.errCreate)
+    }
+  })
 
   const handleToggleCheck = (id, checked, nativeEvent) => {
     setSelectedIds(prev => {
@@ -1554,7 +1598,17 @@ export function KanbanGanttPage() {
                 }),
                 jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${Math.round(zoom * 100)}%` })
               ] }),
-              jsx(Button, { size: 'xs', onClick: () => void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] }), children: i18n.refresh })
+              jsx(Button, { size: 'xs', onClick: () => void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] }), children: i18n.refresh }),
+              // Far right: the board's only creation verb.
+              jsx(Button, {
+                size: 'xs',
+                variant: 'default',
+                onClick: () => $newTask.set({ parentId: '' }),
+                children: jsxs('span', { className: 'flex items-center gap-1', children: [
+                  jsx(Codicon, { name: 'add', size: '0.85rem' }),
+                  i18n.newTask
+                ] })
+              })
             ]
           })
         ]
@@ -1661,7 +1715,19 @@ export function KanbanGanttPage() {
               if (getStorage()) getStorage().set('drawerDocked', next ? '1' : '0')
             }
           })
-        : null
+        : null,
+      // Creation dialog (toolbar button, or "create a sub-task" from a task).
+      jsx(NewTaskDialog, {
+        open: Boolean(newTask),
+        boardSlug: board && board !== 'all' && board !== '*' ? board : undefined,
+        assignees: (derived && derived.allAssignees) || [],
+        tasks: (data && data.tasks) || [],
+        defaultParentId: newTask ? newTask.parentId : '',
+        busy: createTaskMutation.isPending,
+        onSubmit: values => createTaskMutation.mutate(values),
+        onClose: () => $newTask.set(null),
+        i18n
+      })
     ]
   })
 }

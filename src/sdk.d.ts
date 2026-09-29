@@ -55,6 +55,12 @@ declare module '@hermes/plugin-sdk' {
   export const Badge: any
   export const Button: any
   export const Codicon: any
+  export const Dialog: any
+  export const DialogContent: any
+  export const DialogFooter: any
+  export const DialogHeader: any
+  export const DialogTitle: any
+  export const Input: any
   export const Contribute: any
   export const DropdownMenu: any
   export const DropdownMenuContent: any
