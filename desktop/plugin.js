@@ -1575,7 +1575,10 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
     // Tailwind arbitrary class the desktop never compiled (the old
     // `hover:bg-(--ui-accent)/30`) painted nothing, which is why the handle
     // stopped showing any hover feedback. Drawn from the injected stylesheet.
-    children: jsx5("span", { className: "kg-resize-pill" })
+    children: jsxs5("span", { className: "contents", children: [
+      jsx5("span", { className: "kg-resize-rest" }),
+      jsx5("span", { className: "kg-resize-pill" })
+    ] })
   });
 }
 function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
@@ -3167,13 +3170,20 @@ var plugin = {
       const handleStyle = document.createElement("style");
       handleStyle.id = "kg-handle-style";
       handleStyle.textContent = `
-.kg-resize-handle { display: flex; align-items: center; justify-content: center; }
-.kg-resize-pill {
-  pointer-events: none; border-radius: 9999px;
-  width: 4px; height: 2.5rem;
-  background: color-mix(in srgb, var(--ui-text-primary) 55%, transparent);
-  opacity: 0; transition: opacity 120ms ease;
+.kg-resize-handle { display: flex; align-items: stretch; justify-content: center; }
+/* Same two layers the shell's own sash draws (measured on the left panel's
+   resizer): a 1px line in --ui-stroke-secondary sitting at 10% opacity at rest,
+   and a 4px bar in --ui-sash-hover-border — the dedicated sash token, which
+   already carries its own alpha — revealed on hover. Both tokens are theme
+   values, so the affordance follows the active theme instead of a hard colour. */
+.kg-resize-rest, .kg-resize-pill {
+  position: absolute; border-radius: 9999px; transition: opacity 120ms ease;
 }
+.kg-resize-rest { width: 1px; background: var(--ui-stroke-secondary); opacity: 0.1; }
+.kg-resize-pill { width: 4px; background: var(--ui-sash-hover-border); opacity: 0; }
+.kg-resize-handle:hover .kg-resize-rest,
+.kg-resize-handle:focus-visible .kg-resize-rest,
+.kg-resize-handle[data-dragging='true'] .kg-resize-rest { opacity: 1; }
 .kg-resize-handle:hover .kg-resize-pill,
 .kg-resize-handle:focus-visible .kg-resize-pill,
 .kg-resize-handle[data-dragging='true'] .kg-resize-pill { opacity: 1; }
