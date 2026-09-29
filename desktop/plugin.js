@@ -3177,7 +3177,8 @@ var plugin = {
    already carries its own alpha — revealed on hover. Both tokens are theme
    values, so the affordance follows the active theme instead of a hard colour. */
 .kg-resize-rest, .kg-resize-pill {
-  position: absolute; border-radius: 9999px; transition: opacity 120ms ease;
+  position: absolute; inset-block: 0; left: 50%; transform: translateX(-50%);
+  border-radius: 9999px; transition: opacity 120ms ease;
 }
 .kg-resize-rest { width: 1px; background: var(--ui-stroke-secondary); opacity: 0.1; }
 .kg-resize-pill { width: 4px; background: var(--ui-sash-hover-border); opacity: 0; }
