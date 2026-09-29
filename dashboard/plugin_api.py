@@ -674,6 +674,72 @@ def assign(task_id: str, payload: AssignBody, board: Optional[str] = Query(None)
         conn.close()
 
 
+class NewTaskBody(BaseModel):
+    title: str
+    body: Optional[str] = None
+    assignee: Optional[str] = None
+    priority: Optional[int] = 0
+    parentId: Optional[str] = None
+    triage: Optional[bool] = False
+    # Client-generated, so a double submit returns the SAME task instead of a
+    # duplicate (create_task is not idempotent without it).
+    idempotencyKey: Optional[str] = None
+
+
+@router.post("/tasks")
+def create_task(payload: NewTaskBody, board: Optional[str] = Query(None)):
+    """Create a task through the domain layer.
+
+    The domain derives the status (`ready`, or `todo` when the given parent is
+    not finished yet; `triage` when asked) — no status is forced here, so the
+    new task obeys the same parent gating as everything else on the board.
+    """
+    from hermes_cli import kanban_db
+
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+
+    slug = _resolve_board(board)
+    if slug in ("all", "*"):
+        # No task to find the board from: create on the current board.
+        slug = _resolve_board(None)
+        if slug in ("all", "*"):
+            slug = "default"
+
+    parent_id = (payload.parentId or "").strip() or None
+    conn = _connect(slug, ro=False)
+    try:
+        if parent_id and kanban_db.get_task(conn, parent_id) is None:
+            # task_links is per-board, so a parent from another board is not a
+            # parent at all here.
+            raise HTTPException(
+                status_code=409,
+                detail=f"parent {parent_id} is not on board {slug}",
+            )
+        task_id = kanban_db.create_task(
+            conn,
+            title=title,
+            body=(payload.body or "").strip() or None,
+            assignee=(payload.assignee or "").strip() or None,
+            priority=int(payload.priority or 0),
+            parents=[parent_id] if parent_id else (),
+            triage=bool(payload.triage),
+            idempotency_key=(payload.idempotencyKey or "").strip() or None,
+            created_by="gantt",
+        )
+        task = kanban_db.get_task(conn, task_id)
+        return {
+            "ok": True,
+            "task_id": task_id,
+            "board": slug,
+            "status": task.status if task else None,
+            "parent_id": parent_id,
+        }
+    finally:
+        conn.close()
+
+
 @router.get("/meta")
 def _meta():
     return {

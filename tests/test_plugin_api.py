@@ -283,3 +283,98 @@ def test_gantt_all_boards(client):
     r_bulk = http.post("/tasks/bulk?board=all", json={"ids": [board["solo"]], "action": "blocked", "reason": "all block"})
     assert r_bulk.status_code == 200
     assert r_bulk.json()["results"][0]["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# Task creation
+# ---------------------------------------------------------------------------
+
+def _gantt(http, slug):
+    """The snapshot the page re-renders, keyed by task id."""
+    data = http.get(f"/gantt?board={slug}").json()
+    return {t["id"]: t for t in data["tasks"]}
+
+
+def test_create_task(client):
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}", json={"title": "[TEST] created"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["ok"] is True
+    assert data["board"] == board["slug"]
+    # No parent -> the domain settles it on ready (dispatcher's queue).
+    assert data["status"] == "ready"
+
+    snap = _gantt(http, board["slug"])
+    assert data["task_id"] in snap
+    assert snap[data["task_id"]]["title"] == "[TEST] created"
+
+
+def test_create_task_with_fields(client):
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}", json={
+        "title": "[TEST] with fields",
+        "body": "some body",
+        "assignee": "someone",
+        "priority": 3,
+    })
+    assert r.status_code == 200
+    detail = http.get(f"/tasks/{r.json()['task_id']}?board={board['slug']}").json()["task"]
+    assert detail["title"] == "[TEST] with fields"
+    assert detail["body"] == "some body"
+    assert detail["assignee"] == "someone"
+    assert detail["priority"] == 3
+
+
+def test_create_subtask_is_gated_by_its_parent(client):
+    """A new task under a not-yet-done parent lands in todo, not ready."""
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}",
+                  json={"title": "[TEST] child of solo", "parentId": board["solo"]})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["parent_id"] == board["solo"]
+    # `solo` is a fresh todo task -> non-terminal -> the child is gated.
+    assert data["status"] == "todo"
+    snap = _gantt(http, board["slug"])
+    assert snap[data["task_id"]]["parents"] == [board["solo"]]
+    assert data["task_id"] in snap[board["solo"]]["children"]
+
+
+def test_create_task_triage(client):
+    http, board = client
+    r = http.post(f"/tasks?board={board['slug']}",
+                  json={"title": "[TEST] to triage", "triage": True})
+    assert r.status_code == 200
+    assert r.json()["status"] == "triage"
+
+
+def test_create_task_rejects_empty_title(client):
+    http, board = client
+    assert http.post(f"/tasks?board={board['slug']}", json={"title": "   "}).status_code == 400
+    assert http.post(f"/tasks?board={board['slug']}", json={"title": ""}).status_code == 400
+
+
+def test_create_task_rejects_foreign_parent(client):
+    http, board = client
+    other = kanban_db.connect(board="kanban-gantt-test-other")
+    try:
+        foreign = kanban_db.create_task(other, title="[TEST] other board", created_by="test")
+    finally:
+        other.close()
+    r = http.post(f"/tasks?board={board['slug']}",
+                  json={"title": "[TEST] cross-board child", "parentId": foreign})
+    assert r.status_code == 409
+    assert "not on board" in r.json()["detail"]
+
+
+def test_create_task_idempotency_key_prevents_duplicates(client):
+    """The UI sends one key per submit, so a double click cannot create two."""
+    http, board = client
+    payload = {"title": "[TEST] once only", "idempotencyKey": "kg-test-key-1"}
+    first = http.post(f"/tasks?board={board['slug']}", json=payload)
+    second = http.post(f"/tasks?board={board['slug']}", json=payload)
+    assert first.status_code == second.status_code == 200
+    assert first.json()["task_id"] == second.json()["task_id"]
+    snap = _gantt(http, board["slug"])
+    assert len([t for t in snap.values() if t["title"] == "[TEST] once only"]) == 1
