@@ -928,21 +928,35 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const scrollContainerRef = useRef(null)
   const prevTaskIdRef = useRef(null)
 
+  // A description draft belongs to the task it was seeded from. The drawer does
+  // not remount when the page opens ANOTHER task, so an unsaved draft used to
+  // stay in the editor while the rest of the drawer swapped underneath it: the
+  // pencil sat open over someone else's body. `descOwner` pins the drawer to the
+  // task the draft belongs to (see `shownId`), and the dialog below owns the
+  // three ways out of a switch requested while that draft is unsaved.
+  const [descOwner, setDescOwner] = useState(null)
+  const [descDraft, setDescDraft] = useState('')
+  const shownId = descOwner || taskId
+  // Set once the draft has been written, so the dialog's own close beat (which
+  // calls onClose after a successful confirm) cannot be mistaken for a dismissal
+  // and undo the switch the user just approved.
+  const switchResolvedRef = useRef(false)
+
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['kanban-gantt', 'task', apiBase(), board, taskId],
-    queryFn: () => fetchTask(taskId, board),
-    enabled: Boolean(taskId)
+    queryKey: ['kanban-gantt', 'task', apiBase(), board, shownId],
+    queryFn: () => fetchTask(shownId, board),
+    enabled: Boolean(shownId)
   })
 
   // Reset scroll to top when opening a DIFFERENT task
   useEffect(() => {
-    if (taskId && prevTaskIdRef.current !== taskId) {
-      prevTaskIdRef.current = taskId
+    if (shownId && prevTaskIdRef.current !== shownId) {
+      prevTaskIdRef.current = shownId
       if (scrollContainerRef.current) {
         scrollContainerRef.current.scrollTop = 0
       }
     }
-  }, [taskId])
+  }, [shownId])
 
   const [comment, setComment] = useState('')
   const [runsOpen, setRunsOpen] = useState(false)
@@ -950,19 +964,14 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const [showAllComments, setShowAllComments] = useState(false)
   // Parent link awaiting confirmation (the click that asked to remove it).
   const [pendingUnlink, setPendingUnlink] = useState(null)
-  // Description editing: the draft is seeded from the task when the pencil is
-  // pressed, and the textarea edits the raw markdown (the rendered view is what
-  // the section shows the rest of the time).
-  const [descEditing, setDescEditing] = useState(false)
-  const [descDraft, setDescDraft] = useState('')
 
   // Parents/children come from the WHOLE board snapshot, not the filtered rows,
   // so a relation hidden by the current filter still shows up here.
-  const relations = useMemo(() => relationsOf(tasks, taskId), [tasks, taskId])
+  const relations = useMemo(() => relationsOf(tasks, shownId), [tasks, shownId])
 
   const statusMutation = useMutation({
     mutationFn: payload => apiFetch(
-      `/tasks/${encodeURIComponent(taskId)}/status${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+      `/tasks/${encodeURIComponent(shownId)}/status${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'PATCH', body: payload }),
     onSuccess: () => {
       void refetch()
@@ -972,14 +981,14 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   })
   const commentMutation = useMutation({
     mutationFn: body => apiFetch(
-      `/tasks/${encodeURIComponent(taskId)}/comments${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+      `/tasks/${encodeURIComponent(shownId)}/comments${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'POST', body }),
     onSuccess: () => { void refetch() },
     onError: error => toast('error', String(error?.message || error))
   })
   const assignMutation = useMutation({
     mutationFn: profile => apiFetch(
-      `/tasks/${encodeURIComponent(taskId)}/assignee${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+      `/tasks/${encodeURIComponent(shownId)}/assignee${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'PATCH', body: { profile } }),
     onSuccess: () => {
       void refetch()
@@ -994,19 +1003,34 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   // backend also emits `edited`, which our own push carries to other clients.
   const descriptionMutation = useMutation({
     mutationFn: body => apiFetch(
-      `/tasks/${encodeURIComponent(taskId)}/description${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+      `/tasks/${encodeURIComponent(shownId)}/description${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'PATCH', body: { body } }),
     onSuccess: () => {
       void refetch()
       void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
-      setDescEditing(false)
+      setDescOwner(null)
     },
     onError: error => toast('error', String(error?.message || error))
   })
+
+  // The draft is unsaved when it differs from what the backend holds for the task
+  // it belongs to — `data` IS that task's detail, because `shownId` pins it.
+  const descDirty = Boolean(descOwner) && descDraft !== (data?.task?.body || '')
+  // A switch the page asked for while that draft is unsaved: the dialog decides
+  // (save then open, discard, or cancel the switch and keep editing).
+  const descSwitchPending = Boolean(descOwner) && descOwner !== taskId && descDirty
+
+  // Nothing typed (or already written): a requested switch just closes the editor
+  // and lets the drawer follow the page, no question asked.
+  useEffect(() => {
+    if (!descOwner || descOwner === taskId || descDirty) return
+    setDescOwner(null)
+    setDescDraft('')
+  }, [taskId, descOwner, descDirty])
   // Dropping one parent link. The domain also re-evaluates the task's gate, so
   // a task freed by the removal can come back to `ready` — hence the refetch.
   const unlinkMutation = useMutation({
-    mutationFn: parentId => removeParent(taskId, parentId, board),
+    mutationFn: parentId => removeParent(shownId, parentId, board),
     onSuccess: () => {
       void refetch()
       void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
@@ -1070,8 +1094,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 }),
                 jsx('span', {
                   className: 'text-[11px] font-mono text-(--ui-text-quaternary) hover:text-(--ui-text-secondary) cursor-help select-all',
-                  title: i18n.copyHint(taskId),
-                  children: shortId(taskId)
+                  title: i18n.copyHint(shownId),
+                  children: shortId(shownId)
                 })
               ] }),
               jsxs('div', { className: 'flex items-center gap-1 shrink-0', children: [
@@ -1091,7 +1115,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                     children: [
                       jsx(DropdownMenuItem, {
                         className: 'flex items-center gap-2 px-3 py-1.5',
-                        onClick: () => void navigator.clipboard.writeText(taskId),
+                        onClick: () => void navigator.clipboard.writeText(shownId),
                         children: i18n.copyTaskId
                       }),
                       jsx(DropdownMenuItem, {
@@ -1104,7 +1128,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                       // as a child of this one.
                       jsx(DropdownMenuItem, {
                         className: 'flex items-center gap-2 px-3 py-1.5',
-                        onClick: () => $newTask.set({ parentId: taskId }),
+                        onClick: () => $newTask.set({ parentId: shownId }),
                         children: jsxs('span', { className: 'flex items-center gap-2', children: [
                           jsx(Codicon, { name: 'add', size: '0.85rem' }),
                           i18n.createSubtask
@@ -1114,7 +1138,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                       // page's task picker for this task.
                       jsx(DropdownMenuItem, {
                         className: 'flex items-center gap-2 px-3 py-1.5',
-                        onClick: () => $moveUnderId.set(taskId),
+                        onClick: () => $moveUnderId.set(shownId),
                         children: jsxs('span', { className: 'flex items-center gap-2', children: [
                           jsx(Codicon, { name: 'move', size: '0.85rem' }),
                           i18n.moveUnder
@@ -1131,7 +1155,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                       jsx(DropdownMenuItem, {
                         className: 'flex items-center gap-2 px-3 py-1.5 text-red-500 hover:bg-red-500/10',
                         onClick: () => {
-                          if (confirm(i18n.confirmDelete(taskId))) {
+                          if (confirm(i18n.confirmDelete(shownId))) {
                             statusMutation.mutate({ action: 'delete' })
                             onClose()
                           }
@@ -1206,16 +1230,21 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                   jsx(Button, {
                     variant: 'ghost',
                     size: 'icon-xs',
-                    'aria-label': descEditing ? i18n.cancelEdit : i18n.editDescription,
-                    title: descEditing ? i18n.cancelEdit : i18n.editDescription,
+                    'aria-label': descOwner ? i18n.cancelEdit : i18n.editDescription,
+                    title: descOwner ? i18n.cancelEdit : i18n.editDescription,
                     onClick: () => {
-                      setDescDraft(data?.task?.body || '')
-                      setDescEditing(!descEditing)
+                      if (descOwner) {
+                        setDescOwner(null)                  // leave without writing
+                        setDescDraft('')
+                      } else {
+                        setDescOwner(shownId)               // the draft belongs to this task
+                        setDescDraft(data?.task?.body || '')
+                      }
                     },
-                    children: jsx(Codicon, { name: descEditing ? 'close' : 'edit', size: '0.75rem' })
+                    children: jsx(Codicon, { name: descOwner ? 'close' : 'edit', size: '0.75rem' })
                   })
                 ] }),
-                descEditing
+                descOwner
                   ? jsxs('div', { className: 'flex flex-col gap-1.5', children: [
                       jsx(Textarea, {
                         className: 'min-h-24 text-[11px]',
@@ -1418,6 +1447,35 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
         confirmLabel: i18n.removeParentLink(pendingUnlink ? pendingUnlink.title : ''),
         cancelLabel: i18n.cancel,
         destructive: true
+      }),
+      // The description draft guard: the page asked for another task while the
+      // draft was unsaved. Three ways out — write it and open the task, drop it
+      // and open it, or cancel the switch and stay here with the editor as it is.
+      jsx(ConfirmDialog, {
+        open: descSwitchPending,
+        onClose: () => {
+          const resolved = switchResolvedRef.current
+          switchResolvedRef.current = false
+          // Dismissed (Esc, backdrop, Cancel): go back to the task being edited.
+          if (!resolved && descOwner) $openTaskId.set(descOwner)
+        },
+        onConfirm: async () => {
+          await descriptionMutation.mutateAsync(descDraft)
+          switchResolvedRef.current = true
+          setDescOwner(null)
+          setDescDraft('')
+        },
+        title: i18n.unsavedDescTitle,
+        description: i18n.unsavedDescBody,
+        confirmLabel: i18n.saveAndOpen,
+        cancelLabel: i18n.keepEditing,
+        secondaryAction: {
+          label: i18n.discardChanges,
+          onClick: () => {
+            setDescOwner(null)
+            setDescDraft('')
+          }
+        }
       })
     ]
   })
