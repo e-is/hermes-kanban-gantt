@@ -7,8 +7,8 @@ automatically at `/api/plugins/kanban-gantt/events`), consumed through the
 desktop SDK's existing `ctx.socket` door. Nothing else changes: writes stay on
 REST, `GET /gantt` stays exactly as it is and remains the fallback.
 
-Design decisions, all taken from the parent recon notes
-(`docs/spikes/current-state-and-requirements.md`, `docs/spikes/websocket-options.md`):
+Design decisions (the R-numbers are the requirements listed in
+`docs/spikes/websocket-protocol-design.md`, appendix):
 
 * **Reversible.** The whole feature lives behind `KANBAN_GANTT_WS` (default
   OFF). With it off the route is never registered: `/events` 404s and the client

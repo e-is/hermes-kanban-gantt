@@ -9,8 +9,11 @@ node_modules/
 tests/ui/.stubs/
 
 # Agent skills refreshed from skills-lock.json by `npm install` (postinstall,
-# `skills update`); .claude/skills is a tracked symlink to .agents/skills.
-# hermes-plugin-development is not published upstream: it is vendored here.
+# `skills update`); .claude/skills and .junie/skills are tracked symlinks to
+# .agents/skills. hermes-plugin-development is not published upstream: it is
+# vendored here.
 .agents/skills/*
 !.agents/skills/hermes-plugin-development/
 .agents/plans/
+.junie/*
+!.junie/skills

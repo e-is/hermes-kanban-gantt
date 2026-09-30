@@ -4,7 +4,7 @@
  * unit-tested in node (tests/ws-core.test.mjs) exactly as it ships. The SDK
  * wiring lives in src/ws.ts and only composes these decisions.
  *
- * Contract implemented here (see docs/spikes/websocket-prototype.md):
+ * Contract implemented here (see docs/spikes/websocket-protocol-design.md):
  *   - R1  a snapshot frame is turned back into the EXACT shape `GET /gantt`
  *         returns, so nothing downstream (filters, drawer, renderer) changes.
  *   - R7  frames carry a monotonic per-board `version`: a same-or-older frame is

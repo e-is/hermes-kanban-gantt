@@ -3,9 +3,17 @@
 Card `t_01745262` (board `gantt-demo`), 2026-09-29. Scope: the plugin
 **e-is/hermes-kanban-gantt** and the Hermes gateway that mounts it.
 Deliverable asked for: go/no-go, architecture, effort, measured numbers, top risks.
-Supporting work: `polling-inventory.md` (the poll audit),
-`websocket-stack-evaluation.md` (stack comparison + the 15 hard parts),
-`ws-push-prototype.md` (prototype), `polling-baseline.md` (pre-prototype load harness).
+Companion: `websocket-protocol-design.md` (wire contract, lifecycle, operations, and the
+requirements R1–R20 in its appendix). Proofs P1–P11: `tests/ws_proof.py`. The spike's research
+notes (polling audits, load baseline, stack comparison, prototype write-up) were removed; the
+numbers below keep their values, and the raw runs that back them are in `results/` and `harness/`.
+
+> **Status at `9b086e4` (plugin 1.3.2, 2026-09-30).** The prototype shipped **ON by default**
+> (`KANBAN_GANTT_WS=0` is now the off-switch; client storage `ws = '0'` opts out). The
+> `HERMES_KANBAN_DB` pinning trap (§4.1) and the noisy teardown (§4.2) are fixed, and the client
+> re-arms itself every 5 min after giving up. A defect remains, found on re-check: after a
+> gateway restart the client discards the new process's snapshots as stale and quietly stays on
+> the 300 s poll (`websocket-protocol-design.md` §0.3 (4)). §5–§7 are annotated accordingly.
 
 ## 1. Verdict — **GO**, behind the flag, for loopback/token desktops only
 
@@ -30,13 +38,13 @@ what would make it defensible as a default.
 
 | | Value | Source |
 |---|---|---|
-| Where | `src/main.ts`, `useQuery(['kanban-gantt','gantt', …])` — `refetchInterval: 60_000`, demoted to `300_000` only while the socket reports live | `polling-inventory.md` §1 |
+| Where | `src/main.ts:1416-1420`, `useQuery(['kanban-gantt','gantt', …])` — `refetchInterval: 60_000`, demoted to `300_000` only while the socket reports live | code |
 | What it fetches | the whole Gantt snapshot: tasks + labels + link graph, `GET /gantt?board=<slug>` | `dashboard/plugin_api.py::_read_gantt` |
-| Payload | 19-task demo board **10 173 B**; 16 tasks / 8 544 B in this run; `?board=all` 9 556 B | measured, `polling-baseline.md` §2, `ws_proof.py` P1 |
+| Payload | 19-task demo board **10 173 B**; 16 tasks / 8 544 B in this run; `?board=all` 9 556 B | measured (spike load baseline), `ws_proof.py` P1 |
 | Request rate | **1 req/min per open window** — 1 440/day; N windows ⇒ N full snapshots/min | by construction |
-| Bytes | **≈0.61 MB/h per window**; 212 MB–6.4 GB over 30 days on the earlier 1 000-task synthetic board | `polling-baseline.md` §3 (cited, not re-run) |
-| Server cost | one `mode=ro` SQLite read per request: **0.23 ms p50** (demo board), 0.67 ms (`all`) | `polling-baseline.md` |
-| Errors/retries | react-query: 3 tries, last snapshot stays painted; nothing on screen says "stale" | `polling-inventory.md` |
+| Bytes | **≈0.61 MB/h per window**; 212 MB–6.4 GB over 30 days on the earlier 1 000-task synthetic board | spike load baseline, `harness/` (cited, not re-run) |
+| Server cost | one `mode=ro` SQLite read per request: **0.23 ms p50** (demo board), 0.67 ms (`all`) | spike load baseline |
+| Errors/retries | react-query: 3 tries, last snapshot stays painted; the Refresh button shows only while the push is `off` or `dead` | code (`src/main.ts:1925-1943`) |
 
 ## 3. Polling vs. WebSocket, side by side
 
@@ -132,45 +140,47 @@ INFO kanban_gantt_plugin_ws: kanban-gantt ws: rejected upgrade (core_reject)
    refusing. Mitigation for today: start the gateway env-clean, and treat
    `KANBAN_GANTT_BOARDS`/`HERMES_KANBAN_HOME` as the only board root the socket trusts.
    Proper fix: after resolving a slug, assert the path is `<boards_root>/<slug>/kanban.db`
-   and refuse anything else. This is a T1 item, not a T2 one.
+   and refuse anything else. This is a T1 item, not a T2 one. **Done** (`48fda64`,
+   `dashboard/plugin_api.py:102-117`).
 2. **The stream loop dies noisily when the last subscriber leaves**:
    `kanban-gantt ws: stream for wsgw ended: RuntimeError` on every disconnect (the loop's
    `run_in_executor` / reader path after the socket closed). Harmless so far — the next
    subscriber recreates the stream — but it is the code path that also carries the
    grace-window version continuity, so it needs a clean teardown before the flag is default.
+   **Done** (`48fda64`: a departing peer ends the loop quietly, the pump task is awaited).
 
 ## 5. Proposed architecture (what is in the tree)
 
 | Piece | Choice |
 |---|---|
-| Server route | `@router.websocket("/events")` in `dashboard/plugin_ws.py`, attached only when `KANBAN_GANTT_WS` is set, mounted at `/api/plugins/kanban-gantt/events` |
+| Server route | `@router.websocket("/events")` in `dashboard/plugin_ws.py`, attached unless `KANBAN_GANTT_WS=0`, mounted at `/api/plugins/kanban-gantt/events` |
 | Runtime | the host's own CPython + fastapi 0.133.1 / starlette 1.3.1 / uvicorn 0.41.0 / websockets 15.0.1 — no new pin, no new process |
 | Wire format | JSON, `{type:'snapshot'|'heartbeat', board, version, generated_at, tasks[], labels[]}` — the REST shape plus a header, applied to the same react-query cache key |
 | Change detection | per-board `PRAGMA data_version` + `st_mtime_ns` + `st_size`, 250 ms cadence, 300 ms coalescing, one `_read_gantt` per change per board |
-| Client | `ctx.socket('/events?board=<slug>')`, full snapshot first, version-gap ⇒ REST resync, first-frame/idle timeouts, one retry then polling |
+| Client | `ctx.socket('/events?board=<slug>')`, full snapshot first, version-gap ⇒ REST resync, first-frame/idle timeouts, one retry then polling, re-armed every 5 min |
 | Auth | handshake-time delegation to core `_ws_auth_ok`, loopback-only fallback for the standalone dev server |
 | Fallback | the 60 s poll, kept forever for OAuth/custom-URL clients; SSE documented as the transport fallback if `ws://` is blocked |
-| Rollout | `KANBAN_GANTT_WS` (default off) — flag off ⇒ route not registered, `/events` 404, REST untouched |
+| Rollout | `KANBAN_GANTT_WS` (**default on** since 1.3.x) — `KANBAN_GANTT_WS=0` ⇒ route not registered, `/events` 404, REST untouched; per client, storage `ws = '0'` |
 
 ## 6. Effort
 
 | Tier | Scope | Estimate |
 |---|---|---|
-| **T0 — done** | flag-gated prototype for the one loop + proof + gateway probe + mount regression test | landed on `spike/ws-push-prototype` |
-| **T1 — minimal productionization** | (1) board-path assertion against the pinning trap; (2) treat a server-initiated close (1012) as reconnectable instead of fatal; (3) one source of truth for heartbeat/idle constants; (4) clean stream teardown on last disconnect; (5) `KANBAN_GANTT_WS` in README; (6) rebuild + `hermes plugins install` + visual check | **2–3 days** (the gateway-upgrade item that used to be first here is now **done**) |
+| **T0 — done** | flag-gated prototype for the one loop + proof + gateway probe + mount regression test | landed, then shipped on by default |
+| **T1 — minimal productionization** | (1) board-path assertion against the pinning trap — **done**; (2) survive a gateway restart — **partly**: the client re-arms every 5 min, but it still discards the restarted process's lower versions (protocol design §0.3 (4)); (3) one source of truth for heartbeat/idle constants — open; (4) clean stream teardown on last disconnect — **done**; (5) `KANBAN_GANTT_WS` in README — open; (6) rebuild + `hermes plugins install` + visual check — **done** (1.2 s write-to-screen, `48fda64`) | remaining: (2), (3), (5) + keeping `all` off the socket |
 | **T2 — hardened** | observability (connections/frames/reads/rejects + a degraded badge, i18n en+fr), SSE fallback, `all`-boards fan-in, frame coalescing across windows, `task_events` cursor replay, watcher cost on a busy board, multi-worker fan-out design, tests for deploy drain and handshake-failure fallback | **5–8 days** |
 
 ## 7. Top risks and mitigations
 
 | Risk | Likelihood / impact | Mitigation |
 |---|---|---|
-| **Board data cross-wiring via `HERMES_KANBAN_DB`** — reproduced live (§4.1): an unknown slug served the pinned board | certain if the gateway inherits a worker env; **wrong data on screen** | assert the resolved path is under `<boards_root>/<slug>/`; refuse otherwise; start the gateway env-clean; T1 |
+| ~~**Board data cross-wiring via `HERMES_KANBAN_DB`**~~ — reproduced live (§4.1) | **fixed**: a foreign path is refused | keep the assertion; a pinned gateway now fails loudly |
 | Silent degradation — the route not registering (the bug this spike found) would just look like "still polling" | was certain in gateway mode, now fixed and covered by `ws_mount_gateway.py` | keep the guard *and* the test; consider logging at WARNING, not stdout |
-| **Routine gateway restart degrades clients permanently** — uvicorn closes sockets with **1012** on shutdown; the client treats every close as fatal (`WS_MAX_ATTEMPTS = 1`) | medium / high (invisible, sticky until reload) | treat 1012 (any server-initiated close) as reconnectable; T1 |
+| **Routine gateway restart degrades clients** — the SDK reconnects on its own, but the restarted process numbers versions from 1 again, and the client drops them as stale while heartbeats keep it `live` | likely on every restart / medium (pushes ignored, 300 s poll, no Refresh shown) | treat a snapshot below `lastVersion` as a new stream (or add an `epoch`); T1 |
 | Auth is a re-implementation on a route HTTP middleware never touches | low now (delegates to core, verified through the gateway) | keep the delegation; never set `KANBAN_GANTT_WS_TOKEN` in production (it is a bypass for the standalone server) |
 | Watcher cost on a busy board (0.25 s × boards, WAL contention) | unmeasured | **measure with a dispatcher running**; if it bites, move to inotify/`file_control` — transport unchanged |
 | At-most-once, drop-and-coalesce delivery; no replay | accepted by design | every frame is a full snapshot, so a lost frame self-heals; deltas stay out until a delivery guarantee exists |
-| Horizontal scaling (second worker/gateway) | not today (one uvicorn worker, one SQLite writer) | per-process versions + in-process hub are wrong the moment that changes → broker or `task_events` cursor; falsifier #1 in the stack evaluation |
+| Horizontal scaling (second worker/gateway) | not today (one uvicorn worker, one SQLite writer) | per-process versions + in-process hub are wrong the moment that changes → broker or `task_events` cursor; §8 (1) |
 | No observability at all | certain today | T2 first item; a silently degraded client fleet is the failure mode this removes |
 
 ## 8. What would still flip the verdict
@@ -184,7 +194,7 @@ INFO kanban_gantt_plugin_ws: kanban-gantt ws: rejected upgrade (core_reject)
 ## 9. Prototype, harnesses and raw evidence
 
 * Prototype: `dashboard/plugin_ws.py` + `dashboard/plugin_api.py` wiring, client `src/ws.ts`,
-  `src/core/ws-core.ts` — branch `spike/ws-push-prototype`, flag off by default.
+  `src/core/ws-core.ts` — on `main` since 1.3.x, on by default.
 * `tests/ws_proof.py` — 13/13 PASS, standalone plugin app (re-run: p50 393 ms, p95 429 ms).
 * `tests/ws_mount_gateway.py` — 4/4 PASS, core's import mode (new: pins the bug from §4).
 * `docs/spikes/harness/gateway/` — the real-gateway harness (sandbox `HERMES_HOME`, launcher,
