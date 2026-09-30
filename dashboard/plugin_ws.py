@@ -1,7 +1,7 @@
 """kanban-gantt — websocket push prototype for the ONE polling loop that matters.
 
 Spike `t_64075faf`. This module replaces exactly one loop — the 60 s
-`refetchInterval` on `GET /gantt` (`src/main.ts:1358-1362`) — with a server push
+`refetchInterval` on `GET /gantt` (the gantt `useQuery` in `src/main.ts`) — with a server push
 on the plugin's **own** router (`@router.websocket("/events")`, mounted
 automatically at `/api/plugins/kanban-gantt/events`), consumed through the
 desktop SDK's existing `ctx.socket` door. Nothing else changes: writes stay on
@@ -11,8 +11,9 @@ Design decisions (the R-numbers are the requirements listed in
 `docs/spikes/websocket-protocol-design.md`, appendix):
 
 * **Reversible.** The whole feature lives behind `KANBAN_GANTT_WS` (default
-  OFF). With it off the route is never registered: `/events` 404s and the client
-  keeps its 60 s poll. Nothing else in the plugin can tell the difference.
+  ON; `KANBAN_GANTT_WS=0` is the off-switch, see `websocket_enabled()`). With it
+  off the route is never registered: `/events` 404s and the client keeps its
+  60 s poll. Nothing else in the plugin can tell the difference.
 * **Auth inside the handler.** Starlette's HTTP middleware does not run for the
   `websocket` scope, so the route authenticates itself — it delegates to the
   dashboard's canonical gate (`hermes_cli.web_server_chat._ws_auth_ok`, the same
@@ -25,7 +26,9 @@ Design decisions (the R-numbers are the requirements listed in
 * **Drop-and-coalesce per client** — at most one pending frame; a client whose
   send buffer stays full is closed instead of queued.
 * **Monotonic per-board version** on every frame (R7) and a **full snapshot as
-  the first frame** after subscribe/reconnect (R8).
+  the first frame** after subscribe/reconnect (R8). The counter lives in this
+  process only: a restart (or a stream dropped after its grace window) starts
+  again at 1, and the client takes a lower version as a new stream.
 
 What this prototype deliberately does NOT do (see the write-up for the full
 list): cross-process fan-out, delta frames, `task_events` cursor replay, and

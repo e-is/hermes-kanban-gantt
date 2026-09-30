@@ -6,19 +6,6 @@ What is left to do on the plugin. When an item is done, remove it (git keeps the
 
 Reference: [`spikes/websocket-protocol-design.md`](spikes/websocket-protocol-design.md).
 
-### Defects
-
-- [ ] **The push is ignored after a gateway restart.** The restarted process numbers versions
-  from 1 again (the counter lives in the process, §3.4). The SDK reconnects underneath the same
-  `onMessage`, and `classifyFrame` drops any version `<= lastVersion` as stale. Heartbeats keep
-  the idle timer armed, so the page stays `live` with the poll demoted to 300 s and Refresh
-  hidden, until the new counter overtakes the old one. The same happens when a board's stream is
-  dropped after its 60 s grace window. Fix: a snapshot *below* `lastVersion` can only come from a
-  new stream (one socket is ordered, the counter only grows), so apply it and reset the baseline.
-- [ ] **`board=all` still tries the socket.** `wsBoard` in `src/main.ts` only excludes a custom
-  base URL and an empty board. The server refuses `all` (1008), so the client falls back to the
-  poll by timing out, then retries every 5 min. Exclude `all` / `*` on the client.
-
 ### Hardening
 
 - [ ] **One source for the heartbeat.** `WsConfig.heartbeat_s` (server, env-overridable) and
@@ -30,8 +17,8 @@ Reference: [`spikes/websocket-protocol-design.md`](spikes/websocket-protocol-des
 - [ ] **README.** Document `KANBAN_GANTT_WS` (default on, `=0` to disable), the tuning variables
   and the client `ws` storage flag.
 - [ ] **Tests.** Add `tests/ws-core.test.mjs` to `npm test` (today it only runs by hand). Also
-  cover: a failed handshake falls back to the poll (never a blank page), a restarted stream is
-  picked up (lower version), and the two heartbeat constants cannot drift.
+  cover, end to end: a failed handshake falls back to the poll (never a blank page), a gateway
+  restart is picked up by a connected page, and the two heartbeat constants cannot drift.
 - [ ] **Measure** the watcher cost on a board with a running dispatcher, and the push on the
   239-task `sumaris` board (frame size, p95).
 - [ ] Minor: every new subscriber takes a version from the shared counter, so the other windows
@@ -48,10 +35,6 @@ Reference: [`spikes/websocket-protocol-design.md`](spikes/websocket-protocol-des
 
 ## Backend
 
-- [ ] **Newer hosts moved `connect` out of `hermes_cli.kanban_db`** (it lives in
-  `hermes_cli.kanban_db_connect`). `plugin_api._connect(ro=False)` still calls
-  `kanban_db.connect`, so every write route fails on those hosts, and the pytest suite errors in
-  its fixture. Resolve the factory from either module.
 - [ ] Split `dashboard/plugin_api.py` (≈ 1 100 lines) by concern: reads, task writes, links.
 
 ## Renderer
