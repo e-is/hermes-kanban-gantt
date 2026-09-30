@@ -35,10 +35,6 @@ Reference: [`spikes/websocket-protocol-design.md`](spikes/websocket-protocol-des
 
 ## Backend
 
-- [ ] **Newer hosts moved `connect` out of `hermes_cli.kanban_db`** (it lives in
-  `hermes_cli.kanban_db_connect`). `plugin_api._connect(ro=False)` still calls
-  `kanban_db.connect`, so every write route fails on those hosts, and the pytest suite errors in
-  its fixture. Resolve the factory from either module.
 - [ ] Split `dashboard/plugin_api.py` (≈ 1 100 lines) by concern: reads, task writes, links.
 
 ## Renderer
