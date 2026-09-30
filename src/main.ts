@@ -41,6 +41,7 @@ import {
   profileColorSoft,
   Streamdown,
   Switch,
+  Textarea,
   useMutation,
   usePluginI18n,
   useQuery,
@@ -949,6 +950,11 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const [showAllComments, setShowAllComments] = useState(false)
   // Parent link awaiting confirmation (the click that asked to remove it).
   const [pendingUnlink, setPendingUnlink] = useState(null)
+  // Description editing: the draft is seeded from the task when the pencil is
+  // pressed, and the textarea edits the raw markdown (the rendered view is what
+  // the section shows the rest of the time).
+  const [descEditing, setDescEditing] = useState(false)
+  const [descDraft, setDescDraft] = useState('')
 
   // Parents/children come from the WHOLE board snapshot, not the filtered rows,
   // so a relation hidden by the current filter still shows up here.
@@ -982,6 +988,21 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     onError: error => toast('error', String(error?.message || error))
   })
 
+  // The description write: same shape as the reference kanban drawer's
+  // DescriptionSection (raw markdown in a textarea, saved explicitly). The
+  // refetch + gantt invalidation keep the drawer and the timeline in step; the
+  // backend also emits `edited`, which our own push carries to other clients.
+  const descriptionMutation = useMutation({
+    mutationFn: body => apiFetch(
+      `/tasks/${encodeURIComponent(taskId)}/description${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+      { method: 'PATCH', body: { body } }),
+    onSuccess: () => {
+      void refetch()
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
+      setDescEditing(false)
+    },
+    onError: error => toast('error', String(error?.message || error))
+  })
   // Dropping one parent link. The domain also re-evaluates the task's gate, so
   // a task freed by the removal can come back to `ready` — hence the refetch.
   const unlinkMutation = useMutation({
@@ -1175,16 +1196,49 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 onOpen: id => $openTaskId.set(id),
                 openLabel: i18n.openTask
               }),
-              // 1. Description (no max-h clamp)
-              data?.task?.body
-                ? jsxs('div', { className: 'flex flex-col gap-1', children: [
-                    jsx('div', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: i18n.description }),
-                    jsx('div', {
-                      className: 'text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)',
-                      children: jsx(Streamdown, { children: data.task.body })
-                    })
-                  ] })
-                : null,
+              // 1. Description (no max-h clamp). Always rendered, so a task that has
+              // no description yet can be given one; the pencil at the right of the
+              // label mirrors the reference kanban drawer's DescriptionSection, and
+              // the editor shows the raw markdown with an explicit Save.
+              jsxs('div', { className: 'flex flex-col gap-1', children: [
+                jsxs('div', { className: 'flex items-center justify-between gap-2', children: [
+                  jsx('div', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: i18n.description }),
+                  jsx(Button, {
+                    variant: 'ghost',
+                    size: 'icon-xs',
+                    'aria-label': descEditing ? i18n.cancelEdit : i18n.editDescription,
+                    title: descEditing ? i18n.cancelEdit : i18n.editDescription,
+                    onClick: () => {
+                      setDescDraft(data?.task?.body || '')
+                      setDescEditing(!descEditing)
+                    },
+                    children: jsx(Codicon, { name: descEditing ? 'close' : 'edit', size: '0.75rem' })
+                  })
+                ] }),
+                descEditing
+                  ? jsxs('div', { className: 'flex flex-col gap-1.5', children: [
+                      jsx(Textarea, {
+                        className: 'min-h-24 text-[11px]',
+                        value: descDraft,
+                        disabled: descriptionMutation.isPending,
+                        onChange: event => setDescDraft(event.target.value)
+                      }),
+                      jsx(Button, {
+                        className: 'self-end',
+                        size: 'xs',
+                        variant: 'secondary',
+                        disabled: descriptionMutation.isPending,
+                        onClick: () => descriptionMutation.mutate(descDraft),
+                        children: i18n.save
+                      })
+                    ] })
+                  : data?.task?.body
+                    ? jsx('div', {
+                        className: 'text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)',
+                        children: jsx(Streamdown, { children: data.task.body })
+                      })
+                    : jsx('p', { className: 'text-[11px] text-(--ui-text-quaternary)', children: i18n.noDescription })
+              ] }),
 
               // 2. Result (no max-h clamp)
               data?.task?.result

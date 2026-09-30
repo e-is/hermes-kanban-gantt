@@ -137,7 +137,14 @@ def _resolve_board(board: Optional[str]) -> str:
 
 
 def _connect(slug: str, *, ro: bool) -> sqlite3.Connection:
-    """Open a board connection. Reads use mode=ro; writes go through kanban_db."""
+    """Open a board connection. Reads use mode=ro; writes go through the domain.
+
+    Connection opening moved upstream: ``kanban_db.connect`` was the only door,
+    and it now lives in ``hermes_cli.kanban_db_connect``. Prefer the module that
+    has it, so a board that answers reads still accepts writes on either Hermes
+    line (a stale ``AttributeError`` here silently broke every write route —
+    status, assignee, comments, description).
+    """
     if ro:
         path = _board_db_path(slug)
         return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
@@ -145,7 +152,11 @@ def _connect(slug: str, *, ro: bool) -> sqlite3.Connection:
     # tests via sys.path); a bare standalone server without the hermes codebase
     # still serves reads.
     from hermes_cli import kanban_db
-    return kanban_db.connect(board=slug)
+    opener = getattr(kanban_db, "connect", None)
+    if opener is None:                      # Hermes moved it out of kanban_db
+        from hermes_cli import kanban_db_connect
+        opener = kanban_db_connect.connect
+    return opener(board=slug)
 
 
 # ---------------------------------------------------------------------------
@@ -687,6 +698,41 @@ def assign(task_id: str, payload: AssignBody, board: Optional[str] = Query(None)
         if not ok:
             raise HTTPException(status_code=409, detail=f"assign refused for {task_id}")
         return {"ok": True, "task_id": task_id}
+    finally:
+        conn.close()
+
+
+class DescriptionBody(BaseModel):
+    body: Optional[str] = None
+
+
+@router.patch("/tasks/{task_id}/description")
+def update_description(task_id: str, payload: DescriptionBody, board: Optional[str] = Query(None)):
+    """Replace a task's description (raw markdown) — the same write the reference
+    kanban dashboard performs for `body`: one UPDATE plus an `edited` event, then
+    the post-commit observer, so other surfaces (and our own /events push) see it.
+
+    An empty string is a valid value and clears the description; a missing field
+    is refused, so a malformed client cannot wipe a body by omission.
+    """
+    from hermes_cli import kanban_db
+
+    if payload.body is None:
+        raise HTTPException(status_code=400, detail='body is required (send "" to clear it)')
+
+    slug = _board_for_task(task_id, board)
+    conn = _connect(slug, ro=False)
+    try:
+        conn.row_factory = sqlite3.Row      # notify_task_updated indexes by name
+        if conn.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone() is None:
+            raise HTTPException(status_code=404, detail=f"unknown task {task_id}")
+        with kanban_db.write_txn(conn):
+            conn.execute("UPDATE tasks SET body = ? WHERE id = ?", (payload.body, task_id))
+            conn.execute(
+                "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'edited', NULL, ?)",
+                (task_id, int(time.time())))
+        kanban_db.notify_task_updated(conn, task_id, ["body"], board=slug)
+        return {"ok": True, "task_id": task_id, "body": payload.body}
     finally:
         conn.close()
 

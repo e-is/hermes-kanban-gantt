@@ -25,6 +25,7 @@ import {
   profileColor,
   profileColorSoft,
   Streamdown,
+  Textarea,
   useMutation,
   useQuery as useQuery2,
   useQueryClient as useQueryClient2,
@@ -146,6 +147,10 @@ var GANTT_LOCALES = {
     reassigned: "(reassigned)",
     dependencies: "Dependencies:",
     description: "Description",
+    editDescription: "Edit description",
+    cancelEdit: "Cancel edit",
+    save: "Save",
+    noDescription: "No description",
     result: "Result",
     latestSummary: "Latest summary",
     runs: (n) => `Runs (${n})`,
@@ -302,6 +307,10 @@ var GANTT_LOCALES = {
     reassigned: "(réaffecté)",
     dependencies: "Dépendances :",
     description: "Description",
+    editDescription: "Modifier la description",
+    cancelEdit: "Annuler la modification",
+    save: "Enregistrer",
+    noDescription: "Aucune description",
     result: "Résultat",
     latestSummary: "Dernier résumé",
     runs: (n) => `Exécutions (${n})`,
@@ -2146,6 +2155,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const [commentsOpen, setCommentsOpen] = useState3(true);
   const [showAllComments, setShowAllComments] = useState3(false);
   const [pendingUnlink, setPendingUnlink] = useState3(null);
+  const [descEditing, setDescEditing] = useState3(false);
+  const [descDraft, setDescDraft] = useState3("");
   const relations = useMemo2(() => relationsOf(tasks, taskId), [tasks, taskId]);
   const statusMutation = useMutation({
     mutationFn: (payload) => apiFetch(
@@ -2176,6 +2187,18 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     onSuccess: () => {
       void refetch();
       void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
+    },
+    onError: (error) => toast("error", String(error?.message || error))
+  });
+  const descriptionMutation = useMutation({
+    mutationFn: (body) => apiFetch(
+      `/tasks/${encodeURIComponent(taskId)}/description${board ? `?board=${encodeURIComponent(board)}` : ""}`,
+      { method: "PATCH", body: { body } }
+    ),
+    onSuccess: () => {
+      void refetch();
+      void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
+      setDescEditing(false);
     },
     onError: (error) => toast("error", String(error?.message || error))
   });
@@ -2351,14 +2374,45 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
           onOpen: (id) => $openTaskId.set(id),
           openLabel: i18n.openTask
         }),
-        // 1. Description (no max-h clamp)
-        data?.task?.body ? jsxs5("div", { className: "flex flex-col gap-1", children: [
-          jsx5("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.description }),
-          jsx5("div", {
+        // 1. Description (no max-h clamp). Always rendered, so a task that has
+        // no description yet can be given one; the pencil at the right of the
+        // label mirrors the reference kanban drawer's DescriptionSection, and
+        // the editor shows the raw markdown with an explicit Save.
+        jsxs5("div", { className: "flex flex-col gap-1", children: [
+          jsxs5("div", { className: "flex items-center justify-between gap-2", children: [
+            jsx5("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.description }),
+            jsx5(Button4, {
+              variant: "ghost",
+              size: "icon-xs",
+              "aria-label": descEditing ? i18n.cancelEdit : i18n.editDescription,
+              title: descEditing ? i18n.cancelEdit : i18n.editDescription,
+              onClick: () => {
+                setDescDraft(data?.task?.body || "");
+                setDescEditing(!descEditing);
+              },
+              children: jsx5(Codicon4, { name: descEditing ? "close" : "edit", size: "0.75rem" })
+            })
+          ] }),
+          descEditing ? jsxs5("div", { className: "flex flex-col gap-1.5", children: [
+            jsx5(Textarea, {
+              className: "min-h-24 text-[11px]",
+              value: descDraft,
+              disabled: descriptionMutation.isPending,
+              onChange: (event) => setDescDraft(event.target.value)
+            }),
+            jsx5(Button4, {
+              className: "self-end",
+              size: "xs",
+              variant: "secondary",
+              disabled: descriptionMutation.isPending,
+              onClick: () => descriptionMutation.mutate(descDraft),
+              children: i18n.save
+            })
+          ] }) : data?.task?.body ? jsx5("div", {
             className: "text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
             children: jsx5(Streamdown, { children: data.task.body })
-          })
-        ] }) : null,
+          }) : jsx5("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.noDescription })
+        ] }),
         // 2. Result (no max-h clamp)
         data?.task?.result ? jsxs5("div", { className: "flex flex-col gap-1", children: [
           jsx5("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.result }),
