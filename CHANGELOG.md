@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.3.3 — edit a task's description, and a restart no longer mutes the push
+
+**The drawer edits descriptions.** The DESCRIPTION section carries the pencil the
+reference kanban drawer has: press it and the body opens as raw markdown in a
+textarea with an explicit Save underneath; press it again (now a close) to leave
+without writing. The section is always rendered, so a task with no description can
+be given one. `PATCH /tasks/{id}/description` writes the body verbatim, records the
+`edited` task event and calls `notify_task_updated` — the same write the reference
+dashboard performs — so the push carries the change to other clients. An empty
+string clears the description; a payload that omits the field is a 400, so no
+client can wipe a body by omission.
+
+**A draft is never lost to a stray click.** Clicking another task while a draft was
+unsaved used to swap the drawer and leave the editor open on the previous task's
+text. The draft now pins the drawer to the task it came from — both what it queries
+and what every write targets — and the switch asks first: Save and open, Discard
+changes, or Keep editing.
+
+**A gateway restart no longer mutes the push.** The version counter lives in the
+gateway process, so a restart numbered frames again from 1; the client discarded
+every frame at or below its old baseline while heartbeats kept it looking live,
+which turned a live page into a 300 s poll in silence. A lower version is now read
+as a new stream (the frame is a full snapshot) and resets the baseline. The
+all-boards view — which the server refuses to stream, having no single database to
+watch — no longer opens the socket at all: it stays on its 60 s poll, where the
+Refresh button is shown.
+
+**On newer hosts.** Hermes moved the board-connection factory out of
+`hermes_cli.kanban_db` into `hermes_cli.kanban_db_connect`, which made every write
+route raise `AttributeError` while reads kept working. `_connect()` now resolves the
+factory from either module, so writes work on both lines.
+
 ## 1.3.2 — Refresh stays reachable when the push is off
 
 Removing the Refresh button was right while the push is live, but it left anyone who
