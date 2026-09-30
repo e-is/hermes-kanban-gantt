@@ -75,8 +75,11 @@ export function relationsOf(tasks, taskId) {
  * can grey rows out instead of hiding them.
  *
  * Refused: itself, its own descendants (a cycle the domain rejects), a task on
- * another board (task_links is per-board sqlite), a done/archived task, and a
- * task already linked as its parent (a no-op the user should see).
+ * another board (task_links is per-board sqlite), and a task already linked as
+ * its parent (a no-op the user should see). A FINISHED parent is allowed: the
+ * domain refuses to gate a child only when the parent is not yet terminal, so
+ * `done`/`archived` is exactly the prerequisite-satisfied case this timeline is
+ * built around.
  */
 export function dropCandidates(tasks, draggedId, boardSlug) {
   const dragged = tasks.find(t => t.id === draggedId);
@@ -87,7 +90,6 @@ export function dropCandidates(tasks, draggedId, boardSlug) {
     if (task.id === draggedId) reason = 'self';
     else if (below.has(task.id)) reason = 'descendant';
     else if (boardSlug && task.board && task.board !== boardSlug) reason = 'other-board';
-    else if (isTerminal(task.status)) reason = 'terminal';
     else if (alreadyLinked.has(task.id)) reason = 'linked';
     return { task, allowed: reason === null, reason };
   });

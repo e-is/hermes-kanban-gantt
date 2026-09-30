@@ -77,7 +77,6 @@ export function reasonLabel(reason: string, i18n: GanttI18n): string {
     case 'self': return i18n.errSelf
     case 'descendant': return i18n.errCycle
     case 'other-board': return i18n.errOtherBoard
-    case 'terminal': return i18n.errTerminal
     case 'linked': return i18n.reasonLinked
     default: return i18n.errReparent
   }

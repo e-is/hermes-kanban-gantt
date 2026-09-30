@@ -235,6 +235,37 @@ def test_description_is_editable_and_recorded_as_an_edit(client):
     http.patch(f"/tasks/{tid}/description?board={board['slug']}", json={"body": original})
 
 
+def test_a_finished_parent_is_accepted_and_does_not_gate_the_child(client):
+    """Dropping a task under a DONE task is the normal case, not an error.
+
+    A parent is a prerequisite that must be finished before its children, so a
+    terminal parent means the prerequisite is already satisfied: the domain links
+    it and does NOT demote the child. The UI used to refuse the drop outright (a
+    `terminal` reason in dropCandidates), which made the one useful case
+    impossible — reported from the running app.
+    """
+    http, board = client
+    done_id = board["parent"]
+    assert http.get(f"/tasks/{done_id}?board={board['slug']}").json()["task"]["status"] in ("done", "archived")
+
+    fresh = _mk(board["slug"], "[TEST] task dropped under a finished one")
+    conn = kbc.connect(board=TEST_SLUG)
+    try:                                   # ready, so a demotion would be visible
+        conn.execute("UPDATE tasks SET status = 'ready' WHERE id = ?", (fresh,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    r = http.post(f"/tasks/{fresh}/parent?board={board['slug']}",
+                  json={"parentId": done_id, "mode": "add"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ok"] is True
+    assert body["gated"] is False          # the prerequisite was already satisfied
+    assert body["status_after"] == "ready"  # …so the child keeps its status
+    assert done_id in body["parents"]
+
+
 def test_bulk_status_update(client):
     http, board = client
     # child and solo are unblocked / ready -> move both to blocked in bulk

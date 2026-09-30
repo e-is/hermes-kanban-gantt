@@ -306,7 +306,7 @@ test('relationsOf returns full parent and child records', () => {
   assert.deepEqual(relationsOf(GRAPH, 'missing'), { parents: [], children: [] })
 })
 
-test('dropCandidates refuses self, descendants, other boards, terminal and linked', () => {
+test('dropCandidates refuses self, descendants, other boards and linked targets', () => {
   const cands = dropCandidates([
     ...GRAPH,
     { id: 'f', title: 'F', status: 'todo', board: 'one', children: [], parents: [] }
@@ -318,7 +318,10 @@ test('dropCandidates refuses self, descendants, other boards, terminal and linke
   assert.equal(byId.c.reason, 'descendant')
   assert.equal(byId.a.reason, 'linked')       // already b's parent -> no-op
   assert.equal(byId.d.reason, 'other-board')
-  assert.equal(byId.e.reason, 'terminal')
+  // A FINISHED task is a valid parent — the domain gates the child only when the
+  // parent is not yet terminal, so `done` is the prerequisite-satisfied case.
+  assert.equal(byId.e.allowed, true)
+  assert.equal(byId.e.reason, null)
   assert.equal(byId.f.allowed, true)
   assert.equal(byId.f.reason, null)
 })

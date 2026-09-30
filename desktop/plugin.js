@@ -213,7 +213,6 @@ var GANTT_LOCALES = {
     errCycle: "That move would create a cycle.",
     errRunning: "A running task cannot be moved under another task.",
     errOtherBoard: "Both tasks must belong to the same board.",
-    errTerminal: "A finished task cannot take a parent.",
     errReparent: "The move was refused by the kanban board.",
     newTask: "New task",
     newTaskTitle: "Title",
@@ -378,7 +377,6 @@ var GANTT_LOCALES = {
     errCycle: "Ce déplacement créerait un cycle.",
     errRunning: "Une tâche en cours d’exécution ne peut pas être déplacée sous une autre.",
     errOtherBoard: "Les deux tâches doivent appartenir au même board.",
-    errTerminal: "Une tâche terminée ne peut pas recevoir de parent.",
     errReparent: "Le déplacement a été refusé par le board kanban.",
     newTask: "Nouvelle tâche",
     newTaskTitle: "Titre",
@@ -719,10 +717,6 @@ var STATUS_ICON = {
 function statusIcon(status) {
   return STATUS_ICON[status] || "circle-large-outline";
 }
-var TERMINAL_STATUSES = ["done", "archived"];
-function isTerminal(status) {
-  return TERMINAL_STATUSES.indexOf(status) !== -1;
-}
 function descendantsOf(tasks, rootId) {
   const adj = /* @__PURE__ */ new Map();
   for (const t of tasks) adj.set(t.id, t.children || []);
@@ -752,7 +746,6 @@ function dropCandidates(tasks, draggedId, boardSlug) {
     if (task.id === draggedId) reason = "self";
     else if (below.has(task.id)) reason = "descendant";
     else if (boardSlug && task.board && task.board !== boardSlug) reason = "other-board";
-    else if (isTerminal(task.status)) reason = "terminal";
     else if (alreadyLinked.has(task.id)) reason = "linked";
     return { task, allowed: reason === null, reason };
   });
@@ -1368,8 +1361,6 @@ function reasonLabel(reason, i18n) {
       return i18n.errCycle;
     case "other-board":
       return i18n.errOtherBoard;
-    case "terminal":
-      return i18n.errTerminal;
     case "linked":
       return i18n.reasonLinked;
     default:
