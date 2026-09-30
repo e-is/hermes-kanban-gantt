@@ -108,7 +108,8 @@ switch is dispose plus a new subscription. Server-side, all subscribers of a boa
 `BoardStream`, held in a module-global `Hub`: **one DB read per change, fanned out** (R11).
 
 The fan-in view (`board=all`) is **not pushed**. It has no single database to watch: the REST read
-opens every board in turn, and the server refuses the handshake. It stays on the poll. Frames are
+opens every board in turn, and the server would refuse the handshake. The client does not open a
+socket for it (`canPush`) and stays on the poll. Frames are
 not shared between windows: N windows on a board mean N sockets and N sends, but still one read.
 
 ### 3.4 Versions, resync and delivery
@@ -117,6 +118,8 @@ not shared between windows: N windows on a board mean N sockets and N sends, but
   *before* that read, so a write landing in between is seen on the next tick (R8).
 - The client applies **strictly newer** versions; a repeated version is ignored; a jump of more
   than one is a **gap**, and the query is re-validated over REST behind the applied snapshot (R7).
+  A **lower** version is a new stream (next point): it is applied and becomes the new baseline
+  (`classifyFrame` → `restart`).
 - **At-most-once, drop-and-coalesce:** one pending frame per subscriber. A client whose buffer is
   still full after 3 consecutive overruns is closed with **4408** rather than queued (R5). A lost
   frame costs latency, never correctness, because the next frame is the whole truth.
@@ -124,8 +127,9 @@ not shared between windows: N windows on a board mean N sockets and N sends, but
   subscriber leaves, so a quick reconnect continues above what the client already rendered.
 - The counter lives **in the process**. A gateway restart, or a stream dropped after its grace
   window, starts again at 1, which is lower than what a connected client last applied. The SDK
-  reconnects underneath the same `onMessage`, so the client must treat a lower version as a new
-  stream. See `docs/TODO.md` for where this stands.
+  reconnects underneath the same `onMessage`, so the client cannot tell a reconnect happened. It
+  relies on ordering instead: frames on one socket arrive in order and the counter only grows, so
+  a lower version can only come from a new stream.
 - **Writes stay on REST** (R12). The socket is a read/notification channel; after a mutation the
   page still re-reads via `invalidateQueries`.
 
@@ -265,7 +269,7 @@ The code comments cite these IDs. "Status" is the current code; items not met ar
 | R5 | Server coalescing 200–500 ms per board; at most one pending frame per subscriber; close a client whose buffer stays full. | met |
 | R6 | A local 30–60 s tick keeps the "now" cursor and open run arcs moving without pushes. | met |
 | **Ordering / consistency** | | |
-| R7 | Every frame carries a monotonic per-board version; strictly newer frames apply; a gap means resync. | met within one process (§3.4) |
+| R7 | Every frame carries a monotonic per-board version; strictly newer frames apply; a gap means resync. | met; a restart is taken as a new stream (§3.4) |
 | R8 | The first frame after subscribe / reconnect is a full snapshot; the interval is demoted only after one is applied. | met |
 | **Subscription / fan-out** | | |
 | R9 | Subscribe per board slug; a board switch re-subscribes without leaking. `all` / `*` fan-in. | per board met; `all` stays on the poll (§3.3) |

@@ -477,9 +477,12 @@ function classifyFrame(frame, lastVersion) {
   if (frame.type !== "snapshot") return { kind: "ignore" };
   const version = Number(frame.version);
   if (!Number.isFinite(version) || !Array.isArray(frame.tasks)) return { kind: "ignore" };
-  if (lastVersion != null && version <= lastVersion) return { kind: "stale", version };
+  if (lastVersion != null && version === lastVersion) return { kind: "stale", version };
+  if (lastVersion != null && version < lastVersion) {
+    return { kind: "snapshot", version, gap: false, restart: true };
+  }
   const gap = lastVersion != null && version > lastVersion + 1;
-  return { kind: "snapshot", version, gap };
+  return { kind: "snapshot", version, gap, restart: false };
 }
 function frameToQueryData(frame) {
   return {
@@ -488,6 +491,9 @@ function frameToQueryData(frame) {
     tasks: frame.tasks || [],
     labels: frame.labels || []
   };
+}
+function canPush(board) {
+  return !!board && board !== "all" && board !== "*";
 }
 function eventsPath(board) {
   return `/events?board=${encodeURIComponent(board || "")}`;
@@ -582,6 +588,9 @@ function subscribeGantt(socketDoor, opts) {
       if (verdict.kind === "ignore" || verdict.kind === "stale") return;
       armIdle();
       if (verdict.kind === "heartbeat") return;
+      if (verdict.restart) {
+        console.debug(LOG, "version went back " + lastVersion + " → " + verdict.version + ": new server stream");
+      }
       lastVersion = verdict.version;
       attempts = 0;
       live = true;
@@ -2658,7 +2667,7 @@ function KanbanGanttPage() {
   const wsEnabled = useValue2($wsEnabled);
   const [wsState, setWsState] = useState3(WS_STATE.off);
   const socketDoor = getSocket();
-  const wsBoard = wsEnabled && !base && board ? board : null;
+  const wsBoard = wsEnabled && !base && canPush(board) ? board : null;
   const { data, isLoading, isError, error } = useQuery2({
     queryKey: ["kanban-gantt", "gantt", apiBase(), board],
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ""}`),
@@ -2670,7 +2679,7 @@ function KanbanGanttPage() {
   };
   useEffect2(() => {
     if (!wsBoard) {
-      const why = !wsEnabled ? "disabled" : base ? "custom-base" : !socketDoor ? "no-door" : "no-board";
+      const why = !wsEnabled ? "disabled" : base ? "custom-base" : board && !canPush(board) ? "all-boards" : !socketDoor ? "no-door" : "no-board";
       if (getStorage()) {
         getStorage().set("wsOff", why);
         getStorage().set("wsState", WS_STATE.off);

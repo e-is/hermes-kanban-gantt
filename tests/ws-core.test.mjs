@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 
 import {
   WS_BACKOFF_BASE_MS, WS_BACKOFF_MAX_MS, WS_FIRST_FRAME_MS, WS_HEARTBEAT_MS, WS_IDLE_MS,
-  WS_MAX_ATTEMPTS, WS_REARM_MS, WS_STATE, classifyFrame, eventsPath, frameToQueryData, nextBackoff
+  WS_MAX_ATTEMPTS, WS_REARM_MS, WS_STATE, canPush, classifyFrame, eventsPath, frameToQueryData, nextBackoff
 } from '../desktop/ws-core.js'
 
 const snap = (version, extra = {}) => ({
@@ -32,9 +32,21 @@ test('first snapshot is accepted and its shape matches GET /gantt (R1)', () => {
   assert.deepEqual(data.labels, [{ label: 'X', count: 1 }])
 })
 
-test('a same-or-older version is ignored, a gap is flagged for REST resync (R7)', () => {
+test('a lower version is a new server stream: applied, baseline reset (gateway restart)', () => {
+  // The restarted process numbers from 1 again; the SDK reconnects underneath
+  // the same onMessage, so lastVersion is still the old process's.
+  const verdict = classifyFrame(snap(1), 42)
+  assert.equal(verdict.kind, 'snapshot')
+  assert.equal(verdict.version, 1)
+  assert.equal(verdict.restart, true)
+  assert.equal(verdict.gap, false)
+  // …and from the new baseline, the stream proceeds normally.
+  assert.equal(classifyFrame(snap(2), 1).kind, 'snapshot')
+  assert.equal(classifyFrame(snap(2), 1).restart, false)
+})
+
+test('a repeated version is ignored, a gap is flagged for REST resync (R7)', () => {
   assert.equal(classifyFrame(snap(3), 3).kind, 'stale')
-  assert.equal(classifyFrame(snap(2), 3).kind, 'stale')
   const gap = classifyFrame(snap(7), 3)
   assert.equal(gap.kind, 'snapshot')
   assert.equal(gap.gap, true)
@@ -90,4 +102,12 @@ test('the retry budget is finite, but the client re-arms by itself', () => {
 test('the subscribe path pins the board at the handshake (R9/B6)', () => {
   assert.equal(eventsPath('sumaris'), '/events?board=sumaris')
   assert.equal(eventsPath('a/b c'), '/events?board=a%2Fb%20c')
+})
+
+test('the all-boards view stays on the poll: the server has nothing single to watch', () => {
+  assert.equal(canPush('sumaris'), true)
+  assert.equal(canPush('all'), false)
+  assert.equal(canPush('*'), false)
+  assert.equal(canPush(''), false)
+  assert.equal(canPush(null), false)
 })

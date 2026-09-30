@@ -106,6 +106,9 @@ export function subscribeGantt(socketDoor, opts) {
       if (verdict.kind === 'ignore' || verdict.kind === 'stale') return
       armIdle()
       if (verdict.kind === 'heartbeat') return
+      if (verdict.restart) {
+        console.debug(LOG, 'version went back ' + lastVersion + ' → ' + verdict.version + ': new server stream')
+      }
       lastVersion = verdict.version
       attempts = 0
       live = true

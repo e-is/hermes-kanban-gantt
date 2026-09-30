@@ -67,7 +67,7 @@ import {
 import { getStorage, getSocket } from './state'
 import { GANTT_LOCALES, useGanttI18n } from './i18n'
 import { subscribeGantt } from './ws'
-import { WS_STATE } from './core/ws-core'
+import { WS_STATE, canPush } from './core/ws-core'
 import { TitlebarBoardSwitcher } from './ui/TitlebarBoardSwitcher'
 import { NewTaskDialog } from './ui/NewTaskDialog'
 import { TaskRelations } from './ui/TaskRelations'
@@ -1523,7 +1523,7 @@ export function KanbanGanttPage() {
   const wsEnabled = useValue($wsEnabled)
   const [wsState, setWsState] = useState(WS_STATE.off)
   const socketDoor = getSocket()
-  const wsBoard = wsEnabled && !base && board ? board : null
+  const wsBoard = wsEnabled && !base && canPush(board) ? board : null
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['kanban-gantt', 'gantt', apiBase(), board],
@@ -1543,10 +1543,12 @@ export function KanbanGanttPage() {
 
   useEffect(() => {
     if (!wsBoard) {
-      // Three different causes land here, so record which one it is: the flag,
-      // a custom backend base (the socket door only speaks to the plugin's own
-      // namespace), a host without the door, or no board yet.
-      const why = !wsEnabled ? 'disabled' : base ? 'custom-base' : !socketDoor ? 'no-door' : 'no-board'
+      // Several causes land here, so record which one it is: the flag, a custom
+      // backend base (the socket door only speaks to the plugin's own namespace),
+      // the all-boards view (nothing single to watch — it stays on the poll), a
+      // host without the door, or no board yet.
+      const why = !wsEnabled ? 'disabled' : base ? 'custom-base'
+        : board && !canPush(board) ? 'all-boards' : !socketDoor ? 'no-door' : 'no-board'
       if (getStorage()) {
         getStorage().set('wsOff', why)
         getStorage().set('wsState', WS_STATE.off)
@@ -2251,8 +2253,9 @@ const plugin = {
     } catch {
       /* no host.state (standalone server): one scope for the life of the page */
     }
-    // Push is the page's update path (there is no Refresh button), so the client
-    // asks for it unless the user opted out with storage `ws` = '0'. The gateway
+    // Push is the page's update path (Refresh only shows while it is off or
+    // dead), so the client asks for it unless the user opted out with storage
+    // `ws` = '0'. The gateway
     // exposes /events unless it was started with KANBAN_GANTT_WS=0; the poll
     // below stays as the safety net for either case, and for a dead socket.
     //

@@ -7,8 +7,9 @@
  * Contract implemented here (see docs/spikes/websocket-protocol-design.md):
  *   - R1  a snapshot frame is turned back into the EXACT shape `GET /gantt`
  *         returns, so nothing downstream (filters, drawer, renderer) changes.
- *   - R7  frames carry a monotonic per-board `version`: a same-or-older frame is
- *         ignored, a gap means "resync over REST".
+ *   - R7  frames carry a monotonic per-board `version`: a repeated version is
+ *         ignored, a gap means "resync over REST", and a LOWER version means a
+ *         new server stream (restart), so its snapshot resets the baseline.
  *   - R19 the SDK's `ctx.socket` exposes `onMessage` only, so a dead socket is
  *         detected as *silence*: no first frame within WS_FIRST_FRAME_MS, or no
  *         message for WS_IDLE_MS — then the client falls back to polling (R20).
@@ -58,12 +59,22 @@ export function classifyFrame(frame, lastVersion) {
   if (frame.type !== 'snapshot') return { kind: 'ignore' }
   const version = Number(frame.version)
   if (!Number.isFinite(version) || !Array.isArray(frame.tasks)) return { kind: 'ignore' }
-  if (lastVersion != null && version <= lastVersion) return { kind: 'stale', version }
+  if (lastVersion != null && version === lastVersion) return { kind: 'stale', version }
+  // A LOWER version is not an old frame: one socket delivers frames in order and
+  // the server's counter only grows, so it can only come from a new stream — the
+  // gateway restarted, or the board's stream was dropped after its grace window,
+  // and the SDK reconnected underneath us with the same onMessage. Discarding it
+  // (the old `<=` rule) left the page ignoring every push until the new counter
+  // overtook the old one, while heartbeats kept it looking live. It is a full
+  // snapshot, so apply it and restart the baseline from it.
+  if (lastVersion != null && version < lastVersion) {
+    return { kind: 'snapshot', version, gap: false, restart: true }
+  }
   // A gap (one or more frames missed) is not fatal: the frame we just got is a
   // full snapshot (every frame is), so it is applied immediately and the REST
   // query is re-validated behind it (R7).
   const gap = lastVersion != null && version > lastVersion + 1
-  return { kind: 'snapshot', version, gap }
+  return { kind: 'snapshot', version, gap, restart: false }
 }
 
 /** Snapshot frame → the exact object shape `GET /gantt` returns (R1). */
@@ -76,7 +87,14 @@ export function frameToQueryData(frame) {
   }
 }
 
-/** Where the client asks for one board / the fan-in view. */
+/** True when `board` can be pushed. The fan-in view (`all` / `*`) has no single
+ *  database to watch, so the server refuses it; asking anyway only produced a
+ *  failed handshake, a retry and a 5 min re-arm loop — it stays on the poll. */
+export function canPush(board) {
+  return !!board && board !== 'all' && board !== '*'
+}
+
+/** Where the client asks for one board. */
 export function eventsPath(board) {
   return `/events?board=${encodeURIComponent(board || '')}`
 }

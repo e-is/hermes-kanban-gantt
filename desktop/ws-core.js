@@ -27,9 +27,12 @@ function classifyFrame(frame, lastVersion) {
   if (frame.type !== "snapshot") return { kind: "ignore" };
   const version = Number(frame.version);
   if (!Number.isFinite(version) || !Array.isArray(frame.tasks)) return { kind: "ignore" };
-  if (lastVersion != null && version <= lastVersion) return { kind: "stale", version };
+  if (lastVersion != null && version === lastVersion) return { kind: "stale", version };
+  if (lastVersion != null && version < lastVersion) {
+    return { kind: "snapshot", version, gap: false, restart: true };
+  }
   const gap = lastVersion != null && version > lastVersion + 1;
-  return { kind: "snapshot", version, gap };
+  return { kind: "snapshot", version, gap, restart: false };
 }
 function frameToQueryData(frame) {
   return {
@@ -38,6 +41,9 @@ function frameToQueryData(frame) {
     tasks: frame.tasks || [],
     labels: frame.labels || []
   };
+}
+function canPush(board) {
+  return !!board && board !== "all" && board !== "*";
 }
 function eventsPath(board) {
   return `/events?board=${encodeURIComponent(board || "")}`;
@@ -51,6 +57,7 @@ export {
   WS_MAX_ATTEMPTS,
   WS_REARM_MS,
   WS_STATE,
+  canPush,
   classifyFrame,
   eventsPath,
   frameToQueryData,
