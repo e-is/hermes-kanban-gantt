@@ -25,6 +25,7 @@ import {
   profileColor,
   profileColorSoft,
   Streamdown,
+  Textarea,
   useMutation,
   useQuery as useQuery2,
   useQueryClient as useQueryClient2,
@@ -146,6 +147,15 @@ var GANTT_LOCALES = {
     reassigned: "(reassigned)",
     dependencies: "Dependencies:",
     description: "Description",
+    editDescription: "Edit description",
+    cancelEdit: "Cancel edit",
+    save: "Save",
+    noDescription: "No description",
+    unsavedDescTitle: "Description not saved",
+    unsavedDescBody: "You changed this description but have not saved it. Save it before opening another task?",
+    saveAndOpen: "Save and open",
+    keepEditing: "Keep editing",
+    discardChanges: "Discard changes",
     result: "Result",
     latestSummary: "Latest summary",
     runs: (n) => `Runs (${n})`,
@@ -302,6 +312,15 @@ var GANTT_LOCALES = {
     reassigned: "(réaffecté)",
     dependencies: "Dépendances :",
     description: "Description",
+    editDescription: "Modifier la description",
+    cancelEdit: "Annuler la modification",
+    save: "Enregistrer",
+    noDescription: "Aucune description",
+    unsavedDescTitle: "Description non enregistrée",
+    unsavedDescBody: "Vous avez modifié cette description sans l'enregistrer. L'enregistrer avant d'ouvrir une autre tâche ?",
+    saveAndOpen: "Enregistrer et ouvrir",
+    keepEditing: "Continuer l'édition",
+    discardChanges: "Abandonner les modifications",
     result: "Résultat",
     latestSummary: "Dernier résumé",
     runs: (n) => `Exécutions (${n})`,
@@ -2128,28 +2147,32 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const queryClient = useQueryClient2();
   const scrollContainerRef = useRef2(null);
   const prevTaskIdRef = useRef2(null);
+  const [descOwner, setDescOwner] = useState3(null);
+  const [descDraft, setDescDraft] = useState3("");
+  const shownId = descOwner || taskId;
+  const switchResolvedRef = useRef2(false);
   const { data, isLoading, isError, refetch } = useQuery2({
-    queryKey: ["kanban-gantt", "task", apiBase(), board, taskId],
-    queryFn: () => fetchTask(taskId, board),
-    enabled: Boolean(taskId)
+    queryKey: ["kanban-gantt", "task", apiBase(), board, shownId],
+    queryFn: () => fetchTask(shownId, board),
+    enabled: Boolean(shownId)
   });
   useEffect2(() => {
-    if (taskId && prevTaskIdRef.current !== taskId) {
-      prevTaskIdRef.current = taskId;
+    if (shownId && prevTaskIdRef.current !== shownId) {
+      prevTaskIdRef.current = shownId;
       if (scrollContainerRef.current) {
         scrollContainerRef.current.scrollTop = 0;
       }
     }
-  }, [taskId]);
+  }, [shownId]);
   const [comment, setComment] = useState3("");
   const [runsOpen, setRunsOpen] = useState3(false);
   const [commentsOpen, setCommentsOpen] = useState3(true);
   const [showAllComments, setShowAllComments] = useState3(false);
   const [pendingUnlink, setPendingUnlink] = useState3(null);
-  const relations = useMemo2(() => relationsOf(tasks, taskId), [tasks, taskId]);
+  const relations = useMemo2(() => relationsOf(tasks, shownId), [tasks, shownId]);
   const statusMutation = useMutation({
     mutationFn: (payload) => apiFetch(
-      `/tasks/${encodeURIComponent(taskId)}/status${board ? `?board=${encodeURIComponent(board)}` : ""}`,
+      `/tasks/${encodeURIComponent(shownId)}/status${board ? `?board=${encodeURIComponent(board)}` : ""}`,
       { method: "PATCH", body: payload }
     ),
     onSuccess: () => {
@@ -2160,7 +2183,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   });
   const commentMutation = useMutation({
     mutationFn: (body) => apiFetch(
-      `/tasks/${encodeURIComponent(taskId)}/comments${board ? `?board=${encodeURIComponent(board)}` : ""}`,
+      `/tasks/${encodeURIComponent(shownId)}/comments${board ? `?board=${encodeURIComponent(board)}` : ""}`,
       { method: "POST", body }
     ),
     onSuccess: () => {
@@ -2170,7 +2193,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   });
   const assignMutation = useMutation({
     mutationFn: (profile) => apiFetch(
-      `/tasks/${encodeURIComponent(taskId)}/assignee${board ? `?board=${encodeURIComponent(board)}` : ""}`,
+      `/tasks/${encodeURIComponent(shownId)}/assignee${board ? `?board=${encodeURIComponent(board)}` : ""}`,
       { method: "PATCH", body: { profile } }
     ),
     onSuccess: () => {
@@ -2179,8 +2202,27 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     },
     onError: (error) => toast("error", String(error?.message || error))
   });
+  const descriptionMutation = useMutation({
+    mutationFn: (body) => apiFetch(
+      `/tasks/${encodeURIComponent(shownId)}/description${board ? `?board=${encodeURIComponent(board)}` : ""}`,
+      { method: "PATCH", body: { body } }
+    ),
+    onSuccess: () => {
+      void refetch();
+      void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
+      setDescOwner(null);
+    },
+    onError: (error) => toast("error", String(error?.message || error))
+  });
+  const descDirty = Boolean(descOwner) && descDraft !== (data?.task?.body || "");
+  const descSwitchPending = Boolean(descOwner) && descOwner !== taskId && descDirty;
+  useEffect2(() => {
+    if (!descOwner || descOwner === taskId || descDirty) return;
+    setDescOwner(null);
+    setDescDraft("");
+  }, [taskId, descOwner, descDirty]);
   const unlinkMutation = useMutation({
-    mutationFn: (parentId) => removeParent(taskId, parentId, board),
+    mutationFn: (parentId) => removeParent(shownId, parentId, board),
     onSuccess: () => {
       void refetch();
       void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
@@ -2233,8 +2275,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 }),
                 jsx5("span", {
                   className: "text-[11px] font-mono text-(--ui-text-quaternary) hover:text-(--ui-text-secondary) cursor-help select-all",
-                  title: i18n.copyHint(taskId),
-                  children: shortId(taskId)
+                  title: i18n.copyHint(shownId),
+                  children: shortId(shownId)
                 })
               ] }),
               jsxs5("div", { className: "flex items-center gap-1 shrink-0", children: [
@@ -2254,7 +2296,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                     children: [
                       jsx5(DropdownMenuItem3, {
                         className: "flex items-center gap-2 px-3 py-1.5",
-                        onClick: () => void navigator.clipboard.writeText(taskId),
+                        onClick: () => void navigator.clipboard.writeText(shownId),
                         children: i18n.copyTaskId
                       }),
                       jsx5(DropdownMenuItem3, {
@@ -2269,7 +2311,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                       // as a child of this one.
                       jsx5(DropdownMenuItem3, {
                         className: "flex items-center gap-2 px-3 py-1.5",
-                        onClick: () => $newTask.set({ parentId: taskId }),
+                        onClick: () => $newTask.set({ parentId: shownId }),
                         children: jsxs5("span", { className: "flex items-center gap-2", children: [
                           jsx5(Codicon4, { name: "add", size: "0.85rem" }),
                           i18n.createSubtask
@@ -2279,7 +2321,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                       // page's task picker for this task.
                       jsx5(DropdownMenuItem3, {
                         className: "flex items-center gap-2 px-3 py-1.5",
-                        onClick: () => $moveUnderId.set(taskId),
+                        onClick: () => $moveUnderId.set(shownId),
                         children: jsxs5("span", { className: "flex items-center gap-2", children: [
                           jsx5(Codicon4, { name: "move", size: "0.85rem" }),
                           i18n.moveUnder
@@ -2296,7 +2338,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                       jsx5(DropdownMenuItem3, {
                         className: "flex items-center gap-2 px-3 py-1.5 text-red-500 hover:bg-red-500/10",
                         onClick: () => {
-                          if (confirm(i18n.confirmDelete(taskId))) {
+                          if (confirm(i18n.confirmDelete(shownId))) {
                             statusMutation.mutate({ action: "delete" });
                             onClose();
                           }
@@ -2351,14 +2393,50 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
           onOpen: (id) => $openTaskId.set(id),
           openLabel: i18n.openTask
         }),
-        // 1. Description (no max-h clamp)
-        data?.task?.body ? jsxs5("div", { className: "flex flex-col gap-1", children: [
-          jsx5("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.description }),
-          jsx5("div", {
+        // 1. Description (no max-h clamp). Always rendered, so a task that has
+        // no description yet can be given one; the pencil at the right of the
+        // label mirrors the reference kanban drawer's DescriptionSection, and
+        // the editor shows the raw markdown with an explicit Save.
+        jsxs5("div", { className: "flex flex-col gap-1", children: [
+          jsxs5("div", { className: "flex items-center justify-between gap-2", children: [
+            jsx5("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.description }),
+            jsx5(Button4, {
+              variant: "ghost",
+              size: "icon-xs",
+              "aria-label": descOwner ? i18n.cancelEdit : i18n.editDescription,
+              title: descOwner ? i18n.cancelEdit : i18n.editDescription,
+              onClick: () => {
+                if (descOwner) {
+                  setDescOwner(null);
+                  setDescDraft("");
+                } else {
+                  setDescOwner(shownId);
+                  setDescDraft(data?.task?.body || "");
+                }
+              },
+              children: jsx5(Codicon4, { name: descOwner ? "close" : "edit", size: "0.75rem" })
+            })
+          ] }),
+          descOwner ? jsxs5("div", { className: "flex flex-col gap-1.5", children: [
+            jsx5(Textarea, {
+              className: "min-h-24 text-[11px]",
+              value: descDraft,
+              disabled: descriptionMutation.isPending,
+              onChange: (event) => setDescDraft(event.target.value)
+            }),
+            jsx5(Button4, {
+              className: "self-end",
+              size: "xs",
+              variant: "secondary",
+              disabled: descriptionMutation.isPending,
+              onClick: () => descriptionMutation.mutate(descDraft),
+              children: i18n.save
+            })
+          ] }) : data?.task?.body ? jsx5("div", {
             className: "text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
             children: jsx5(Streamdown, { children: data.task.body })
-          })
-        ] }) : null,
+          }) : jsx5("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.noDescription })
+        ] }),
         // 2. Result (no max-h clamp)
         data?.task?.result ? jsxs5("div", { className: "flex flex-col gap-1", children: [
           jsx5("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.result }),
@@ -2518,6 +2596,34 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
         confirmLabel: i18n.removeParentLink(pendingUnlink ? pendingUnlink.title : ""),
         cancelLabel: i18n.cancel,
         destructive: true
+      }),
+      // The description draft guard: the page asked for another task while the
+      // draft was unsaved. Three ways out — write it and open the task, drop it
+      // and open it, or cancel the switch and stay here with the editor as it is.
+      jsx5(ConfirmDialog, {
+        open: descSwitchPending,
+        onClose: () => {
+          const resolved = switchResolvedRef.current;
+          switchResolvedRef.current = false;
+          if (!resolved && descOwner) $openTaskId.set(descOwner);
+        },
+        onConfirm: async () => {
+          await descriptionMutation.mutateAsync(descDraft);
+          switchResolvedRef.current = true;
+          setDescOwner(null);
+          setDescDraft("");
+        },
+        title: i18n.unsavedDescTitle,
+        description: i18n.unsavedDescBody,
+        confirmLabel: i18n.saveAndOpen,
+        cancelLabel: i18n.keepEditing,
+        secondaryAction: {
+          label: i18n.discardChanges,
+          onClick: () => {
+            setDescOwner(null);
+            setDescDraft("");
+          }
+        }
       })
     ]
   });

@@ -36,6 +36,9 @@ sys.path.insert(0, str(PLUGIN_DIR))
 
 # hermes_cli lives in the hermes venv; tests are run with that interpreter.
 from hermes_cli import kanban_db  # noqa: E402
+# Connection opening moved out of kanban_db upstream (hermes_cli.kanban_db_connect);
+# kanban_db no longer exposes connect(), so the sandbox opens through the new module.
+from hermes_cli import kanban_db_connect as kbc  # noqa: E402
 
 import plugin_api  # noqa: E402
 
@@ -70,7 +73,7 @@ def board(tmp_path, monkeypatch):
             stale.unlink(missing_ok=True))
 
     # init_db + create tasks through the domain layer (invariants included)
-    conn = kanban_db.connect(board=TEST_SLUG)
+    conn = kbc.connect(board=TEST_SLUG)
     parent = kanban_db.create_task(conn, title="[TEST] parent task", priority=1,
                                    created_by="test")
     child = kanban_db.create_task(conn, title="[TEST] child task", priority=2,
@@ -189,6 +192,47 @@ def test_task_detail(client):
 def test_task_detail_404(client):
     http, board = client
     assert http.get(f"/tasks/t_missing?board={board['slug']}").status_code == 404
+
+
+def test_description_is_editable_and_recorded_as_an_edit(client):
+    """The drawer's pencil writes through PATCH /tasks/{id}/description.
+
+    The body is replaced verbatim (it is raw markdown — no trimming, no
+    escaping), the write leaves an `edited` event like the reference kanban
+    dashboard's field editor, an empty string clears the description, and a
+    payload that OMITS the field is refused so a malformed client cannot wipe a
+    body by accident.
+    """
+    http, board = client
+    tid = board["child"]
+    original = http.get(f"/tasks/{tid}?board={board['slug']}").json()["task"]["body"]
+    new_body = "=== Mission ===\n1. Rebase `features/tu-coverage` sur develop.\n2. Review finale architecte.\n"
+
+    r = http.patch(f"/tasks/{tid}/description?board={board['slug']}", json={"body": new_body})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert http.get(f"/tasks/{tid}?board={board['slug']}").json()["task"]["body"] == new_body
+
+    conn = kbc.connect(board=TEST_SLUG)
+    try:
+        kind = conn.execute(
+            "SELECT kind FROM task_events WHERE task_id = ? ORDER BY rowid DESC LIMIT 1", (tid,)
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert kind == "edited"
+
+    # An empty description is a valid value (clears it)…
+    assert http.patch(f"/tasks/{tid}/description?board={board['slug']}", json={"body": ""}).status_code == 200
+    assert http.get(f"/tasks/{tid}?board={board['slug']}").json()["task"]["body"] in ("", None)
+
+    # …but omitting the field is refused, and the cleared value stays cleared.
+    assert http.patch(f"/tasks/{tid}/description?board={board['slug']}", json={}).status_code == 400
+
+    # Unknown task → 404, never a silent upsert.
+    assert http.patch(f"/tasks/t_missing/description?board={board['slug']}", json={"body": "x"}).status_code == 404
+
+    # Restore, so a later test in this file sees the fixture's body again.
+    http.patch(f"/tasks/{tid}/description?board={board['slug']}", json={"body": original})
 
 
 def test_bulk_status_update(client):
@@ -396,7 +440,7 @@ def test_create_task_rejects_empty_title(client):
 
 def test_create_task_rejects_foreign_parent(client):
     http, board = client
-    other = kanban_db.connect(board="kanban-gantt-test-other")
+    other = kbc.connect(board="kanban-gantt-test-other")
     try:
         foreign = kanban_db.create_task(other, title="[TEST] other board", created_by="test")
     finally:
@@ -410,7 +454,7 @@ def test_create_task_rejects_foreign_parent(client):
 # ---------------------------------------------------------------------------
 
 def _mk(slug, title, **kw):
-    conn = kanban_db.connect(board=slug)
+    conn = kbc.connect(board=slug)
     try:
         return kanban_db.create_task(conn, title=title, created_by="test", **kw)
     finally:
@@ -450,7 +494,7 @@ def test_parent_link_gates_ready_child(client):
     """A `ready` child re-parented under a non-terminal parent goes back to todo."""
     http, board = client
     # `solo` is a fresh todo task -> non-terminal, so linking must gate.
-    conn = kanban_db.connect(board=board["slug"])
+    conn = kbc.connect(board=board["slug"])
     conn.execute("UPDATE tasks SET status = 'ready' WHERE id = ?", (board["child"],))
     conn.commit()
     conn.close()
@@ -485,7 +529,7 @@ def test_parent_link_running_child_refused(client):
     # create_task refuses to leave a task 'running' without a run, so force the
     # state the domain's guard is about: status + a current run.
     running = _mk(board["slug"], "[TEST] running task")
-    conn = kanban_db.connect(board=board["slug"])
+    conn = kbc.connect(board=board["slug"])
     conn.execute("UPDATE tasks SET status = 'running', current_run_id = 1 WHERE id = ?",
                  (running,))
     conn.commit()
