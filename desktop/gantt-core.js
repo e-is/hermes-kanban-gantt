@@ -230,6 +230,23 @@ function computeDomain(visible, minBarSec) {
   hi += min;
   return { min: lo, max: hi };
 }
+function lastActivity(task) {
+  const stamps = [task.completed_at, task.run_ended_at, task.run_started_at, task.started_at, task.created_at];
+  for (const run of task.runs || []) stamps.push(run.ended_at, run.started_at);
+  const valid = stamps.filter((s) => typeof s === "number" && s > 0);
+  return valid.length ? Math.max(...valid) : null;
+}
+function relativeAge(ts, now) {
+  if (ts == null) return "";
+  const s = Math.max(0, now - ts);
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < DAY) return `${Math.floor(s / 3600)}h`;
+  if (s < 14 * DAY) return `${Math.floor(s / DAY)}d`;
+  if (s < 60 * DAY) return `${Math.floor(s / (7 * DAY))}w`;
+  if (s < 365 * DAY) return `${Math.floor(s / (30 * DAY))}mo`;
+  return `${Math.floor(s / (365 * DAY))}y`;
+}
 function tickUnit(span) {
   return span <= 120 * DAY ? "day" : span <= 730 * DAY ? "week" : "month";
 }
@@ -255,8 +272,10 @@ export {
   isDescendant,
   isMissingBoardError,
   isTerminal,
+  lastActivity,
   matchesSearch,
   relationsOf,
+  relativeAge,
   resolveBoardSlug,
   shortId,
   statusIcon,

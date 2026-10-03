@@ -88,7 +88,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, lastActivity, relativeAge, DAY, MIN_BAR } from './core/gantt-core.ts'
 
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -337,7 +337,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
   })
 }
 
-function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
+function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, listMode, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
   const i18n = useGanttI18n()
   const labelW = useValue($labelW)
   const bars = taskBars(task, now)
@@ -383,7 +383,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             : 'bg-transparent',
       'hover:bg-(--ui-accent)/8'
     ),
-    style: { gridTemplateColumns: `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
+    style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
     onClick: e => {
       // If clicking inside the checkbox itself, don't trigger row click handler again
       if (e.target.tagName === 'INPUT' && e.target.type === 'checkbox') return
@@ -403,7 +403,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
         style: {
           paddingLeft: `${depth * 12 + 8}px`,
           paddingRight: '8px',
-          width: `${labelW}px`,
+          width: listMode ? undefined : `${labelW}px`,
           // Opaque fill spanning the full row height, tinted like the row
           // itself so the selection/check highlight stays visible through it.
           backgroundColor: isSelected
@@ -487,7 +487,8 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             ]
           }),
           // Assignee at a glance: avatar when assigned, a faint dashed ring when not.
-          task.assignee
+          // (The list view has its own assignee column.)
+          listMode ? null : task.assignee
             ? jsx('span', {
                 className: 'shrink-0 inline-flex',
                 title: `${i18n.assignLabel} ${task.assignee}`,
@@ -501,7 +502,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               })
         ]
       }),
-      jsxs('div', {
+      listMode ? jsx(ListCells, { task, now, statusTitle, dotColor }) : jsxs('div', {
         className: 'relative overflow-hidden',
         style: { height: `${ROW_H}px` },
         children: bars.length > 0
@@ -510,6 +511,37 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
       })
     ]
   })
+}
+
+/** List view columns: task | assignee | status | last activity. */
+const LIST_COLUMNS = 'minmax(0, 1fr) 150px 96px 64px'
+
+/** The three meta cells a list row shows instead of the timeline bars. */
+function ListCells({ task, now, statusTitle, dotColor }) {
+  const i18n = useGanttI18n()
+  const last = lastActivity(task)
+  return [
+    jsx('div', {
+      key: 'assignee',
+      className: 'flex items-center gap-1.5 min-w-0 px-2 text-[11px]',
+      children: task.assignee
+        ? [jsx(ProfileAvatar, { key: 'a', name: task.assignee, size: '0.95rem' }),
+           jsx('span', { key: 'n', className: 'truncate', children: task.assignee })]
+        : jsx('span', { className: 'text-(--ui-text-quaternary) italic', children: i18n.unassigned })
+    }),
+    jsx('div', {
+      key: 'status',
+      className: 'px-2 text-[11px] truncate',
+      style: { color: dotColor },
+      children: statusTitle
+    }),
+    jsx('div', {
+      key: 'age',
+      className: 'px-2 text-[10px] tabular-nums text-right text-(--ui-text-tertiary)',
+      title: last ? new Date(last * 1000).toLocaleString() : '',
+      children: relativeAge(last, now)
+    })
+  ]
 }
 
 function ProfileAvatar({ name, size = '1rem' }) {
@@ -751,6 +783,27 @@ function AssigneeBadge({ assignee, assignees = [], onAssign, disabled }) {
       ]
     })
   ] })
+}
+
+function ViewToggle({ value, onChange }) {
+  const i18n = useGanttI18n()
+  const item = (mode, icon, label) => jsx('button', {
+    type: 'button',
+    onClick: () => onChange(mode),
+    title: label,
+    'aria-label': label,
+    'aria-pressed': value === mode,
+    className: cn(
+      'inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded cursor-pointer',
+      value === mode ? 'bg-(--ui-accent)/15 text-(--ui-accent) font-medium' : 'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)'
+    ),
+    children: [jsx(Codicon, { key: 'i', name: icon, size: '0.8rem' }), jsx('span', { key: 'l', children: label })]
+  }, mode)
+  return jsxs('span', {
+    className: 'inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5',
+    role: 'group',
+    children: [item('list', 'list-flat', i18n.viewList), item('timeline', 'graph-line', i18n.viewTimeline)]
+  })
 }
 
 function SelectionBar({
@@ -1605,6 +1658,17 @@ export function KanbanGanttPage() {
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [bulkAssignee, setBulkAssignee] = useState('')
   const lastCheckedIdRef = useRef(null)
+  // 'timeline' (default) or 'list'. The list drops the bars and gives the
+  // width to the columns: task, assignee, status, last activity.
+  const [viewMode, setViewMode] = useState(() => {
+    const saved = getStorage() ? getStorage().get('viewMode', null) : null
+    return saved === 'list' ? 'list' : 'timeline'
+  })
+  const listMode = viewMode === 'list'
+  const handleViewMode = mode => {
+    setViewMode(mode)
+    if (getStorage()) getStorage().set('viewMode', mode)
+  }
   const [zoom, setZoom] = useState(() => {
     const saved = getStorage() ? getStorage().get('zoom', null) : null
     return saved != null && Number.isFinite(Number(saved)) ? Number(saved) : 1
@@ -1939,6 +2003,7 @@ export function KanbanGanttPage() {
     pxPerSec,
     min: domain.min,
     timelineW,
+    listMode,
     onOpen: id => $openTaskId.set(id),
     isSelected: openTaskId === row.task.id,
     isChecked: selectedIds.has(row.task.id),
@@ -2052,7 +2117,8 @@ export function KanbanGanttPage() {
           jsxs('div', {
             className: 'inline-flex items-center gap-3',
             children: [
-              jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
+              jsx(ViewToggle, { value: viewMode, onChange: handleViewMode }),
+              listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {
                   type: 'range',
                   min: String(ZOOM_MIN),
@@ -2126,9 +2192,9 @@ export function KanbanGanttPage() {
                 className: 'overflow-auto flex-1 min-h-0 relative',
                 children: [
                   jsxs('div', {
-                    className: 'grid w-max sticky top-0 z-20 bg-(--ui-bg-chrome)',
+                    className: cn('grid sticky top-0 z-20 bg-(--ui-bg-chrome)', listMode ? 'w-full' : 'w-max'),
                     'data-glass-opaque': true,
-                    style: { gridTemplateColumns: `${labelW}px ${timelineW}px` },
+                    style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px` },
                     children: [
                       jsxs('div', {
                         className: 'sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center px-2 gap-1.5',
@@ -2152,7 +2218,7 @@ export function KanbanGanttPage() {
                             'aria-label': i18n.selectAll
                           }),
                           jsx('span', { className: 'text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none', children: i18n.tasksColumn }),
-                          jsx(ResizeHandle, {
+                          listMode ? null : jsx(ResizeHandle, {
                             get: () => $labelW.get(),
                             set: w => $labelW.set(w),
                             min: LABEL_W_MIN,
@@ -2162,13 +2228,20 @@ export function KanbanGanttPage() {
                           })
                         ]
                       }),
-                      jsx(Ruler, { min: domain.min, max: domain.max, pxPerSec })
+                      ...(listMode
+                        ? [i18n.assigneeColumn, i18n.statusColumn, i18n.lastActivityColumn].map((h, i) => jsx('div', {
+                            key: h,
+                            className: cn('flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none', i === 2 && 'justify-end'),
+                            style: { height: '24px' },
+                            children: h
+                          }))
+                        : [jsx(Ruler, { key: 'ruler', min: domain.min, max: domain.max, pxPerSec })])
                     ]
                   }),
                   jsxs('div', {
-                    className: 'relative flex flex-col w-max',
+                    className: cn('relative flex flex-col', listMode ? 'w-full' : 'w-max'),
                     children: [
-                      jsx('div', {
+                      listMode ? null : jsx('div', {
                         className: 'absolute top-0 bottom-0 pointer-events-none z-0',
                         style: { left: `${labelW}px`, width: `${timelineW}px` },
                         children: jsx(WeekendBands, { min: domain.min, max: domain.max, pxPerSec })
