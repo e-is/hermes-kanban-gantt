@@ -171,6 +171,7 @@ var GANTT_LOCALES = {
     copyTitle: "Copy title",
     moveToShort: "Move to",
     unassignAction: "Unassign",
+    bulkFailed: (n, why) => `${n} task${n > 1 ? "s" : ""} not updated: ${why}`,
     delete: "Delete",
     confirmDelete: (id) => `Permanently delete task ${id}?`,
     taskDetail: "Task detail",
@@ -335,6 +336,7 @@ var GANTT_LOCALES = {
     copyTitle: "Copier le titre",
     moveToShort: "Déplacer",
     unassignAction: "Désassigner",
+    bulkFailed: (n, why) => `${n} tâche${n > 1 ? "s" : ""} non mise${n > 1 ? "s" : ""} à jour : ${why}`,
     delete: "Supprimer",
     confirmDelete: (id) => `Supprimer définitivement la tâche ${id} ?`,
     taskDetail: "Détail de la tâche",
@@ -1723,6 +1725,17 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               task.status === "running" ? jsx5("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }) : null,
               name
             ]
+          }),
+          // Assignee at a glance: avatar when assigned, a faint dashed ring when not.
+          task.assignee ? jsx5("span", {
+            className: "shrink-0 inline-flex",
+            title: `${i18n.assignLabel} ${task.assignee}`,
+            children: jsx5(ProfileAvatar, { name: task.assignee, size: "0.95rem" })
+          }) : jsx5("span", {
+            className: "shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60",
+            style: { width: "0.95rem", height: "0.95rem" },
+            title: i18n.unassigned,
+            "aria-label": i18n.unassigned
           })
         ]
       }),
@@ -2868,16 +2881,29 @@ function KanbanGanttPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedIds, derived]);
   const bulkMutation = useMutation({
-    mutationFn: ({ action, ids }) => apiFetch(`/tasks/bulk${board ? `?board=${encodeURIComponent(board)}` : ""}`, {
+    // `assignee` must travel: the backend switches to mass-assign on its
+    // presence ('' = unassign). Dropping it sent a bare action 'assign', which
+    // the backend refused as unknown, so a batch assign never stored anything.
+    mutationFn: ({ action, ids, assignee }) => apiFetch(`/tasks/bulk${board ? `?board=${encodeURIComponent(board)}` : ""}`, {
       method: "POST",
-      body: { ids, action }
+      body: assignee !== void 0 ? { ids, assignee } : { ids, action }
     }),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      const failed = (response?.results || []).filter((r) => !r.ok);
+      if (failed.length > 0) {
+        toast("error", i18n.bulkFailed(failed.length, failed[0]?.error || failed[0]?.id));
+      }
       setSelectedIds(/* @__PURE__ */ new Set());
       setBulkAssignee("");
       void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
-    }
+    },
+    onError: (error2) => toast("error", String(error2?.message || error2))
   });
+  const assigneeChoices = useMemo2(() => {
+    const fromBoard = derived && derived.allAssignees || [];
+    const fromProfiles = profilesData && profilesData.profiles || [];
+    return Array.from(/* @__PURE__ */ new Set([...fromProfiles, ...fromBoard])).sort();
+  }, [derived, profilesData]);
   const handleZoomChange = (val) => {
     setZoom(val);
     if (getStorage()) getStorage().set("zoom", val);
@@ -3125,7 +3151,7 @@ function KanbanGanttPage() {
                     bulkMutation.mutate({ action: "delete", ids: [...selectedIds] });
                   }
                 },
-                assignees: derived.allAssignees || [],
+                assignees: assigneeChoices,
                 busy: bulkMutation.isPending
               }),
               jsxs5("div", {
@@ -3195,7 +3221,7 @@ function KanbanGanttPage() {
       openTaskId ? jsx5(TaskDrawer, {
         taskId: openTaskId,
         board,
-        assignees: derived.allAssignees || [],
+        assignees: assigneeChoices,
         // Unfiltered snapshot: a parent hidden by the current filter must
         // still be listed in the drawer's relations.
         tasks: data?.tasks || [],
@@ -3211,11 +3237,7 @@ function KanbanGanttPage() {
       jsx5(NewTaskDialog, {
         open: Boolean(newTask),
         boardSlug: board && board !== "all" && board !== "*" ? board : void 0,
-        assignees: (() => {
-          const fromBoard = derived && derived.allAssignees || [];
-          const fromProfiles = profilesData && profilesData.profiles || [];
-          return Array.from(/* @__PURE__ */ new Set([...fromProfiles, ...fromBoard])).sort();
-        })(),
+        assignees: assigneeChoices,
         tasks: data && data.tasks || [],
         projects: projectsData && projectsData.projects || [],
         defaultParentId: newTask ? newTask.parentId : "",
