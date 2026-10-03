@@ -180,6 +180,13 @@ var GANTT_LOCALES = {
     selectAll: "Select all",
     selectTask: (name) => `Select ${name}`,
     tasksColumn: "Tasks",
+    assigneeColumn: "Assignee",
+    statusColumn: "Status",
+    lastActivityColumn: "Updated",
+    viewList: "List",
+    viewTimeline: "Timeline",
+    // Suffixes for the list's "updated" cell, concatenated to the number.
+    relativeUnits: { now: "now", m: "m", h: "h", d: "d", w: "w", mo: "mo", y: "y" },
     clickForDetail: "click for details",
     legendShow: (label) => `Click to show ${label}`,
     legendHide: (label) => `Click to hide ${label}`,
@@ -362,6 +369,13 @@ var GANTT_LOCALES = {
     selectAll: "Tout sélectionner",
     selectTask: (name) => `Sélectionner ${name}`,
     tasksColumn: "Tâches",
+    assigneeColumn: "Assigné à",
+    statusColumn: "Statut",
+    lastActivityColumn: "Mis à jour",
+    viewList: "Liste",
+    viewTimeline: "Chronologie",
+    // Suffixes concaténés au nombre (« 5min », « 2 j »… l'espace est inclus).
+    relativeUnits: { now: "à l'instant", m: "min", h: "h", d: " j", w: " sem", mo: " mois", y: " a" },
     clickForDetail: "cliquer pour le détail",
     legendShow: (label) => `Cliquer pour réafficher ${label}`,
     legendHide: (label) => `Cliquer pour masquer ${label}`,
@@ -1026,6 +1040,24 @@ function computeDomain(visible, minBarSec) {
   }
   hi += min;
   return { min: lo, max: hi };
+}
+function lastActivity(task) {
+  const stamps = [task.completed_at, task.run_ended_at, task.run_started_at, task.started_at, task.created_at];
+  for (const run of task.runs || []) stamps.push(run.ended_at, run.started_at);
+  const valid = stamps.filter((s) => typeof s === "number" && s > 0);
+  return valid.length ? Math.max(...valid) : null;
+}
+function relativeAge(ts, now, units = {}) {
+  const u = { now: "now", m: "m", h: "h", d: "d", w: "w", mo: "mo", y: "y", ...units };
+  if (ts == null) return "";
+  const s = Math.max(0, now - ts);
+  if (s < 60) return u.now;
+  if (s < 3600) return `${Math.floor(s / 60)}${u.m}`;
+  if (s < DAY) return `${Math.floor(s / 3600)}${u.h}`;
+  if (s < 14 * DAY) return `${Math.floor(s / DAY)}${u.d}`;
+  if (s < 60 * DAY) return `${Math.floor(s / (7 * DAY))}${u.w}`;
+  if (s < 365 * DAY) return `${Math.floor(s / (30 * DAY))}${u.mo}`;
+  return `${Math.floor(s / (365 * DAY))}${u.y}`;
 }
 function tickUnit(span) {
   return span <= 120 * DAY ? "day" : span <= 730 * DAY ? "week" : "month";
@@ -1793,7 +1825,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
     ] })
   });
 }
-function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn, hasChildren, collapsed, secondary, secondaryOnly, continuation = [], lastSibling, hiddenCount = 0, matched, descendantOfSelected, onToggleFold }) {
+function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn, hasChildren, collapsed, secondary, secondaryOnly, continuation = [], lastSibling, hiddenCount = 0, matched, descendantOfSelected, onToggleFold, listMode }) {
   const i18n = useGanttI18n();
   const labelW = useValue2($labelW);
   const bars = taskBars(task, now);
@@ -1873,7 +1905,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
       isSelected ? "bg-(--ui-accent)/12 font-semibold" : isChecked ? "bg-(--ui-accent)/6" : descendantOfSelected ? "bg-(--ui-accent)/7" : isEven ? "bg-black/[0.02] dark:bg-white/[0.02]" : "bg-transparent",
       "hover:bg-(--ui-accent)/8"
     ),
-    style: { gridTemplateColumns: `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
+    style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
     onClick: (e) => {
       if (e.target.tagName === "INPUT" && e.target.type === "checkbox") return;
       if (e.shiftKey || e.ctrlKey || e.metaKey) {
@@ -1892,7 +1924,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
         style: {
           paddingLeft: `${marks.indent}px`,
           paddingRight: "8px",
-          width: `${labelW}px`,
+          width: listMode ? void 0 : `${labelW}px`,
           // Opaque fill spanning the full row height, tinted like the row
           // itself so the selection/check highlight stays visible through it.
           backgroundColor: isSelected ? "color-mix(in srgb, var(--ui-accent) 12%, var(--ui-bg-chrome))" : isChecked ? "color-mix(in srgb, var(--ui-accent) 6%, var(--ui-bg-chrome))" : descendantOfSelected ? "color-mix(in srgb, var(--ui-accent) 7%, var(--ui-bg-chrome))" : isEven ? "color-mix(in srgb, var(--ui-text-primary) 2%, var(--ui-bg-chrome))" : "var(--ui-bg-chrome)"
@@ -1965,11 +1997,12 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             ]
           }),
           // Assignee at a glance: avatar when assigned, a faint dashed ring when not.
-          task.assignee ? jsx5("span", {
+          // (The list view has its own assignee column.)
+          listMode ? null : task.assignee ? jsx6("span", {
             className: "shrink-0 inline-flex",
             title: `${i18n.assignLabel} ${task.assignee}`,
-            children: jsx5(ProfileAvatar, { name: task.assignee, size: "0.95rem" })
-          }) : jsx5("span", {
+            children: jsx6(ProfileAvatar, { name: task.assignee, size: "0.95rem" })
+          }) : jsx6("span", {
             className: "shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60",
             style: { width: "0.95rem", height: "0.95rem" },
             title: i18n.unassigned,
@@ -1977,13 +2010,40 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
           })
         ]
       }),
-      jsxs6("div", {
+      listMode ? jsx6(ListCells, { task, now, statusTitle, dotColor }) : jsxs6("div", {
         className: "relative overflow-hidden",
         style: { height: `${ROW_H}px` },
         children: bars.length > 0 ? bars.map((b, idx) => jsx6(Bar, { key: b.runId || idx, task, bar: b, pxPerSec, min, onOpen })) : [jsx6("div", { key: "empty", className: "text-(--ui-text-quaternary) text-[10px]", children: "—" })]
       })
     ]
   });
+}
+var LIST_COLUMNS = "minmax(0, 1fr) 150px 96px 64px";
+function ListCells({ task, now, statusTitle, dotColor }) {
+  const i18n = useGanttI18n();
+  const last = lastActivity(task);
+  return [
+    jsx6("div", {
+      key: "assignee",
+      className: "flex items-center gap-1.5 min-w-0 px-2 text-[11px]",
+      children: task.assignee ? [
+        jsx6(ProfileAvatar, { key: "a", name: task.assignee, size: "0.95rem" }),
+        jsx6("span", { key: "n", className: "truncate", children: task.assignee })
+      ] : jsx6("span", { className: "text-(--ui-text-quaternary) italic", children: i18n.unassigned })
+    }),
+    jsx6("div", {
+      key: "status",
+      className: "px-2 text-[11px] truncate",
+      style: { color: dotColor },
+      children: statusTitle
+    }),
+    jsx6("div", {
+      key: "age",
+      className: "px-2 text-[10px] tabular-nums text-right text-(--ui-text-tertiary)",
+      title: last ? new Date(last * 1e3).toLocaleString() : "",
+      children: relativeAge(last, now, i18n.relativeUnits)
+    })
+  ];
 }
 function ProfileAvatar({ name, size = "1rem" }) {
   const color = profileColor(name);
@@ -2209,6 +2269,26 @@ function AssigneeBadge({ assignee, assignees = [], onAssign, disabled }) {
       ]
     })
   ] });
+}
+function ViewToggle({ value, onChange }) {
+  const i18n = useGanttI18n();
+  const item = (mode, icon, label) => jsx6("button", {
+    type: "button",
+    onClick: () => onChange(mode),
+    title: label,
+    "aria-label": label,
+    "aria-pressed": value === mode,
+    className: cn3(
+      "inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded cursor-pointer",
+      value === mode ? "bg-(--ui-accent)/15 text-(--ui-accent) font-medium" : "text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)"
+    ),
+    children: [jsx6(Codicon5, { key: "i", name: icon, size: "0.8rem" }), jsx6("span", { key: "l", children: label })]
+  }, mode);
+  return jsxs6("span", {
+    className: "inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5",
+    role: "group",
+    children: [item("list", "list-flat", i18n.viewList), item("timeline", "graph-line", i18n.viewTimeline)]
+  });
 }
 function SelectionBar({
   selected,
@@ -3029,6 +3109,15 @@ function KanbanGanttPage() {
   const [selectedIds, setSelectedIds] = useState4(() => /* @__PURE__ */ new Set());
   const [bulkAssignee, setBulkAssignee] = useState4("");
   const lastCheckedIdRef = useRef2(null);
+  const [viewMode, setViewMode] = useState4(() => {
+    const saved = getStorage() ? getStorage().get("viewMode", null) : null;
+    return saved === "list" ? "list" : "timeline";
+  });
+  const listMode = viewMode === "list";
+  const handleViewMode = (mode) => {
+    setViewMode(mode);
+    if (getStorage()) getStorage().set("viewMode", mode);
+  };
   const [zoom, setZoom] = useState4(() => {
     const saved = getStorage() ? getStorage().get("zoom", null) : null;
     return saved != null && Number.isFinite(Number(saved)) ? Number(saved) : 1;
@@ -3310,6 +3399,7 @@ function KanbanGanttPage() {
     pxPerSec,
     min: domain.min,
     timelineW,
+    listMode,
     onOpen: (id) => $openTaskId.set(id),
     isSelected: openTaskId === row.task.id,
     isChecked: selectedIds.has(row.task.id),
@@ -3411,7 +3501,8 @@ function KanbanGanttPage() {
               jsxs6("div", {
                 className: "inline-flex items-center gap-3",
                 children: [
-                  jsxs6("span", { className: "inline-flex items-center gap-1.5", children: [
+                  jsx6(ViewToggle, { value: viewMode, onChange: handleViewMode }),
+                  listMode ? null : jsxs6("span", { className: "inline-flex items-center gap-1.5", children: [
                     jsx6("input", {
                       type: "range",
                       min: String(ZOOM_MIN),
@@ -3480,9 +3571,9 @@ function KanbanGanttPage() {
                 className: "overflow-auto flex-1 min-h-0 relative",
                 children: [
                   jsxs6("div", {
-                    className: "grid w-max sticky top-0 z-20 bg-(--ui-bg-chrome)",
+                    className: cn3("grid sticky top-0 z-20 bg-(--ui-bg-chrome)", listMode ? "w-full" : "w-max"),
                     "data-glass-opaque": true,
-                    style: { gridTemplateColumns: `${labelW}px ${timelineW}px` },
+                    style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px` },
                     children: [
                       jsxs6("div", {
                         className: "sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center pr-2 gap-1.5",
@@ -3533,7 +3624,7 @@ function KanbanGanttPage() {
                             "aria-label": i18n.selectAll
                           }),
                           jsx6("span", { className: "text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", children: i18n.tasksColumn }),
-                          jsx6(ResizeHandle, {
+                          listMode ? null : jsx6(ResizeHandle, {
                             get: () => $labelW.get(),
                             set: (w) => $labelW.set(w),
                             min: LABEL_W_MIN,
@@ -3543,13 +3634,18 @@ function KanbanGanttPage() {
                           })
                         ]
                       }),
-                      jsx6(Ruler, { min: domain.min, max: domain.max, pxPerSec })
+                      ...listMode ? [i18n.assigneeColumn, i18n.statusColumn, i18n.lastActivityColumn].map((h, i) => jsx6("div", {
+                        key: h,
+                        className: cn3("flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", i === 2 && "justify-end"),
+                        style: { height: "24px" },
+                        children: h
+                      })) : [jsx6(Ruler, { key: "ruler", min: domain.min, max: domain.max, pxPerSec })]
                     ]
                   }),
                   jsxs6("div", {
-                    className: "relative flex flex-col w-max",
+                    className: cn3("relative flex flex-col", listMode ? "w-full" : "w-max"),
                     children: [
-                      jsx6("div", {
+                      listMode ? null : jsx6("div", {
                         className: "absolute top-0 bottom-0 pointer-events-none z-0",
                         style: { left: `${labelW}px`, width: `${timelineW}px` },
                         children: jsx6(WeekendBands, { min: domain.min, max: domain.max, pxPerSec })
