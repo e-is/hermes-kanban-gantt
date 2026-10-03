@@ -171,6 +171,7 @@ var GANTT_LOCALES = {
     copyTitle: "Copy title",
     moveToShort: "Move to",
     unassignAction: "Unassign",
+    bulkFailed: (n, why) => `${n} task${n > 1 ? "s" : ""} not updated: ${why}`,
     delete: "Delete",
     confirmDelete: (id) => `Permanently delete task ${id}?`,
     taskDetail: "Task detail",
@@ -179,6 +180,11 @@ var GANTT_LOCALES = {
     selectAll: "Select all",
     selectTask: (name) => `Select ${name}`,
     tasksColumn: "Tasks",
+    assigneeColumn: "Assignee",
+    statusColumn: "Status",
+    lastActivityColumn: "Updated",
+    viewList: "List",
+    viewTimeline: "Timeline",
     clickForDetail: "click for details",
     legendShow: (label) => `Click to show ${label}`,
     legendHide: (label) => `Click to hide ${label}`,
@@ -335,6 +341,7 @@ var GANTT_LOCALES = {
     copyTitle: "Copier le titre",
     moveToShort: "Déplacer",
     unassignAction: "Désassigner",
+    bulkFailed: (n, why) => `${n} tâche${n > 1 ? "s" : ""} non mise${n > 1 ? "s" : ""} à jour : ${why}`,
     delete: "Supprimer",
     confirmDelete: (id) => `Supprimer définitivement la tâche ${id} ?`,
     taskDetail: "Détail de la tâche",
@@ -343,6 +350,11 @@ var GANTT_LOCALES = {
     selectAll: "Tout sélectionner",
     selectTask: (name) => `Sélectionner ${name}`,
     tasksColumn: "Tâches",
+    assigneeColumn: "Assigné",
+    statusColumn: "Statut",
+    lastActivityColumn: "Mis à jour",
+    viewList: "Liste",
+    viewTimeline: "Chronologie",
     clickForDetail: "cliquer pour le détail",
     legendShow: (label) => `Cliquer pour réafficher ${label}`,
     legendHide: (label) => `Cliquer pour masquer ${label}`,
@@ -910,6 +922,23 @@ function computeDomain(visible, minBarSec) {
   }
   hi += min;
   return { min: lo, max: hi };
+}
+function lastActivity(task) {
+  const stamps = [task.completed_at, task.run_ended_at, task.run_started_at, task.started_at, task.created_at];
+  for (const run of task.runs || []) stamps.push(run.ended_at, run.started_at);
+  const valid = stamps.filter((s) => typeof s === "number" && s > 0);
+  return valid.length ? Math.max(...valid) : null;
+}
+function relativeAge(ts, now) {
+  if (ts == null) return "";
+  const s = Math.max(0, now - ts);
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < DAY) return `${Math.floor(s / 3600)}h`;
+  if (s < 14 * DAY) return `${Math.floor(s / DAY)}d`;
+  if (s < 60 * DAY) return `${Math.floor(s / (7 * DAY))}w`;
+  if (s < 365 * DAY) return `${Math.floor(s / (30 * DAY))}mo`;
+  return `${Math.floor(s / (365 * DAY))}y`;
 }
 function tickUnit(span) {
   return span <= 120 * DAY ? "day" : span <= 730 * DAY ? "week" : "month";
@@ -1604,7 +1633,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
     ] })
   });
 }
-function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
+function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, listMode, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
   const i18n = useGanttI18n();
   const labelW = useValue2($labelW);
   const bars = taskBars(task, now);
@@ -1634,7 +1663,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
       isSelected ? "bg-(--ui-accent)/12 font-semibold" : isChecked ? "bg-(--ui-accent)/6" : isEven ? "bg-black/[0.02] dark:bg-white/[0.02]" : "bg-transparent",
       "hover:bg-(--ui-accent)/8"
     ),
-    style: { gridTemplateColumns: `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
+    style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
     onClick: (e) => {
       if (e.target.tagName === "INPUT" && e.target.type === "checkbox") return;
       if (e.shiftKey || e.ctrlKey || e.metaKey) {
@@ -1653,7 +1682,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
         style: {
           paddingLeft: `${depth * 12 + 8}px`,
           paddingRight: "8px",
-          width: `${labelW}px`,
+          width: listMode ? void 0 : `${labelW}px`,
           // Opaque fill spanning the full row height, tinted like the row
           // itself so the selection/check highlight stays visible through it.
           backgroundColor: isSelected ? "color-mix(in srgb, var(--ui-accent) 12%, var(--ui-bg-chrome))" : isChecked ? "color-mix(in srgb, var(--ui-accent) 6%, var(--ui-bg-chrome))" : isEven ? "color-mix(in srgb, var(--ui-text-primary) 2%, var(--ui-bg-chrome))" : "var(--ui-bg-chrome)"
@@ -1723,16 +1752,55 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               task.status === "running" ? jsx5("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }) : null,
               name
             ]
+          }),
+          // Assignee at a glance: avatar when assigned, a faint dashed ring when not.
+          // (The list view has its own assignee column.)
+          listMode ? null : task.assignee ? jsx5("span", {
+            className: "shrink-0 inline-flex",
+            title: `${i18n.assignLabel} ${task.assignee}`,
+            children: jsx5(ProfileAvatar, { name: task.assignee, size: "0.95rem" })
+          }) : jsx5("span", {
+            className: "shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60",
+            style: { width: "0.95rem", height: "0.95rem" },
+            title: i18n.unassigned,
+            "aria-label": i18n.unassigned
           })
         ]
       }),
-      jsxs5("div", {
+      listMode ? jsx5(ListCells, { task, now, statusTitle, dotColor }) : jsxs5("div", {
         className: "relative overflow-hidden",
         style: { height: `${ROW_H}px` },
         children: bars.length > 0 ? bars.map((b, idx) => jsx5(Bar, { key: b.runId || idx, task, bar: b, pxPerSec, min, onOpen })) : [jsx5("div", { key: "empty", className: "text-(--ui-text-quaternary) text-[10px]", children: "—" })]
       })
     ]
   });
+}
+var LIST_COLUMNS = "minmax(0, 1fr) 150px 96px 64px";
+function ListCells({ task, now, statusTitle, dotColor }) {
+  const i18n = useGanttI18n();
+  const last = lastActivity(task);
+  return [
+    jsx5("div", {
+      key: "assignee",
+      className: "flex items-center gap-1.5 min-w-0 px-2 text-[11px]",
+      children: task.assignee ? [
+        jsx5(ProfileAvatar, { key: "a", name: task.assignee, size: "0.95rem" }),
+        jsx5("span", { key: "n", className: "truncate", children: task.assignee })
+      ] : jsx5("span", { className: "text-(--ui-text-quaternary) italic", children: i18n.unassigned })
+    }),
+    jsx5("div", {
+      key: "status",
+      className: "px-2 text-[11px] truncate",
+      style: { color: dotColor },
+      children: statusTitle
+    }),
+    jsx5("div", {
+      key: "age",
+      className: "px-2 text-[10px] tabular-nums text-right text-(--ui-text-tertiary)",
+      title: last ? new Date(last * 1e3).toLocaleString() : "",
+      children: relativeAge(last, now)
+    })
+  ];
 }
 function ProfileAvatar({ name, size = "1rem" }) {
   const color = profileColor(name);
@@ -1958,6 +2026,26 @@ function AssigneeBadge({ assignee, assignees = [], onAssign, disabled }) {
       ]
     })
   ] });
+}
+function ViewToggle({ value, onChange }) {
+  const i18n = useGanttI18n();
+  const item = (mode, icon, label) => jsx5("button", {
+    type: "button",
+    onClick: () => onChange(mode),
+    title: label,
+    "aria-label": label,
+    "aria-pressed": value === mode,
+    className: cn3(
+      "inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded cursor-pointer",
+      value === mode ? "bg-(--ui-accent)/15 text-(--ui-accent) font-medium" : "text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)"
+    ),
+    children: [jsx5(Codicon4, { key: "i", name: icon, size: "0.8rem" }), jsx5("span", { key: "l", children: label })]
+  }, mode);
+  return jsxs5("span", {
+    className: "inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5",
+    role: "group",
+    children: [item("list", "list-flat", i18n.viewList), item("timeline", "graph-line", i18n.viewTimeline)]
+  });
 }
 function SelectionBar({
   selected,
@@ -2709,6 +2797,15 @@ function KanbanGanttPage() {
   const [selectedIds, setSelectedIds] = useState3(() => /* @__PURE__ */ new Set());
   const [bulkAssignee, setBulkAssignee] = useState3("");
   const lastCheckedIdRef = useRef2(null);
+  const [viewMode, setViewMode] = useState3(() => {
+    const saved = getStorage() ? getStorage().get("viewMode", null) : null;
+    return saved === "list" ? "list" : "timeline";
+  });
+  const listMode = viewMode === "list";
+  const handleViewMode = (mode) => {
+    setViewMode(mode);
+    if (getStorage()) getStorage().set("viewMode", mode);
+  };
   const [zoom, setZoom] = useState3(() => {
     const saved = getStorage() ? getStorage().get("zoom", null) : null;
     return saved != null && Number.isFinite(Number(saved)) ? Number(saved) : 1;
@@ -2868,16 +2965,29 @@ function KanbanGanttPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedIds, derived]);
   const bulkMutation = useMutation({
-    mutationFn: ({ action, ids }) => apiFetch(`/tasks/bulk${board ? `?board=${encodeURIComponent(board)}` : ""}`, {
+    // `assignee` must travel: the backend switches to mass-assign on its
+    // presence ('' = unassign). Dropping it sent a bare action 'assign', which
+    // the backend refused as unknown, so a batch assign never stored anything.
+    mutationFn: ({ action, ids, assignee }) => apiFetch(`/tasks/bulk${board ? `?board=${encodeURIComponent(board)}` : ""}`, {
       method: "POST",
-      body: { ids, action }
+      body: assignee !== void 0 ? { ids, assignee } : { ids, action }
     }),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      const failed = (response?.results || []).filter((r) => !r.ok);
+      if (failed.length > 0) {
+        toast("error", i18n.bulkFailed(failed.length, failed[0]?.error || failed[0]?.id));
+      }
       setSelectedIds(/* @__PURE__ */ new Set());
       setBulkAssignee("");
       void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
-    }
+    },
+    onError: (error2) => toast("error", String(error2?.message || error2))
   });
+  const assigneeChoices = useMemo2(() => {
+    const fromBoard = derived && derived.allAssignees || [];
+    const fromProfiles = profilesData && profilesData.profiles || [];
+    return Array.from(/* @__PURE__ */ new Set([...fromProfiles, ...fromBoard])).sort();
+  }, [derived, profilesData]);
   const handleZoomChange = (val) => {
     setZoom(val);
     if (getStorage()) getStorage().set("zoom", val);
@@ -2964,6 +3074,7 @@ function KanbanGanttPage() {
     pxPerSec,
     min: domain.min,
     timelineW,
+    listMode,
     onOpen: (id) => $openTaskId.set(id),
     isSelected: openTaskId === row.task.id,
     isChecked: selectedIds.has(row.task.id),
@@ -3064,7 +3175,8 @@ function KanbanGanttPage() {
               jsxs5("div", {
                 className: "inline-flex items-center gap-3",
                 children: [
-                  jsxs5("span", { className: "inline-flex items-center gap-1.5", children: [
+                  jsx5(ViewToggle, { value: viewMode, onChange: handleViewMode }),
+                  listMode ? null : jsxs5("span", { className: "inline-flex items-center gap-1.5", children: [
                     jsx5("input", {
                       type: "range",
                       min: String(ZOOM_MIN),
@@ -3125,7 +3237,7 @@ function KanbanGanttPage() {
                     bulkMutation.mutate({ action: "delete", ids: [...selectedIds] });
                   }
                 },
-                assignees: derived.allAssignees || [],
+                assignees: assigneeChoices,
                 busy: bulkMutation.isPending
               }),
               jsxs5("div", {
@@ -3133,9 +3245,9 @@ function KanbanGanttPage() {
                 className: "overflow-auto flex-1 min-h-0 relative",
                 children: [
                   jsxs5("div", {
-                    className: "grid w-max sticky top-0 z-20 bg-(--ui-bg-chrome)",
+                    className: cn3("grid sticky top-0 z-20 bg-(--ui-bg-chrome)", listMode ? "w-full" : "w-max"),
                     "data-glass-opaque": true,
-                    style: { gridTemplateColumns: `${labelW}px ${timelineW}px` },
+                    style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px` },
                     children: [
                       jsxs5("div", {
                         className: "sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center px-2 gap-1.5",
@@ -3159,7 +3271,7 @@ function KanbanGanttPage() {
                             "aria-label": i18n.selectAll
                           }),
                           jsx5("span", { className: "text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", children: i18n.tasksColumn }),
-                          jsx5(ResizeHandle, {
+                          listMode ? null : jsx5(ResizeHandle, {
                             get: () => $labelW.get(),
                             set: (w) => $labelW.set(w),
                             min: LABEL_W_MIN,
@@ -3169,13 +3281,18 @@ function KanbanGanttPage() {
                           })
                         ]
                       }),
-                      jsx5(Ruler, { min: domain.min, max: domain.max, pxPerSec })
+                      ...listMode ? [i18n.assigneeColumn, i18n.statusColumn, i18n.lastActivityColumn].map((h, i) => jsx5("div", {
+                        key: h,
+                        className: cn3("flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", i === 2 && "justify-end"),
+                        style: { height: "24px" },
+                        children: h
+                      })) : [jsx5(Ruler, { key: "ruler", min: domain.min, max: domain.max, pxPerSec })]
                     ]
                   }),
                   jsxs5("div", {
-                    className: "relative flex flex-col w-max",
+                    className: cn3("relative flex flex-col", listMode ? "w-full" : "w-max"),
                     children: [
-                      jsx5("div", {
+                      listMode ? null : jsx5("div", {
                         className: "absolute top-0 bottom-0 pointer-events-none z-0",
                         style: { left: `${labelW}px`, width: `${timelineW}px` },
                         children: jsx5(WeekendBands, { min: domain.min, max: domain.max, pxPerSec })
@@ -3195,7 +3312,7 @@ function KanbanGanttPage() {
       openTaskId ? jsx5(TaskDrawer, {
         taskId: openTaskId,
         board,
-        assignees: derived.allAssignees || [],
+        assignees: assigneeChoices,
         // Unfiltered snapshot: a parent hidden by the current filter must
         // still be listed in the drawer's relations.
         tasks: data?.tasks || [],
@@ -3211,11 +3328,7 @@ function KanbanGanttPage() {
       jsx5(NewTaskDialog, {
         open: Boolean(newTask),
         boardSlug: board && board !== "all" && board !== "*" ? board : void 0,
-        assignees: (() => {
-          const fromBoard = derived && derived.allAssignees || [];
-          const fromProfiles = profilesData && profilesData.profiles || [];
-          return Array.from(/* @__PURE__ */ new Set([...fromProfiles, ...fromBoard])).sort();
-        })(),
+        assignees: assigneeChoices,
         tasks: data && data.tasks || [],
         projects: projectsData && projectsData.projects || [],
         defaultParentId: newTask ? newTask.parentId : "",

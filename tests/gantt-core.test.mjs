@@ -387,3 +387,19 @@ test('a board-specific failure is told apart from a dead backend', () => {
   assert.equal(isMissingBoardError(new Error('GET /boards → HTTP 500')), false)
   assert.equal(isMissingBoardError(undefined), false)
 })
+test('lastActivity is the newest real timestamp on the task, runs included', () => {
+  const { lastActivity } = core
+  assert.equal(lastActivity({ created_at: NOW - 5 * DAY }), NOW - 5 * DAY)
+  assert.equal(lastActivity({ created_at: NOW - 5 * DAY, started_at: NOW - 2 * DAY,
+    runs: [{ started_at: NOW - DAY, ended_at: NOW - H }] }), NOW - H)
+  assert.equal(lastActivity({}), null)
+})
+
+test('relativeAge grows with the gap and is empty without a timestamp', () => {
+  const { relativeAge } = core
+  assert.equal(relativeAge(null, NOW), '')
+  const order = [NOW - 30, NOW - 5 * 60, NOW - 3 * H, NOW - 2 * DAY, NOW - 30 * DAY, NOW - 200 * DAY, NOW - 800 * DAY]
+  const out = order.map(t => relativeAge(t, NOW))
+  assert.equal(new Set(out).size, out.length)
+  assert.equal(relativeAge(NOW + 10, NOW), 'now')
+})
