@@ -89,7 +89,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR } from './core/gantt-core.ts'
 
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -346,34 +346,30 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
   const name = cleanTitle(task.title, task.label)
 
   // Explorer connectors, in front of the checkbox and left of the fold square.
-  // Geometry: the label cell pads by `depth * 12 + 8`, so level `d` owns the
-  // slot [d*12, d*12+8] and the square starts at d*12+8 — the elbow's horizontal
-  // segment stops exactly there.
-  const INDENT = 12
+  // All the geometry comes from the core (`treeMarks`) so it can be unit-tested:
+  // every level's vertical runs through the centre of THAT level's square, and a
+  // child's elbow hangs under its PARENT's square — not on its own slot, which is
+  // what made the icons look shifted left.
+  const marks = treeMarks(depth, continuation, lastSibling)
   const line = 'var(--ui-stroke-secondary)'
-  const connectors = []
-  for (let level = 0; level < continuation.length; level++) {
-    if (!continuation[level]) continue      // that ancestor is the last of its group
-    connectors.push(jsx('span', {
-      key: `lv${level}`,
-      className: 'absolute',
-      style: { left: `${level * INDENT + 5}px`, top: 0, width: '1px', height: '100%',
-               backgroundColor: line, opacity: 0.65 }
-    }))
-  }
-  if (isChild) {
-    // The vertical of this row's own elbow: full height when a sibling follows,
-    // top-half only when this is the last one (the classic `├` / `└`).
+  const connectors = marks.guides.map(x => jsx('span', {
+    key: `g${x}`,
+    className: 'absolute pointer-events-none',
+    style: { left: `${x}px`, top: 0, width: '1px', height: '100%', backgroundColor: line, opacity: 0.65 }
+  }))
+  if (marks.elbowX !== null) {
+    // This row's own elbow: full height when a sibling follows it, top-half only
+    // when it is the last one (the classic `├` / `└`).
     connectors.push(jsx('span', {
       key: 'elbow-v',
       className: 'absolute pointer-events-none',
-      style: { left: `${depth * INDENT + 5}px`, top: 0, width: '1px',
-               height: lastSibling ? '50%' : '100%', backgroundColor: line, opacity: 0.65 }
+      style: { left: `${marks.elbowX}px`, top: 0, width: '1px',
+               height: marks.elbowHalf ? '50%' : '100%', backgroundColor: line, opacity: 0.65 }
     }))
     connectors.push(jsx('span', {
       key: 'elbow-h',
       className: 'absolute pointer-events-none',
-      style: { left: `${depth * INDENT + 5}px`, top: '50%', width: '3px', height: '1px',
+      style: { left: `${marks.elbowX}px`, top: '50%', width: `${marks.elbowW}px`, height: '1px',
                backgroundColor: line, opacity: 0.65 }
     }))
   }
@@ -459,7 +455,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
         ),
         'data-glass-opaque': true,
         style: {
-          paddingLeft: `${depth * 12 + 8}px`,
+          paddingLeft: `${marks.indent}px`,
           paddingRight: '8px',
           width: `${labelW}px`,
           // Opaque fill spanning the full row height, tinted like the row

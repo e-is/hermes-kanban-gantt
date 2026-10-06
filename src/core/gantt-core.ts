@@ -285,6 +285,40 @@ export function buildRows(tasks) {
  * (`continuation`: for each ancestor level, whether that ancestor has a sibling
  * below it) and the selection halo (`descendantOfSelected`).
  */
+// ── the tree column's geometry ────────────────────────────────────────────────
+// One slot per level, and the slot must be wide enough for the 13px fold square:
+// with the earlier 12px slot the marks drifted, the continuation guides sat 3px
+// left of the squares they belong to, and a child's elbow was drawn on the
+// CHILD's slot instead of under its PARENT's square — which is what made the
+// icons look shifted to the left.
+export const TREE_SLOT = 16
+export const TREE_SQUARE = 13
+export const TREE_AXIS = TREE_SQUARE / 2   // a level's vertical runs through its square's centre
+
+/**
+ * Where a row's branch marks sit, in px from the label cell's left edge:
+ * `indent` is the cell's padding (so the square starts exactly there), `guides`
+ * the x of each continuation vertical, and the elbow — under the PARENT's square —
+ * whose arm is wide enough to reach the child's own square. Pure geometry, so the
+ * renderer and the tests agree on it instead of each doing its own arithmetic.
+ */
+export function treeMarks(depth, continuation = [], lastSibling = false) {
+  const guides = []
+  for (let level = 0; level < continuation.length; level++) {
+    if (continuation[level]) guides.push(level * TREE_SLOT + TREE_AXIS)
+  }
+  const child = depth > 0
+  const elbowX = child ? (depth - 1) * TREE_SLOT + TREE_AXIS : null
+  return {
+    indent: depth * TREE_SLOT,
+    squareX: depth * TREE_SLOT,
+    guides,
+    elbowX,
+    elbowW: child ? TREE_SLOT - TREE_AXIS : 0,
+    elbowHalf: child && Boolean(lastSibling)
+  }
+}
+
 export function treeRows(tasks, opts = {}) {
   const fold = opts.fold || new Map()
   const search = opts.search || ''
@@ -357,10 +391,14 @@ export function treeRows(tasks, opts = {}) {
     })
   }
 
+  // The top level is NOT a sibling group: each root starts its own tree, so it
+  // never has a "following sibling" and level 0 never draws a guide. Without
+  // this, a lone child of a root was prefixed by a spurious `|` at level 0
+  // ("| |_") instead of just its own elbow ("|_").
   for (const t of tasks) {
     if (hasParent.has(t.id) || shown.has(t.id)) continue
     shown.add(t.id)
-    walk(t.id, 0, false, false, [], true)
+    walk(t.id, 0, false, false, [], false)
   }
   // Anything that has neither been walked nor a walked parent (a cycle, or a task
   // whose parents are filtered out) is placed once, flagged as a child like
@@ -369,7 +407,7 @@ export function treeRows(tasks, opts = {}) {
   for (const t of tasks) {
     if (shown.has(t.id) || covered.has(t.id)) continue
     shown.add(t.id)
-    walk(t.id, 0, hasParent.has(t.id), false, [], true)
+    walk(t.id, 0, hasParent.has(t.id), false, [], false)
   }
 
   // "n hidden" must count what is ACTUALLY hidden: a descendant that ends up

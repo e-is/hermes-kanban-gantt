@@ -886,6 +886,25 @@ function matchesSearch(task, query) {
   const title = (task.title || "").toLowerCase();
   return label.includes(q) || title.includes(q);
 }
+var TREE_SLOT = 16;
+var TREE_SQUARE = 13;
+var TREE_AXIS = TREE_SQUARE / 2;
+function treeMarks(depth, continuation = [], lastSibling = false) {
+  const guides = [];
+  for (let level = 0; level < continuation.length; level++) {
+    if (continuation[level]) guides.push(level * TREE_SLOT + TREE_AXIS);
+  }
+  const child = depth > 0;
+  const elbowX = child ? (depth - 1) * TREE_SLOT + TREE_AXIS : null;
+  return {
+    indent: depth * TREE_SLOT,
+    squareX: depth * TREE_SLOT,
+    guides,
+    elbowX,
+    elbowW: child ? TREE_SLOT - TREE_AXIS : 0,
+    elbowHalf: child && Boolean(lastSibling)
+  };
+}
 function treeRows(tasks, opts = {}) {
   const fold = opts.fold || /* @__PURE__ */ new Map();
   const search = opts.search || "";
@@ -945,12 +964,12 @@ function treeRows(tasks, opts = {}) {
   for (const t of tasks) {
     if (hasParent.has(t.id) || shown.has(t.id)) continue;
     shown.add(t.id);
-    walk(t.id, 0, false, false, [], true);
+    walk(t.id, 0, false, false, [], false);
   }
   for (const t of tasks) {
     if (shown.has(t.id) || covered.has(t.id)) continue;
     shown.add(t.id);
-    walk(t.id, 0, hasParent.has(t.id), false, [], true);
+    walk(t.id, 0, hasParent.has(t.id), false, [], false);
   }
   const printed = new Set(rows.map((r) => r.task.id));
   for (const row of rows) {
@@ -1777,33 +1796,22 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
   const bars = taskBars(task, now);
   const label = task.label ? `[${task.label}]` : "";
   const name = cleanTitle(task.title, task.label);
-  const INDENT = 12;
+  const marks = treeMarks(depth, continuation, lastSibling);
   const line = "var(--ui-stroke-secondary)";
-  const connectors = [];
-  for (let level = 0; level < continuation.length; level++) {
-    if (!continuation[level]) continue;
-    connectors.push(jsx6("span", {
-      key: `lv${level}`,
-      className: "absolute",
-      style: {
-        left: `${level * INDENT + 5}px`,
-        top: 0,
-        width: "1px",
-        height: "100%",
-        backgroundColor: line,
-        opacity: 0.65
-      }
-    }));
-  }
-  if (isChild) {
+  const connectors = marks.guides.map((x) => jsx6("span", {
+    key: `g${x}`,
+    className: "absolute pointer-events-none",
+    style: { left: `${x}px`, top: 0, width: "1px", height: "100%", backgroundColor: line, opacity: 0.65 }
+  }));
+  if (marks.elbowX !== null) {
     connectors.push(jsx6("span", {
       key: "elbow-v",
       className: "absolute pointer-events-none",
       style: {
-        left: `${depth * INDENT + 5}px`,
+        left: `${marks.elbowX}px`,
         top: 0,
         width: "1px",
-        height: lastSibling ? "50%" : "100%",
+        height: marks.elbowHalf ? "50%" : "100%",
         backgroundColor: line,
         opacity: 0.65
       }
@@ -1812,9 +1820,9 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
       key: "elbow-h",
       className: "absolute pointer-events-none",
       style: {
-        left: `${depth * INDENT + 5}px`,
+        left: `${marks.elbowX}px`,
         top: "50%",
-        width: "3px",
+        width: `${marks.elbowW}px`,
         height: "1px",
         backgroundColor: line,
         opacity: 0.65
@@ -1879,7 +1887,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
         ),
         "data-glass-opaque": true,
         style: {
-          paddingLeft: `${depth * 12 + 8}px`,
+          paddingLeft: `${marks.indent}px`,
           paddingRight: "8px",
           width: `${labelW}px`,
           // Opaque fill spanning the full row height, tinted like the row
