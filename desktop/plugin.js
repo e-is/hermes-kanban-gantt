@@ -214,6 +214,11 @@ var GANTT_LOCALES = {
     errRunning: "A running task cannot be moved under another task.",
     errOtherBoard: "Both tasks must belong to the same board.",
     errReparent: "The move was refused by the kanban board.",
+    expandTask: (name) => `Expand ${name}`,
+    collapseTask: (name) => `Collapse ${name}`,
+    expandTaskHidden: (name, n) => `Expand ${name} (${n} hidden)`,
+    collapseAll: "Collapse every task",
+    expandAll: "Expand every task",
     newTask: "New task",
     newTaskTitle: "Title",
     newTaskTitlePlaceholder: "What needs to be done?",
@@ -390,6 +395,11 @@ var GANTT_LOCALES = {
     errRunning: "Une tâche en cours d’exécution ne peut pas être déplacée sous une autre.",
     errOtherBoard: "Les deux tâches doivent appartenir au même board.",
     errReparent: "Le déplacement a été refusé par le board kanban.",
+    expandTask: (name) => `Déplier ${name}`,
+    collapseTask: (name) => `Replier ${name}`,
+    expandTaskHidden: (name, n) => `Déplier ${name} (${n} masquée${n > 1 ? "s" : ""})`,
+    collapseAll: "Tout replier",
+    expandAll: "Tout déplier",
     newTask: "Nouvelle tâche",
     newTaskTitle: "Titre",
     newTaskTitlePlaceholder: "Que faut-il faire ?",
@@ -876,27 +886,87 @@ function matchesSearch(task, query) {
   const title = (task.title || "").toLowerCase();
   return label.includes(q) || title.includes(q);
 }
-function buildRows(tasks) {
+function treeRows(tasks, opts = {}) {
+  const fold = opts.fold || /* @__PURE__ */ new Map();
+  const search = opts.search || "";
+  const selected = opts.selected || /* @__PURE__ */ new Set();
   const set = new Set(tasks.map((t) => t.id));
-  const byId = {};
-  for (const t of tasks) byId[t.id] = t;
+  const byId = new Map(tasks.map((t) => [t.id, t]));
   const adj = /* @__PURE__ */ new Map();
   for (const t of tasks) adj.set(t.id, (t.children || []).filter((c) => set.has(c)));
   const hasParent = /* @__PURE__ */ new Set();
-  for (const t of tasks) {
-    for (const p of t.parents || []) if (set.has(p)) hasParent.add(t.id);
-  }
-  const roots = tasks.filter((t) => !hasParent.has(t.id));
+  for (const t of tasks) for (const p of t.parents || []) if (set.has(p)) hasParent.add(t.id);
+  const halo = /* @__PURE__ */ new Set();
+  for (const id of selected) for (const d of descendantsOf(tasks, id)) halo.add(d);
   const rows = [];
-  const visited = /* @__PURE__ */ new Set();
-  const walk = (id, depth, isChild) => {
-    if (visited.has(id)) return;
-    visited.add(id);
-    rows.push({ task: byId[id], depth, isChild });
-    for (const c of adj.get(id) || []) walk(c, depth + 1, true);
+  const shown = /* @__PURE__ */ new Set();
+  const covered = /* @__PURE__ */ new Set();
+  const markCovered = (root) => {
+    const stack = [...adj.get(root) || []];
+    const seen = /* @__PURE__ */ new Set();
+    while (stack.length) {
+      const id = stack.pop();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      covered.add(id);
+      for (const c of adj.get(id) || []) stack.push(c);
+    }
   };
-  for (const r of roots) walk(r.id, 0, false);
-  for (const t of tasks) walk(t.id, 0, Boolean(hasParent.has(t.id)));
+  const walk = (id, depth, isChild, secondary, cont, hasFollowing) => {
+    const task = byId.get(id);
+    const kids = adj.get(id) || [];
+    markCovered(id);
+    const onlySecondary = kids.length > 0 && kids.every((c) => shown.has(c));
+    const open = search ? true : fold.has(id) ? !fold.get(id) : !onlySecondary;
+    const collapsed = kids.length > 0 && !open;
+    rows.push({
+      task,
+      depth,
+      isChild,
+      secondary,
+      continuation: cont,
+      lastSibling: !hasFollowing,
+      hasChildren: kids.length > 0,
+      secondaryOnly: onlySecondary,
+      collapsed,
+      hiddenCount: 0,
+      matched: Boolean(search) && matchesSearch(task, search),
+      descendantOfSelected: halo.has(id)
+    });
+    if (secondary || !open) return;
+    const ordered = [...kids.filter((c) => !shown.has(c)), ...kids.filter((c) => shown.has(c))];
+    ordered.forEach((c, i) => {
+      const isSecondary = shown.has(c);
+      const isLast = i === ordered.length - 1;
+      if (!isSecondary) shown.add(c);
+      walk(c, depth + 1, true, isSecondary, [...cont, hasFollowing], !isLast);
+    });
+  };
+  for (const t of tasks) {
+    if (hasParent.has(t.id) || shown.has(t.id)) continue;
+    shown.add(t.id);
+    walk(t.id, 0, false, false, [], true);
+  }
+  for (const t of tasks) {
+    if (shown.has(t.id) || covered.has(t.id)) continue;
+    shown.add(t.id);
+    walk(t.id, 0, hasParent.has(t.id), false, [], true);
+  }
+  const printed = new Set(rows.map((r) => r.task.id));
+  for (const row of rows) {
+    if (!row.collapsed) continue;
+    let n = 0;
+    const stack = [...adj.get(row.task.id) || []];
+    const seen = /* @__PURE__ */ new Set();
+    while (stack.length) {
+      const id = stack.pop();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (!printed.has(id)) n += 1;
+      for (const c of adj.get(id) || []) stack.push(c);
+    }
+    row.hiddenCount = n;
+  }
   return rows;
 }
 function computeDomain(visible, minBarSec) {
@@ -1701,34 +1771,95 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
     ] })
   });
 }
-function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
+function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn, hasChildren, collapsed, secondary, secondaryOnly, continuation = [], lastSibling, hiddenCount = 0, matched, descendantOfSelected, onToggleFold }) {
   const i18n = useGanttI18n();
   const labelW = useValue2($labelW);
   const bars = taskBars(task, now);
   const label = task.label ? `[${task.label}]` : "";
   const name = cleanTitle(task.title, task.label);
-  const connector = isChild ? jsx6("span", {
-    className: "absolute",
+  const INDENT = 12;
+  const line = "var(--ui-stroke-secondary)";
+  const connectors = [];
+  for (let level = 0; level < continuation.length; level++) {
+    if (!continuation[level]) continue;
+    connectors.push(jsx6("span", {
+      key: `lv${level}`,
+      className: "absolute",
+      style: {
+        left: `${level * INDENT + 5}px`,
+        top: 0,
+        width: "1px",
+        height: "100%",
+        backgroundColor: line,
+        opacity: 0.65
+      }
+    }));
+  }
+  if (isChild) {
+    connectors.push(jsx6("span", {
+      key: "elbow-v",
+      className: "absolute pointer-events-none",
+      style: {
+        left: `${depth * INDENT + 5}px`,
+        top: 0,
+        width: "1px",
+        height: lastSibling ? "50%" : "100%",
+        backgroundColor: line,
+        opacity: 0.65
+      }
+    }));
+    connectors.push(jsx6("span", {
+      key: "elbow-h",
+      className: "absolute pointer-events-none",
+      style: {
+        left: `${depth * INDENT + 5}px`,
+        top: "50%",
+        width: "3px",
+        height: "1px",
+        backgroundColor: line,
+        opacity: 0.65
+      }
+    }));
+  }
+  const foldSquare = hasChildren ? jsx6("span", {
+    role: "button",
+    tabIndex: 0,
+    "aria-label": collapsed ? hiddenCount ? i18n.expandTaskHidden(name, hiddenCount) : i18n.expandTask(name) : i18n.collapseTask(name),
+    "aria-expanded": !collapsed,
+    title: collapsed ? hiddenCount ? i18n.expandTaskHidden(name, hiddenCount) : i18n.expandTask(name) : i18n.collapseTask(name),
+    className: cn3(
+      "shrink-0 inline-flex items-center justify-center cursor-pointer select-none",
+      "text-[10px] leading-none font-semibold",
+      secondary || secondaryOnly ? "text-(--ui-text-quaternary)" : "text-(--ui-text-tertiary)",
+      "hover:text-(--ui-text-primary)"
+    ),
     style: {
-      // Drawn BEFORE the checkbox (visually left of it) and sized so its
-      // right edge lands exactly on the checkbox's left edge: with the
-      // label padding-left of `depth * 12 + 8`, the connector spans
-      // [depth*12+2, depth*12+8] — 6px wide, no overlap with the box.
-      left: `${depth * 12 + 2}px`,
-      top: "calc(50% - 12px)",
-      width: "6px",
-      height: "12px",
-      borderLeft: "1px solid var(--ui-stroke-secondary)",
-      borderBottom: "1px solid var(--ui-stroke-secondary)"
-    }
-  }) : null;
+      width: "13px",
+      height: "13px",
+      border: "1px solid var(--ui-stroke-secondary)",
+      borderRadius: "3px",
+      borderStyle: secondary || secondaryOnly ? "dashed" : "solid",
+      backgroundColor: secondary || secondaryOnly ? "transparent" : "var(--ui-bg-tertiary, transparent)"
+    },
+    onClick: (e) => {
+      e.stopPropagation();
+      onToggleFold(task.id, !collapsed);
+    },
+    onKeyDown: (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleFold(task.id, !collapsed);
+    },
+    children: collapsed ? "+" : "−"
+  }) : jsx6("span", { className: "shrink-0", style: { width: "13px", height: "13px" }, "aria-hidden": "true" });
   const dotColor = (bars.length > 0 ? bars[bars.length - 1]?.tone : null) || statusTone(task.status);
   const icon = statusIcon(task.status);
   const statusTitle = i18n.col?.[task.status] || task.status;
   return jsxs6("div", {
     className: cn3(
       "group grid items-center border-b border-(--ui-stroke-tertiary)/40 transition-colors cursor-pointer",
-      isSelected ? "bg-(--ui-accent)/12 font-semibold" : isChecked ? "bg-(--ui-accent)/6" : isEven ? "bg-black/[0.02] dark:bg-white/[0.02]" : "bg-transparent",
+      isSelected ? "bg-(--ui-accent)/12 font-semibold" : isChecked ? "bg-(--ui-accent)/6" : descendantOfSelected ? "bg-(--ui-accent)/7" : isEven ? "bg-black/[0.02] dark:bg-white/[0.02]" : "bg-transparent",
       "hover:bg-(--ui-accent)/8"
     ),
     style: { gridTemplateColumns: `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
@@ -1753,10 +1884,11 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
           width: `${labelW}px`,
           // Opaque fill spanning the full row height, tinted like the row
           // itself so the selection/check highlight stays visible through it.
-          backgroundColor: isSelected ? "color-mix(in srgb, var(--ui-accent) 12%, var(--ui-bg-chrome))" : isChecked ? "color-mix(in srgb, var(--ui-accent) 6%, var(--ui-bg-chrome))" : isEven ? "color-mix(in srgb, var(--ui-text-primary) 2%, var(--ui-bg-chrome))" : "var(--ui-bg-chrome)"
+          backgroundColor: isSelected ? "color-mix(in srgb, var(--ui-accent) 12%, var(--ui-bg-chrome))" : isChecked ? "color-mix(in srgb, var(--ui-accent) 6%, var(--ui-bg-chrome))" : descendantOfSelected ? "color-mix(in srgb, var(--ui-accent) 7%, var(--ui-bg-chrome))" : isEven ? "color-mix(in srgb, var(--ui-text-primary) 2%, var(--ui-bg-chrome))" : "var(--ui-bg-chrome)"
         },
         children: [
-          connector,
+          ...connectors,
+          foldSquare,
           jsx6("input", {
             type: "checkbox",
             checked: Boolean(isChecked),
@@ -2808,6 +2940,28 @@ function KanbanGanttPage() {
     queryFn: () => apiFetch(`/gantt${board ? `?board=${encodeURIComponent(board)}` : ""}`),
     refetchInterval: wsState === WS_STATE.live ? 3e5 : 6e4
   });
+  const foldKey = `fold.${board || "current"}`;
+  const [fold, setFold] = useState4(() => /* @__PURE__ */ new Map());
+  useEffect3(() => {
+    let next = /* @__PURE__ */ new Map();
+    try {
+      const raw = getStorage() ? getStorage().get(foldKey, null) : null;
+      const parsed = raw ? JSON.parse(String(raw)) : [];
+      if (Array.isArray(parsed)) next = new Map(parsed.filter(Array.isArray));
+    } catch (err) {
+      next = /* @__PURE__ */ new Map();
+    }
+    setFold(next);
+  }, [foldKey]);
+  const writeFold = (next) => {
+    setFold(next);
+    if (getStorage()) getStorage().set(foldKey, JSON.stringify([...next]));
+  };
+  const handleToggleFold = (id, collapsed) => {
+    const next = new Map(fold);
+    next.set(id, collapsed);
+    writeFold(next);
+  };
   const recordWsState = (state) => {
     setWsState(state);
     if (getStorage()) getStorage().set("wsState", state);
@@ -2893,11 +3047,24 @@ function KanbanGanttPage() {
       visible = visible.filter((t) => t.assignee && selectedAssignees.has(t.assignee));
     }
     visible = visible.filter((t) => matchesSearch(t, search));
-    const rows2 = buildRows(visible);
+    const rows2 = treeRows(visible, {
+      fold,
+      search,
+      selected: openTaskId ? /* @__PURE__ */ new Set([openTaskId]) : /* @__PURE__ */ new Set()
+    });
     const domain2 = computeDomain(visible);
     const allAssignees = Array.from(new Set(data.tasks.map((t) => t.assignee).filter(Boolean))).sort();
     return { rows: rows2, domain: domain2, total: visible.length, tasks: visible, allAssignees };
-  }, [data, showArchived, disabledStatuses, selectedAssignees, search]);
+  }, [data, showArchived, disabledStatuses, selectedAssignees, search, fold, openTaskId]);
+  const handleToggleAll = () => {
+    const parents = derived.rows.filter((r) => r.hasChildren);
+    if (!parents.length) return;
+    const anyOpen = parents.some((r) => !r.collapsed);
+    const next = new Map(fold);
+    for (const r of parents) next.set(r.task.id, anyOpen);
+    writeFold(next);
+  };
+  const allCollapsed = derived.rows.some((r) => r.hasChildren && !r.collapsed);
   const createTaskMutation = useMutation({
     mutationFn: (values) => createTask(values, board),
     onSuccess: (response, values) => {
@@ -3118,7 +3285,8 @@ function KanbanGanttPage() {
     dragState: !dropMap || row.task.id === dragId ? null : dropMap.get(row.task.id)?.allowed ? "ok" : "no",
     onDragStartTask: handleDragStart,
     onDragEndTask: () => setDragId(null),
-    onDropOn: handleDropOn
+    onDropOn: handleDropOn,
+    onToggleFold: handleToggleFold
   }, row.task.id));
   const STATUS_PRIORITY = ["blocked", "running", "review", "ready", "scheduled", "todo", "triage", "done", "archived"];
   const blockedCount = derived.tasks.filter((t) => t.status === "blocked").length;
@@ -3157,6 +3325,25 @@ function KanbanGanttPage() {
               jsxs6("div", {
                 className: "inline-flex items-center gap-2 text-sm font-medium",
                 children: [
+                  // The tree's global toggle, right at the head of the column (before
+                  // the first task): collapse everything the user can collapse, or
+                  // open everything, in one click.
+                  jsx6("span", {
+                    role: "button",
+                    tabIndex: 0,
+                    "aria-label": allCollapsed ? i18n.collapseAll : i18n.expandAll,
+                    title: allCollapsed ? i18n.collapseAll : i18n.expandAll,
+                    className: "inline-flex items-center justify-center cursor-pointer select-none text-[10px] leading-none font-semibold text-(--ui-text-tertiary) hover:text-(--ui-text-primary) mr-1",
+                    style: {
+                      width: "14px",
+                      height: "14px",
+                      border: "1px solid var(--ui-stroke-secondary)",
+                      borderRadius: "3px",
+                      backgroundColor: "var(--ui-bg-tertiary, transparent)"
+                    },
+                    onClick: handleToggleAll,
+                    children: allCollapsed ? "−" : "+"
+                  }),
                   jsx6("span", { className: "font-semibold", children: i18n.title }),
                   jsx6("span", {
                     className: "inline-flex items-center justify-center rounded-full px-2 py-0.2 text-[10.5px] font-semibold tracking-tight shadow-xs cursor-help",

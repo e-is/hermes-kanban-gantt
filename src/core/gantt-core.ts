@@ -266,6 +266,131 @@ export function buildRows(tasks) {
   for (const t of tasks) walk(t.id, 0, Boolean(hasParent.has(t.id)));
   return rows;
 }
+/**
+ * Rows for the tree column WITH the fold state — the explorer grammar.
+ *
+ * `buildRows` stays the flat projection (first visit wins). This adds what the
+ * explorer rendering needs, and encodes two rules the hierarchy dictates:
+ *
+ * - The fold state is a sparse override map (`id -> collapsed`): a node with no
+ *   entry keeps its DEFAULT, which depends on how it was reached. A task reached
+ *   through its first parent holds the PRIMARY position and defaults OPEN; a
+ *   child that already appeared elsewhere shows under a later parent as a
+ *   SECONDARY position, defaulting CLOSED — so the link stays visible (that
+ *   parent still draws the boxed `+`) without printing the same subtree twice.
+ * - A non-empty `search` IGNORES the fold state: everything opens and matches are
+ *   flagged, while the overrides the user stored are left untouched.
+ *
+ * Every row also carries what the renderer needs to draw the connectors
+ * (`continuation`: for each ancestor level, whether that ancestor has a sibling
+ * below it) and the selection halo (`descendantOfSelected`).
+ */
+export function treeRows(tasks, opts = {}) {
+  const fold = opts.fold || new Map()
+  const search = opts.search || ''
+  const selected = opts.selected || new Set()
+  const set = new Set(tasks.map(t => t.id))
+  const byId = new Map(tasks.map(t => [t.id, t]))
+  const adj = new Map();
+  for (const t of tasks) adj.set(t.id, (t.children || []).filter(c => set.has(c)))
+  const hasParent = new Set()
+  for (const t of tasks) for (const p of t.parents || []) if (set.has(p)) hasParent.add(t.id)
+
+  const halo = new Set()
+  for (const id of selected) for (const d of descendantsOf(tasks, id)) halo.add(d)
+
+  const rows = []
+  const shown = new Set()          // holds a PRIMARY position
+  const covered = new Set()        // has a walked ancestor (it may be hidden)
+  // Every descendant of a walked node is "covered": when a fold hides them they
+  // must NOT come back as orphans in the catch-all pass below (a grandchild whose
+  // parent is hidden would otherwise be re-placed at the root).
+  const markCovered = root => {
+    const stack = [...(adj.get(root) || [])]
+    const seen = new Set()
+    while (stack.length) {
+      const id = stack.pop()
+      if (seen.has(id)) continue
+      seen.add(id)
+      covered.add(id)
+      for (const c of adj.get(id) || []) stack.push(c)
+    }
+  }
+
+  // `cont[level]` says whether the ancestor AT that level has a sibling below it
+  // — that is what the renderer draws as a vertical. A node's children inherit
+  // its own array plus one entry for ITS level: whether THIS node is followed by
+  // a sibling.
+  const walk = (id, depth, isChild, secondary, cont, hasFollowing) => {
+    const task = byId.get(id)
+    const kids = adj.get(id) || []
+    markCovered(id)
+    // DEFAULT FOLD, and it depends on the node's role: a parent that owns children
+    // of its own opens by default; one whose every child is already printed under
+    // an earlier parent (a "secondary" parent — the multi-parent case) starts
+    // CLOSED, so the tree shows the boxed `+` — the link is visible — without
+    // repeating a subtree the user is already looking at.
+    const onlySecondary = kids.length > 0 && kids.every(c => shown.has(c))
+    const open = search ? true : (fold.has(id) ? !fold.get(id) : !onlySecondary)
+    const collapsed = kids.length > 0 && !open
+    rows.push({
+      task, depth, isChild, secondary, continuation: cont, lastSibling: !hasFollowing,
+      hasChildren: kids.length > 0,
+      secondaryOnly: onlySecondary,
+      collapsed,
+      hiddenCount: 0,
+      matched: Boolean(search) && matchesSearch(task, search),
+      descendantOfSelected: halo.has(id)
+    })
+    // A secondary position shows the task itself and nothing else: its subtree is
+    // already printed under the primary position, and recursing here would print
+    // the same branch under every parent that reaches it.
+    if (secondary || !open) return
+    // Primary children first (they own the subtree), then the ones already placed
+    // through an earlier parent, appended as a secondary position.
+    const ordered = [...kids.filter(c => !shown.has(c)), ...kids.filter(c => shown.has(c))]
+    ordered.forEach((c, i) => {
+      const isSecondary = shown.has(c)
+      const isLast = i === ordered.length - 1
+      if (!isSecondary) shown.add(c)      // claim the primary position
+      walk(c, depth + 1, true, isSecondary, [...cont, hasFollowing], !isLast)
+    })
+  }
+
+  for (const t of tasks) {
+    if (hasParent.has(t.id) || shown.has(t.id)) continue
+    shown.add(t.id)
+    walk(t.id, 0, false, false, [], true)
+  }
+  // Anything that has neither been walked nor a walked parent (a cycle, or a task
+  // whose parents are filtered out) is placed once, flagged as a child like
+  // `buildRows` does. A task HIDDEN BY A FOLD is covered, so it is not re-added
+  // here as an orphan — that is the bug this guard exists for.
+  for (const t of tasks) {
+    if (shown.has(t.id) || covered.has(t.id)) continue
+    shown.add(t.id)
+    walk(t.id, 0, hasParent.has(t.id), false, [], true)
+  }
+
+  // "n hidden" must count what is ACTUALLY hidden: a descendant that ends up
+  // printed elsewhere (under another parent) is visible and is not counted.
+  const printed = new Set(rows.map(r => r.task.id))
+  for (const row of rows) {
+    if (!row.collapsed) continue
+    let n = 0
+    const stack = [...(adj.get(row.task.id) || [])]
+    const seen = new Set()
+    while (stack.length) {
+      const id = stack.pop()
+      if (seen.has(id)) continue
+      seen.add(id)
+      if (!printed.has(id)) n += 1
+      for (const c of adj.get(id) || []) stack.push(c)
+    }
+    row.hiddenCount = n
+  }
+  return rows
+}
 export function computeDomain(visible, minBarSec) {
   const min = minBarSec || MIN_BAR;
   let lo = Infinity, hi = -Infinity, hasProgress = false;
