@@ -194,6 +194,109 @@ function buildRows(tasks) {
   for (const t of tasks) walk(t.id, 0, Boolean(hasParent.has(t.id)));
   return rows;
 }
+var TREE_SLOT = 16;
+var TREE_SQUARE = 13;
+var TREE_AXIS = TREE_SQUARE / 2;
+var TREE_INSET = 6;
+function treeMarks(depth, continuation = [], lastSibling = false) {
+  const guides = [];
+  for (let level = 0; level < continuation.length; level++) {
+    if (continuation[level]) guides.push(TREE_INSET + level * TREE_SLOT + TREE_AXIS);
+  }
+  const child = depth > 0;
+  const elbowX = child ? TREE_INSET + (depth - 1) * TREE_SLOT + TREE_AXIS : null;
+  return {
+    indent: TREE_INSET + depth * TREE_SLOT,
+    squareX: TREE_INSET + depth * TREE_SLOT,
+    guides,
+    elbowX,
+    elbowW: child ? TREE_SLOT - TREE_AXIS : 0,
+    elbowHalf: child && Boolean(lastSibling)
+  };
+}
+function treeRows(tasks, opts = {}) {
+  const fold = opts.fold || /* @__PURE__ */ new Map();
+  const search = opts.search || "";
+  const selected = opts.selected || /* @__PURE__ */ new Set();
+  const set = new Set(tasks.map((t) => t.id));
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const adj = /* @__PURE__ */ new Map();
+  for (const t of tasks) adj.set(t.id, (t.children || []).filter((c) => set.has(c)));
+  const hasParent = /* @__PURE__ */ new Set();
+  for (const t of tasks) for (const p of t.parents || []) if (set.has(p)) hasParent.add(t.id);
+  const halo = /* @__PURE__ */ new Set();
+  for (const id of selected) for (const d of descendantsOf(tasks, id)) halo.add(d);
+  const rows = [];
+  const shown = /* @__PURE__ */ new Set();
+  const covered = /* @__PURE__ */ new Set();
+  const markCovered = (root) => {
+    const stack = [...adj.get(root) || []];
+    const seen = /* @__PURE__ */ new Set();
+    while (stack.length) {
+      const id = stack.pop();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      covered.add(id);
+      for (const c of adj.get(id) || []) stack.push(c);
+    }
+  };
+  const walk = (id, depth, isChild, secondary, cont, hasFollowing) => {
+    const task = byId.get(id);
+    const kids = adj.get(id) || [];
+    markCovered(id);
+    const onlySecondary = kids.length > 0 && kids.every((c) => shown.has(c));
+    const open = search ? true : fold.has(id) ? !fold.get(id) : !onlySecondary;
+    const collapsed = kids.length > 0 && !open;
+    rows.push({
+      task,
+      depth,
+      isChild,
+      secondary,
+      continuation: cont,
+      lastSibling: !hasFollowing,
+      hasChildren: kids.length > 0,
+      secondaryOnly: onlySecondary,
+      collapsed,
+      hiddenCount: 0,
+      matched: Boolean(search) && matchesSearch(task, search),
+      descendantOfSelected: halo.has(id)
+    });
+    if (secondary || !open) return;
+    const ordered = [...kids.filter((c) => !shown.has(c)), ...kids.filter((c) => shown.has(c))];
+    ordered.forEach((c, i) => {
+      const isSecondary = shown.has(c);
+      const isLast = i === ordered.length - 1;
+      if (!isSecondary) shown.add(c);
+      walk(c, depth + 1, true, isSecondary, [...cont, hasFollowing], !isLast);
+    });
+  };
+  for (const t of tasks) {
+    if (hasParent.has(t.id) || shown.has(t.id)) continue;
+    shown.add(t.id);
+    walk(t.id, 0, false, false, [], false);
+  }
+  for (const t of tasks) {
+    if (shown.has(t.id) || covered.has(t.id)) continue;
+    shown.add(t.id);
+    walk(t.id, 0, hasParent.has(t.id), false, [], false);
+  }
+  const printed = new Set(rows.map((r) => r.task.id));
+  for (const row of rows) {
+    if (!row.collapsed) continue;
+    let n = 0;
+    const stack = [...adj.get(row.task.id) || []];
+    const seen = /* @__PURE__ */ new Set();
+    while (stack.length) {
+      const id = stack.pop();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (!printed.has(id)) n += 1;
+      for (const c of adj.get(id) || []) stack.push(c);
+    }
+    row.hiddenCount = n;
+  }
+  return rows;
+}
 function computeDomain(visible, minBarSec) {
   const min = minBarSec || MIN_BAR;
   let lo = Infinity, hi = -Infinity, hasProgress = false;
@@ -247,6 +350,10 @@ export {
   DAY,
   MIN_BAR,
   TERMINAL_STATUSES,
+  TREE_AXIS,
+  TREE_INSET,
+  TREE_SLOT,
+  TREE_SQUARE,
   barRange,
   buildRows,
   computeDomain,
@@ -263,5 +370,7 @@ export {
   statusTone,
   taskBars,
   tickUnit,
-  ticks
+  ticks,
+  treeMarks,
+  treeRows
 };

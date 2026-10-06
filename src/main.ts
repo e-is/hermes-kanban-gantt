@@ -89,7 +89,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR } from './core/gantt-core.ts'
 
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -338,30 +338,81 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
   })
 }
 
-function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn }) {
+function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn, hasChildren, collapsed, secondary, secondaryOnly, continuation = [], lastSibling, hiddenCount = 0, matched, descendantOfSelected, onToggleFold }) {
   const i18n = useGanttI18n()
   const labelW = useValue($labelW)
   const bars = taskBars(task, now)
   const label = task.label ? `[${task.label}]` : ''
   const name = cleanTitle(task.title, task.label)
 
-  const connector = isChild
+  // Explorer connectors, in front of the checkbox and left of the fold square.
+  // All the geometry comes from the core (`treeMarks`) so it can be unit-tested:
+  // every level's vertical runs through the centre of THAT level's square, and a
+  // child's elbow hangs under its PARENT's square — not on its own slot, which is
+  // what made the icons look shifted left.
+  const marks = treeMarks(depth, continuation, lastSibling)
+  const line = 'var(--ui-stroke-secondary)'
+  const connectors = marks.guides.map(x => jsx('span', {
+    key: `g${x}`,
+    className: 'absolute pointer-events-none',
+    style: { left: `${x}px`, top: 0, width: '1px', height: '100%', backgroundColor: line, opacity: 0.65 }
+  }))
+  if (marks.elbowX !== null) {
+    // This row's own elbow: full height when a sibling follows it, top-half only
+    // when it is the last one (the classic `├` / `└`).
+    connectors.push(jsx('span', {
+      key: 'elbow-v',
+      className: 'absolute pointer-events-none',
+      style: { left: `${marks.elbowX}px`, top: 0, width: '1px',
+               height: marks.elbowHalf ? '50%' : '100%', backgroundColor: line, opacity: 0.65 }
+    }))
+    connectors.push(jsx('span', {
+      key: 'elbow-h',
+      className: 'absolute pointer-events-none',
+      style: { left: `${marks.elbowX}px`, top: '50%', width: `${marks.elbowW}px`, height: '1px',
+               backgroundColor: line, opacity: 0.65 }
+    }))
+  }
+
+  // The boxed `+` / `−`, the file explorer's affordance. A leaf keeps the space
+  // (an empty 13px slot) so titles stay aligned across a sibling group.
+  const foldSquare = hasChildren
     ? jsx('span', {
-        className: 'absolute',
+        role: 'button',
+        tabIndex: 0,
+        'aria-label': collapsed
+          ? (hiddenCount ? i18n.expandTaskHidden(name, hiddenCount) : i18n.expandTask(name))
+          : i18n.collapseTask(name),
+        'aria-expanded': !collapsed,
+        title: collapsed
+          ? (hiddenCount ? i18n.expandTaskHidden(name, hiddenCount) : i18n.expandTask(name))
+          : i18n.collapseTask(name),
+        className: cn(
+          'shrink-0 inline-flex items-center justify-center cursor-pointer select-none',
+          'text-[10px] leading-none font-semibold',
+          (secondary || secondaryOnly) ? 'text-(--ui-text-quaternary)' : 'text-(--ui-text-tertiary)',
+          'hover:text-(--ui-text-primary)'
+        ),
         style: {
-          // Drawn BEFORE the checkbox (visually left of it) and sized so its
-          // right edge lands exactly on the checkbox's left edge: with the
-          // label padding-left of `depth * 12 + 8`, the connector spans
-          // [depth*12+2, depth*12+8] — 6px wide, no overlap with the box.
-          left: `${depth * 12 + 2}px`,
-          top: 'calc(50% - 12px)',
-          width: '6px',
-          height: '12px',
-          borderLeft: '1px solid var(--ui-stroke-secondary)',
-          borderBottom: '1px solid var(--ui-stroke-secondary)'
-        }
+          width: '13px', height: '13px',
+          border: '1px solid var(--ui-stroke-secondary)',
+          borderRadius: '3px',
+          borderStyle: (secondary || secondaryOnly) ? 'dashed' : 'solid',
+          backgroundColor: (secondary || secondaryOnly) ? 'transparent' : 'var(--ui-bg-tertiary, transparent)'
+        },
+        onClick: e => {
+          e.stopPropagation()               // never opens the drawer nor checks the box
+          onToggleFold(task.id, !collapsed)
+        },
+        onKeyDown: e => {
+          if (e.key !== 'Enter' && e.key !== ' ') return
+          e.preventDefault()
+          e.stopPropagation()
+          onToggleFold(task.id, !collapsed)
+        },
+        children: collapsed ? '+' : '−'
       })
-    : null
+    : jsx('span', { className: 'shrink-0', style: { width: '13px', height: '13px' }, 'aria-hidden': 'true' })
 
   const dotColor = (bars.length > 0 ? bars[bars.length - 1]?.tone : null) || statusTone(task.status)
   // Representative Codicon per status, coloured with the status tone — replaces
@@ -379,9 +430,11 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
         ? 'bg-(--ui-accent)/12 font-semibold'
         : isChecked
           ? 'bg-(--ui-accent)/6'
-          : isEven
-            ? 'bg-black/[0.02] dark:bg-white/[0.02]'
-            : 'bg-transparent',
+          : descendantOfSelected
+            ? 'bg-(--ui-accent)/7'
+            : isEven
+              ? 'bg-black/[0.02] dark:bg-white/[0.02]'
+              : 'bg-transparent',
       'hover:bg-(--ui-accent)/8'
     ),
     style: { gridTemplateColumns: `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
@@ -402,7 +455,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
         ),
         'data-glass-opaque': true,
         style: {
-          paddingLeft: `${depth * 12 + 8}px`,
+          paddingLeft: `${marks.indent}px`,
           paddingRight: '8px',
           width: `${labelW}px`,
           // Opaque fill spanning the full row height, tinted like the row
@@ -411,12 +464,15 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             ? 'color-mix(in srgb, var(--ui-accent) 12%, var(--ui-bg-chrome))'
             : isChecked
               ? 'color-mix(in srgb, var(--ui-accent) 6%, var(--ui-bg-chrome))'
-              : isEven
-                ? 'color-mix(in srgb, var(--ui-text-primary) 2%, var(--ui-bg-chrome))'
-                : 'var(--ui-bg-chrome)'
+              : descendantOfSelected
+                ? 'color-mix(in srgb, var(--ui-accent) 7%, var(--ui-bg-chrome))'
+                : isEven
+                  ? 'color-mix(in srgb, var(--ui-text-primary) 2%, var(--ui-bg-chrome))'
+                  : 'var(--ui-bg-chrome)'
         },
         children: [
-          connector,
+          ...connectors,
+          foldSquare,
           jsx('input', {
             type: 'checkbox',
             checked: Boolean(isChecked),
@@ -1585,6 +1641,33 @@ export function KanbanGanttPage() {
     refetchInterval: wsState === WS_STATE.live ? 300_000 : 60_000
   })
 
+  // Tree fold state: a sparse override map (`id -> collapsed`), PER BOARD, so a
+  // board that comes back shows the same branches open. It goes through the same
+  // storage door as the board preference; a search never writes to it (treeRows
+  // simply ignores it while a query is active, and nothing is lost when it ends).
+  const foldKey = `fold.${board || 'current'}`
+  const [fold, setFold] = useState(() => new Map())
+  useEffect(() => {
+    let next = new Map()
+    try {
+      const raw = getStorage() ? getStorage().get(foldKey, null) : null
+      const parsed = raw ? JSON.parse(String(raw)) : []
+      if (Array.isArray(parsed)) next = new Map(parsed.filter(Array.isArray))
+    } catch (err) {
+      next = new Map()                      // corrupt entry: start unfolded
+    }
+    setFold(next)
+  }, [foldKey])
+  const writeFold = next => {
+    setFold(next)
+    if (getStorage()) getStorage().set(foldKey, JSON.stringify([...next]))
+  }
+  const handleToggleFold = (id, collapsed) => {
+    const next = new Map(fold)
+    next.set(id, collapsed)
+    writeFold(next)
+  }
+
   // The socket's state is PERSISTED, not just held in React state: it is the only
   // way a silent push failure is diagnosable from outside — the client talks to
   // console.debug, which nothing captures in a packaged build (so "why is there
@@ -1689,11 +1772,34 @@ export function KanbanGanttPage() {
       visible = visible.filter(t => t.assignee && selectedAssignees.has(t.assignee))
     }
     visible = visible.filter(t => matchesSearch(t, search))
-    const rows = buildRows(visible)
+    // The fold state is applied HERE, after every filter: `buildRows` stays the
+    // flat projection the tests know, `treeRows` adds the explorer grammar (which
+    // levels continue, who has children, what is collapsed).
+    const rows = treeRows(visible, {
+      fold,
+      search,
+      selected: openTaskId ? new Set([openTaskId]) : new Set()
+    })
     const domain = computeDomain(visible)
     const allAssignees = Array.from(new Set(data.tasks.map(t => t.assignee).filter(Boolean))).sort()
     return { rows, domain, total: visible.length, tasks: visible, allAssignees }
-  }, [data, showArchived, disabledStatuses, selectedAssignees, search])
+  }, [data, showArchived, disabledStatuses, selectedAssignees, search, fold, openTaskId])
+
+  // The header toggle: if anything the user can collapse is open, collapse it all;
+  // otherwise open everything. It walks the rows, so it acts on exactly the set
+  // that is on screen (a filtered-out branch is not silently rewritten).
+  // `derived` is null until the board's data arrives, hence the guards: reading
+  // `derived.rows` unguarded crashed the whole page into the error boundary on
+  // the first render (found in the desktop log).
+  const handleToggleAll = () => {
+    const parents = (derived?.rows || []).filter(r => r.hasChildren)
+    if (!parents.length) return
+    const anyOpen = parents.some(r => !r.collapsed)
+    const next = new Map(fold)
+    for (const r of parents) next.set(r.task.id, anyOpen)
+    writeFold(next)
+  }
+  const anyBranchOpen = (derived?.rows || []).some(r => r.hasChildren && !r.collapsed)
 
   // Creating a task: the domain derives the status (ready, or todo when the
   // chosen parent is not finished), so the dialog only collects what the user
@@ -1976,7 +2082,8 @@ export function KanbanGanttPage() {
       : (dropMap.get(row.task.id)?.allowed ? 'ok' : 'no'),
     onDragStartTask: handleDragStart,
     onDragEndTask: () => setDragId(null),
-    onDropOn: handleDropOn
+    onDropOn: handleDropOn,
+    onToggleFold: handleToggleFold
   }, row.task.id))
 
   // Determine dominant status priority for the top task count badge:
@@ -2156,10 +2263,34 @@ export function KanbanGanttPage() {
                     style: { gridTemplateColumns: `${labelW}px ${timelineW}px` },
                     children: [
                       jsxs('div', {
-                        className: 'sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center px-2 gap-1.5',
+                        className: 'sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center pr-2 gap-1.5',
                         'data-glass-opaque': true,
-                        style: { height: pxPerSec * DAY >= 50 && tickUnit(domain.max - domain.min) === 'day' ? '32px' : '24px' },
+                        style: { height: pxPerSec * DAY >= 50 && tickUnit(domain.max - domain.min) === 'day' ? '32px' : '24px',
+                                 paddingLeft: `${TREE_INSET}px` },
                         children: [
+                          // The tree's global toggle: at the head of the column and IN
+                          // FRONT OF the master checkbox, in the same 13px slot a root's
+                          // fold square occupies — so the column reads as one affordance
+                          // and the master checkbox lines up with the rows' checkboxes.
+                          jsx('span', {
+                            role: 'button',
+                            tabIndex: 0,
+                            'aria-label': anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
+                            title: anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
+                            className: cn(
+                              'shrink-0 inline-flex items-center justify-center cursor-pointer select-none',
+                              'text-[10px] leading-none font-semibold',
+                              'text-(--ui-text-tertiary) hover:text-(--ui-text-primary)'
+                            ),
+                            style: {
+                              width: '13px', height: '13px',
+                              border: '1px solid var(--ui-stroke-secondary)',
+                              borderRadius: '3px',
+                              backgroundColor: 'var(--ui-bg-tertiary, transparent)'
+                            },
+                            onClick: handleToggleAll,
+                            children: anyBranchOpen ? '−' : '+'
+                          }),
                           jsx('input', {
                             type: 'checkbox',
                             checked: Boolean(derived.rows.length > 0 && selectedIds.size === derived.rows.length),

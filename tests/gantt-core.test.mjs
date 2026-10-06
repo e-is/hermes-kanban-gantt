@@ -18,7 +18,8 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 // ESM export statements.
 const core = await import(join(HERE, '..', 'desktop', 'gantt-core.js'))
 
-const { barRange, taskBars, shortId, matchesSearch, buildRows, computeDomain, ticks, tickUnit, statusTone, DAY, MIN_BAR,
+const { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_SLOT, TREE_AXIS, TREE_INSET,
+  computeDomain, ticks, tickUnit, statusTone, DAY, MIN_BAR,
   statusIcon, isTerminal, descendantsOf, isDescendant, relationsOf, dropCandidates,
   resolveBoardSlug, isMissingBoardError } = core
 const NOW = 1_800_000_000
@@ -386,4 +387,157 @@ test('a board-specific failure is told apart from a dead backend', () => {
   assert.equal(isMissingBoardError(new Error('backend not ready')), false)
   assert.equal(isMissingBoardError(new Error('GET /boards → HTTP 500')), false)
   assert.equal(isMissingBoardError(undefined), false)
+})
+
+// ── treeRows: the explorer grammar (fold state, connectors, halo) ─────────────
+//
+// a -> {b -> c, e, f}, and f ALSO under g (the multi-parent case). `a` is f's
+// primary parent (it is walked first), `g` is the secondary one.
+
+const TREE = [
+  { id: 'a', title: 'A', status: 'todo', children: ['b', 'e', 'f'], parents: [] },
+  { id: 'b', title: 'B', status: 'todo', children: ['c'], parents: ['a'] },
+  { id: 'c', title: 'C', status: 'todo', children: [], parents: ['b'] },
+  { id: 'e', title: 'E', status: 'todo', children: [], parents: ['a'] },
+  { id: 'f', title: 'F', status: 'todo', children: [], parents: ['a', 'g'] },
+  { id: 'g', title: 'G', status: 'todo', children: ['f'], parents: [] }
+]
+const ids = rows => rows.map(r => r.task.id)
+const byId = rows => Object.fromEntries(rows.map(r => [r.task.id, r]))
+
+test('treeRows keeps the flat projection when nothing is folded', () => {
+  assert.deepEqual(ids(treeRows(TREE)), ['a', 'b', 'c', 'e', 'f', 'g'])
+  assert.deepEqual(ids(buildRows(TREE)), ['a', 'b', 'c', 'e', 'f', 'g'])
+})
+
+test('a collapsed parent hides its whole subtree, not just the first level', () => {
+  // a is folded, so b/c/e are hidden. f is NOT hidden: its other parent (g) is
+  // still open, and the tree must not lose a task because its first parent is
+  // closed — so f stays visible through g.
+  const rows = treeRows(TREE, { fold: new Map([['a', true]]) })
+  assert.deepEqual(ids(rows), ['a', 'g', 'f'])
+  const by = byId(rows)
+  assert.equal(by.a.collapsed, true)
+  assert.equal(by.a.hasChildren, true)
+  assert.equal(by.a.hiddenCount, 3)              // b, c and e — not f, which shows
+  assert.equal(by.b, undefined)                  // the folded branch is gone
+})
+
+test('a task only reachable through a later parent shows that parent folded', () => {
+  // g's only child (f) is already printed under a: g starts COLLAPSED, so the
+  // link is visible without printing f twice.
+  const rows = treeRows(TREE)
+  assert.equal(byId(rows).g.collapsed, true)
+  assert.equal(byId(rows).g.secondaryOnly, true)
+  // f is printed under a, so nothing is actually hidden here — the count follows
+  // what the user cannot see, not the raw subtree size.
+  assert.equal(byId(rows).g.hiddenCount, 0)
+  assert.equal(rows.filter(r => r.task.id === 'f').length, 1)
+
+  // …and opening it prints f a SECOND time, flagged, without its subtree.
+  const open = treeRows(TREE, { fold: new Map([['g', false]]) })
+  const fs = open.filter(r => r.task.id === 'f')
+  assert.equal(fs.length, 2)
+  assert.equal(fs[1].secondary, true)
+  assert.equal(fs[1].depth, 1)
+})
+
+test('continuation describes the ANCESTOR level, and lastSibling the row', () => {
+  const r = byId(treeRows(TREE))
+  // Level 0 is the top level: it is not a sibling group, so it never guides.
+  assert.deepEqual(r.b.continuation, [false])
+  assert.deepEqual(r.e.continuation, [false])
+  // Level 1 is b's own level: b IS followed by e, so the guide appears there.
+  assert.deepEqual(r.c.continuation, [false, true])
+  assert.equal(r.b.lastSibling, false)
+  assert.equal(r.e.lastSibling, false)
+  assert.equal(r.f.lastSibling, true)            // f is a's last child
+  assert.deepEqual(r.a.continuation, [])         // a root draws no guide
+})
+
+test('a lone child of a root draws only its elbow, no leading guide', () => {
+  // The reported defect: "| |_" instead of "|_". A parent with a single visible
+  // child must not prefix it with a vertical — there is no sibling to continue.
+  const LONE = [
+    { id: 'p', title: 'P', status: 'todo', children: ['c'], parents: [] },
+    { id: 'c', title: 'C', status: 'todo', children: [], parents: ['p'] }
+  ]
+  const only = treeRows(LONE)
+  assert.equal(only.length, 2)
+  assert.equal(only[1].task.id, 'c')
+  assert.equal(only[1].depth, 1)
+  assert.equal(only[1].lastSibling, true)                       // a lone child: the elbow is a └
+  assert.deepEqual(only[1].continuation, [false])               // no level-0 guide
+  assert.equal(only[1].continuation.some(Boolean), false)       // nothing to draw left of it
+})
+
+test('a guide appears on an inner level only when that level has a sibling below', () => {
+  // p -> {b -> c, e}: c sits two levels down, and its OWN level (1) has a sibling
+  // below it (e), so exactly one guide shows — at level 1, not at level 0.
+  const NESTED = [
+    { id: 'p', title: 'P', status: 'todo', children: ['b', 'e'], parents: [] },
+    { id: 'b', title: 'B', status: 'todo', children: ['c'], parents: ['p'] },
+    { id: 'c', title: 'C', status: 'todo', children: [], parents: ['b'] },
+    { id: 'e', title: 'E', status: 'todo', children: [], parents: ['p'] }
+  ]
+  const rows = byId(treeRows(NESTED))
+  assert.deepEqual(rows.c.continuation, [false, true])
+  assert.equal(rows.c.continuation[0], false)                   // root level: never
+  assert.equal(rows.c.continuation[1], true)                    // b is followed by e
+})
+
+test('a search ignores the fold state and flags what it matched', () => {
+  const rows = treeRows(TREE, { fold: new Map([['a', true], ['g', true]]), search: 'c' })
+  assert.ok(ids(rows).includes('c'))             // the folded branch opens
+  assert.equal(byId(rows).c.matched, true)
+  assert.equal(byId(rows).a.matched, false)
+})
+
+test('the halo follows the selected task descendants, not its ancestors', () => {
+  const rows = byId(treeRows(TREE, { selected: new Set(['a']) }))
+  assert.equal(rows.b.descendantOfSelected, true)
+  assert.equal(rows.c.descendantOfSelected, true)
+  assert.equal(rows.f.descendantOfSelected, true)
+  assert.equal(rows.a.descendantOfSelected, false)   // it IS the selection
+  assert.equal(rows.g.descendantOfSelected, false)   // unrelated branch
+})
+
+// ── treeMarks: the column's geometry, one slot per level ──────────────────────
+
+test('a lone child draws only its elbow, hanging under the PARENT square', () => {
+  // The reported defect: the icons looked "too far left" because the elbow was
+  // drawn on the CHILD's slot. It must sit under the parent's square centre, and
+  // its arm must reach the child's own square exactly.
+  const lone = treeMarks(1, [false], true)
+  assert.deepEqual(lone.guides, [])                          // nothing to continue
+  assert.equal(lone.indent, TREE_INSET + TREE_SLOT)           // the square starts here
+  assert.equal(lone.squareX, TREE_INSET + TREE_SLOT)
+  assert.equal(lone.elbowX, TREE_INSET + TREE_AXIS)           // level 0's square centre
+  assert.equal(lone.elbowW, TREE_SLOT - TREE_AXIS)
+  assert.equal(lone.elbowX + lone.elbowW, lone.squareX)       // the arm meets the square
+  assert.equal(lone.elbowHalf, true)                         // a lone child draws a `└`
+})
+
+test('every guide runs through the centre of its own level square', () => {
+  const marks = treeMarks(2, [false, true], false)
+  // Only level 1 continues (level 0 is the top level and never guides).
+  assert.deepEqual(marks.guides, [TREE_INSET + TREE_SLOT + TREE_AXIS])
+  // A depth-2 row's elbow is exactly the guide of its parent's level, continued.
+  assert.equal(marks.elbowX, TREE_INSET + TREE_SLOT + TREE_AXIS)
+  assert.equal(marks.elbowX + marks.elbowW, marks.squareX)     // TREE_INSET + 2 * TREE_SLOT
+  assert.equal(marks.elbowHalf, false)                        // a sibling follows
+})
+
+test('a root has no elbow, and a leaf keeps its slot width', () => {
+  const root = treeMarks(0, [], true)
+  assert.equal(root.elbowX, null)                            // nothing to hang from
+  assert.deepEqual(root.guides, [])
+  // A root still gets the inset — and it is the exact offset the column header's
+  // global toggle uses, so the two affordances line up.
+  assert.equal(root.indent, TREE_INSET)
+  assert.equal(root.squareX, TREE_INSET)
+  const deep = treeMarks(3, [false, true, false], true)
+  assert.deepEqual(deep.guides, [TREE_INSET + TREE_SLOT + TREE_AXIS])  // only level 1
+  assert.equal(deep.squareX, TREE_INSET + 3 * TREE_SLOT)
+  assert.equal(deep.elbowHalf, true)                          // last of its group
 })
