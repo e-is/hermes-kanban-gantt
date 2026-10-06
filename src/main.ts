@@ -1792,15 +1792,18 @@ export function KanbanGanttPage() {
   // The header toggle: if anything the user can collapse is open, collapse it all;
   // otherwise open everything. It walks the rows, so it acts on exactly the set
   // that is on screen (a filtered-out branch is not silently rewritten).
+  // `derived` is null until the board's data arrives, hence the guards: reading
+  // `derived.rows` unguarded crashed the whole page into the error boundary on
+  // the first render (found in the desktop log).
   const handleToggleAll = () => {
-    const parents = derived.rows.filter(r => r.hasChildren)
+    const parents = (derived?.rows || []).filter(r => r.hasChildren)
     if (!parents.length) return
     const anyOpen = parents.some(r => !r.collapsed)
     const next = new Map(fold)
     for (const r of parents) next.set(r.task.id, anyOpen)
     writeFold(next)
   }
-  const allCollapsed = derived.rows.some(r => r.hasChildren && !r.collapsed)
+  const anyBranchOpen = (derived?.rows || []).some(r => r.hasChildren && !r.collapsed)
 
   // Creating a task: the domain derives the status (ready, or todo when the
   // chosen parent is not finished), so the dialog only collects what the user
@@ -2136,8 +2139,8 @@ export function KanbanGanttPage() {
               jsx('span', {
                 role: 'button',
                 tabIndex: 0,
-                'aria-label': allCollapsed ? i18n.collapseAll : i18n.expandAll,
-                title: allCollapsed ? i18n.collapseAll : i18n.expandAll,
+                'aria-label': anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
+                title: anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
                 className: 'inline-flex items-center justify-center cursor-pointer select-none text-[10px] leading-none font-semibold text-(--ui-text-tertiary) hover:text-(--ui-text-primary) mr-1',
                 style: {
                   width: '14px', height: '14px',
@@ -2146,7 +2149,7 @@ export function KanbanGanttPage() {
                   backgroundColor: 'var(--ui-bg-tertiary, transparent)'
                 },
                 onClick: handleToggleAll,
-                children: allCollapsed ? '−' : '+'
+                children: anyBranchOpen ? '−' : '+'
               }),
               jsx('span', { className: 'font-semibold', children: i18n.title }),
               jsx('span', {

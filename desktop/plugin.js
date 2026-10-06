@@ -3057,14 +3057,14 @@ function KanbanGanttPage() {
     return { rows: rows2, domain: domain2, total: visible.length, tasks: visible, allAssignees };
   }, [data, showArchived, disabledStatuses, selectedAssignees, search, fold, openTaskId]);
   const handleToggleAll = () => {
-    const parents = derived.rows.filter((r) => r.hasChildren);
+    const parents = (derived?.rows || []).filter((r) => r.hasChildren);
     if (!parents.length) return;
     const anyOpen = parents.some((r) => !r.collapsed);
     const next = new Map(fold);
     for (const r of parents) next.set(r.task.id, anyOpen);
     writeFold(next);
   };
-  const allCollapsed = derived.rows.some((r) => r.hasChildren && !r.collapsed);
+  const anyBranchOpen = (derived?.rows || []).some((r) => r.hasChildren && !r.collapsed);
   const createTaskMutation = useMutation({
     mutationFn: (values) => createTask(values, board),
     onSuccess: (response, values) => {
@@ -3331,8 +3331,8 @@ function KanbanGanttPage() {
                   jsx6("span", {
                     role: "button",
                     tabIndex: 0,
-                    "aria-label": allCollapsed ? i18n.collapseAll : i18n.expandAll,
-                    title: allCollapsed ? i18n.collapseAll : i18n.expandAll,
+                    "aria-label": anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
+                    title: anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
                     className: "inline-flex items-center justify-center cursor-pointer select-none text-[10px] leading-none font-semibold text-(--ui-text-tertiary) hover:text-(--ui-text-primary) mr-1",
                     style: {
                       width: "14px",
@@ -3342,7 +3342,7 @@ function KanbanGanttPage() {
                       backgroundColor: "var(--ui-bg-tertiary, transparent)"
                     },
                     onClick: handleToggleAll,
-                    children: allCollapsed ? "−" : "+"
+                    children: anyBranchOpen ? "−" : "+"
                   }),
                   jsx6("span", { className: "font-semibold", children: i18n.title }),
                   jsx6("span", {
