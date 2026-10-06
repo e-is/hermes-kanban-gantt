@@ -889,16 +889,17 @@ function matchesSearch(task, query) {
 var TREE_SLOT = 16;
 var TREE_SQUARE = 13;
 var TREE_AXIS = TREE_SQUARE / 2;
+var TREE_INSET = 6;
 function treeMarks(depth, continuation = [], lastSibling = false) {
   const guides = [];
   for (let level = 0; level < continuation.length; level++) {
-    if (continuation[level]) guides.push(level * TREE_SLOT + TREE_AXIS);
+    if (continuation[level]) guides.push(TREE_INSET + level * TREE_SLOT + TREE_AXIS);
   }
   const child = depth > 0;
-  const elbowX = child ? (depth - 1) * TREE_SLOT + TREE_AXIS : null;
+  const elbowX = child ? TREE_INSET + (depth - 1) * TREE_SLOT + TREE_AXIS : null;
   return {
-    indent: depth * TREE_SLOT,
-    squareX: depth * TREE_SLOT,
+    indent: TREE_INSET + depth * TREE_SLOT,
+    squareX: TREE_INSET + depth * TREE_SLOT,
     guides,
     elbowX,
     elbowW: child ? TREE_SLOT - TREE_AXIS : 0,
@@ -3333,25 +3334,6 @@ function KanbanGanttPage() {
               jsxs6("div", {
                 className: "inline-flex items-center gap-2 text-sm font-medium",
                 children: [
-                  // The tree's global toggle, right at the head of the column (before
-                  // the first task): collapse everything the user can collapse, or
-                  // open everything, in one click.
-                  jsx6("span", {
-                    role: "button",
-                    tabIndex: 0,
-                    "aria-label": anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
-                    title: anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
-                    className: "inline-flex items-center justify-center cursor-pointer select-none text-[10px] leading-none font-semibold text-(--ui-text-tertiary) hover:text-(--ui-text-primary) mr-1",
-                    style: {
-                      width: "14px",
-                      height: "14px",
-                      border: "1px solid var(--ui-stroke-secondary)",
-                      borderRadius: "3px",
-                      backgroundColor: "var(--ui-bg-tertiary, transparent)"
-                    },
-                    onClick: handleToggleAll,
-                    children: anyBranchOpen ? "−" : "+"
-                  }),
                   jsx6("span", { className: "font-semibold", children: i18n.title }),
                   jsx6("span", {
                     className: "inline-flex items-center justify-center rounded-full px-2 py-0.2 text-[10.5px] font-semibold tracking-tight shadow-xs cursor-help",
@@ -3477,10 +3459,37 @@ function KanbanGanttPage() {
                     style: { gridTemplateColumns: `${labelW}px ${timelineW}px` },
                     children: [
                       jsxs6("div", {
-                        className: "sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center px-2 gap-1.5",
+                        className: "sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center pr-2 gap-1.5",
                         "data-glass-opaque": true,
-                        style: { height: pxPerSec * DAY >= 50 && tickUnit(domain.max - domain.min) === "day" ? "32px" : "24px" },
+                        style: {
+                          height: pxPerSec * DAY >= 50 && tickUnit(domain.max - domain.min) === "day" ? "32px" : "24px",
+                          paddingLeft: `${TREE_INSET}px`
+                        },
                         children: [
+                          // The tree's global toggle: at the head of the column and IN
+                          // FRONT OF the master checkbox, in the same 13px slot a root's
+                          // fold square occupies — so the column reads as one affordance
+                          // and the master checkbox lines up with the rows' checkboxes.
+                          jsx6("span", {
+                            role: "button",
+                            tabIndex: 0,
+                            "aria-label": anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
+                            title: anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
+                            className: cn3(
+                              "shrink-0 inline-flex items-center justify-center cursor-pointer select-none",
+                              "text-[10px] leading-none font-semibold",
+                              "text-(--ui-text-tertiary) hover:text-(--ui-text-primary)"
+                            ),
+                            style: {
+                              width: "13px",
+                              height: "13px",
+                              border: "1px solid var(--ui-stroke-secondary)",
+                              borderRadius: "3px",
+                              backgroundColor: "var(--ui-bg-tertiary, transparent)"
+                            },
+                            onClick: handleToggleAll,
+                            children: anyBranchOpen ? "−" : "+"
+                          }),
                           jsx6("input", {
                             type: "checkbox",
                             checked: Boolean(derived.rows.length > 0 && selectedIds.size === derived.rows.length),

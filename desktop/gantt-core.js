@@ -197,16 +197,17 @@ function buildRows(tasks) {
 var TREE_SLOT = 16;
 var TREE_SQUARE = 13;
 var TREE_AXIS = TREE_SQUARE / 2;
+var TREE_INSET = 6;
 function treeMarks(depth, continuation = [], lastSibling = false) {
   const guides = [];
   for (let level = 0; level < continuation.length; level++) {
-    if (continuation[level]) guides.push(level * TREE_SLOT + TREE_AXIS);
+    if (continuation[level]) guides.push(TREE_INSET + level * TREE_SLOT + TREE_AXIS);
   }
   const child = depth > 0;
-  const elbowX = child ? (depth - 1) * TREE_SLOT + TREE_AXIS : null;
+  const elbowX = child ? TREE_INSET + (depth - 1) * TREE_SLOT + TREE_AXIS : null;
   return {
-    indent: depth * TREE_SLOT,
-    squareX: depth * TREE_SLOT,
+    indent: TREE_INSET + depth * TREE_SLOT,
+    squareX: TREE_INSET + depth * TREE_SLOT,
     guides,
     elbowX,
     elbowW: child ? TREE_SLOT - TREE_AXIS : 0,
@@ -350,6 +351,7 @@ export {
   MIN_BAR,
   TERMINAL_STATUSES,
   TREE_AXIS,
+  TREE_INSET,
   TREE_SLOT,
   TREE_SQUARE,
   barRange,

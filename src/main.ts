@@ -89,7 +89,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR } from './core/gantt-core.ts'
 
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -2129,24 +2129,6 @@ export function KanbanGanttPage() {
           jsxs('div', {
             className: 'inline-flex items-center gap-2 text-sm font-medium',
             children: [
-              // The tree's global toggle, right at the head of the column (before
-              // the first task): collapse everything the user can collapse, or
-              // open everything, in one click.
-              jsx('span', {
-                role: 'button',
-                tabIndex: 0,
-                'aria-label': anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
-                title: anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
-                className: 'inline-flex items-center justify-center cursor-pointer select-none text-[10px] leading-none font-semibold text-(--ui-text-tertiary) hover:text-(--ui-text-primary) mr-1',
-                style: {
-                  width: '14px', height: '14px',
-                  border: '1px solid var(--ui-stroke-secondary)',
-                  borderRadius: '3px',
-                  backgroundColor: 'var(--ui-bg-tertiary, transparent)'
-                },
-                onClick: handleToggleAll,
-                children: anyBranchOpen ? '−' : '+'
-              }),
               jsx('span', { className: 'font-semibold', children: i18n.title }),
               jsx('span', {
                 className: 'inline-flex items-center justify-center rounded-full px-2 py-0.2 text-[10.5px] font-semibold tracking-tight shadow-xs cursor-help',
@@ -2281,10 +2263,34 @@ export function KanbanGanttPage() {
                     style: { gridTemplateColumns: `${labelW}px ${timelineW}px` },
                     children: [
                       jsxs('div', {
-                        className: 'sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center px-2 gap-1.5',
+                        className: 'sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center pr-2 gap-1.5',
                         'data-glass-opaque': true,
-                        style: { height: pxPerSec * DAY >= 50 && tickUnit(domain.max - domain.min) === 'day' ? '32px' : '24px' },
+                        style: { height: pxPerSec * DAY >= 50 && tickUnit(domain.max - domain.min) === 'day' ? '32px' : '24px',
+                                 paddingLeft: `${TREE_INSET}px` },
                         children: [
+                          // The tree's global toggle: at the head of the column and IN
+                          // FRONT OF the master checkbox, in the same 13px slot a root's
+                          // fold square occupies — so the column reads as one affordance
+                          // and the master checkbox lines up with the rows' checkboxes.
+                          jsx('span', {
+                            role: 'button',
+                            tabIndex: 0,
+                            'aria-label': anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
+                            title: anyBranchOpen ? i18n.collapseAll : i18n.expandAll,
+                            className: cn(
+                              'shrink-0 inline-flex items-center justify-center cursor-pointer select-none',
+                              'text-[10px] leading-none font-semibold',
+                              'text-(--ui-text-tertiary) hover:text-(--ui-text-primary)'
+                            ),
+                            style: {
+                              width: '13px', height: '13px',
+                              border: '1px solid var(--ui-stroke-secondary)',
+                              borderRadius: '3px',
+                              backgroundColor: 'var(--ui-bg-tertiary, transparent)'
+                            },
+                            onClick: handleToggleAll,
+                            children: anyBranchOpen ? '−' : '+'
+                          }),
                           jsx('input', {
                             type: 'checkbox',
                             checked: Boolean(derived.rows.length > 0 && selectedIds.size === derived.rows.length),

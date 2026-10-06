@@ -294,6 +294,10 @@ export function buildRows(tasks) {
 export const TREE_SLOT = 16
 export const TREE_SQUARE = 13
 export const TREE_AXIS = TREE_SQUARE / 2   // a level's vertical runs through its square's centre
+// Breathing room before the first square, so a root's fold affordance does not
+// touch the cell's left edge. Every x below includes it, and the column header's
+// global toggle uses the same constant — the two cannot drift apart.
+export const TREE_INSET = 6
 
 /**
  * Where a row's branch marks sit, in px from the label cell's left edge:
@@ -305,13 +309,13 @@ export const TREE_AXIS = TREE_SQUARE / 2   // a level's vertical runs through it
 export function treeMarks(depth, continuation = [], lastSibling = false) {
   const guides = []
   for (let level = 0; level < continuation.length; level++) {
-    if (continuation[level]) guides.push(level * TREE_SLOT + TREE_AXIS)
+    if (continuation[level]) guides.push(TREE_INSET + level * TREE_SLOT + TREE_AXIS)
   }
   const child = depth > 0
-  const elbowX = child ? (depth - 1) * TREE_SLOT + TREE_AXIS : null
+  const elbowX = child ? TREE_INSET + (depth - 1) * TREE_SLOT + TREE_AXIS : null
   return {
-    indent: depth * TREE_SLOT,
-    squareX: depth * TREE_SLOT,
+    indent: TREE_INSET + depth * TREE_SLOT,
+    squareX: TREE_INSET + depth * TREE_SLOT,
     guides,
     elbowX,
     elbowW: child ? TREE_SLOT - TREE_AXIS : 0,

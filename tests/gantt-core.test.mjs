@@ -18,7 +18,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 // ESM export statements.
 const core = await import(join(HERE, '..', 'desktop', 'gantt-core.js'))
 
-const { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_SLOT, TREE_AXIS,
+const { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_SLOT, TREE_AXIS, TREE_INSET,
   computeDomain, ticks, tickUnit, statusTone, DAY, MIN_BAR,
   statusIcon, isTerminal, descendantsOf, isDescendant, relationsOf, dropCandidates,
   resolveBoardSlug, isMissingBoardError } = core
@@ -510,9 +510,9 @@ test('a lone child draws only its elbow, hanging under the PARENT square', () =>
   // its arm must reach the child's own square exactly.
   const lone = treeMarks(1, [false], true)
   assert.deepEqual(lone.guides, [])                          // nothing to continue
-  assert.equal(lone.indent, TREE_SLOT)                       // the square starts here
-  assert.equal(lone.squareX, TREE_SLOT)
-  assert.equal(lone.elbowX, TREE_AXIS)                       // level 0's square centre
+  assert.equal(lone.indent, TREE_INSET + TREE_SLOT)           // the square starts here
+  assert.equal(lone.squareX, TREE_INSET + TREE_SLOT)
+  assert.equal(lone.elbowX, TREE_INSET + TREE_AXIS)           // level 0's square centre
   assert.equal(lone.elbowW, TREE_SLOT - TREE_AXIS)
   assert.equal(lone.elbowX + lone.elbowW, lone.squareX)       // the arm meets the square
   assert.equal(lone.elbowHalf, true)                         // a lone child draws a `└`
@@ -521,11 +521,10 @@ test('a lone child draws only its elbow, hanging under the PARENT square', () =>
 test('every guide runs through the centre of its own level square', () => {
   const marks = treeMarks(2, [false, true], false)
   // Only level 1 continues (level 0 is the top level and never guides).
-  assert.deepEqual(marks.guides, [TREE_SLOT + TREE_AXIS])
-  assert.equal(marks.guides[0], 1 * TREE_SLOT + TREE_AXIS)
+  assert.deepEqual(marks.guides, [TREE_INSET + TREE_SLOT + TREE_AXIS])
   // A depth-2 row's elbow is exactly the guide of its parent's level, continued.
-  assert.equal(marks.elbowX, 1 * TREE_SLOT + TREE_AXIS)
-  assert.equal(marks.elbowX + marks.elbowW, marks.squareX)     // 2 * TREE_SLOT
+  assert.equal(marks.elbowX, TREE_INSET + TREE_SLOT + TREE_AXIS)
+  assert.equal(marks.elbowX + marks.elbowW, marks.squareX)     // TREE_INSET + 2 * TREE_SLOT
   assert.equal(marks.elbowHalf, false)                        // a sibling follows
 })
 
@@ -533,9 +532,12 @@ test('a root has no elbow, and a leaf keeps its slot width', () => {
   const root = treeMarks(0, [], true)
   assert.equal(root.elbowX, null)                            // nothing to hang from
   assert.deepEqual(root.guides, [])
-  assert.equal(root.indent, 0)
+  // A root still gets the inset — and it is the exact offset the column header's
+  // global toggle uses, so the two affordances line up.
+  assert.equal(root.indent, TREE_INSET)
+  assert.equal(root.squareX, TREE_INSET)
   const deep = treeMarks(3, [false, true, false], true)
-  assert.deepEqual(deep.guides, [TREE_SLOT + TREE_AXIS])      // only level 1 continues
-  assert.equal(deep.squareX, 3 * TREE_SLOT)
+  assert.deepEqual(deep.guides, [TREE_INSET + TREE_SLOT + TREE_AXIS])  // only level 1
+  assert.equal(deep.squareX, TREE_INSET + 3 * TREE_SLOT)
   assert.equal(deep.elbowHalf, true)                          // last of its group
 })
