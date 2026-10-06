@@ -78,4 +78,4 @@ unset HERMES_DELEGATED_CHILD_CONTEXT
 unset HERMES_KANBAN_DB
 unset HERMES_KANBAN_BOARD
 cd "$SCRIPT_DIR"
-exec "$PY" -m pytest test_plugin_api.py "$@"
+exec "$PY" -m pytest "$SCRIPT_DIR" "$@"

@@ -196,6 +196,11 @@ def authorize(ws: WebSocket) -> tuple[bool, str]:
     3. If the host core is not importable (bare standalone server), accept
        loopback clients only — never a wider socket than the HTTP surface
        already has (R16).
+    4. Fail CLOSED: a gate that raises is a refusal, never a reason to fall back
+       to rule 3. Behind a loopback reverse proxy every client looks like
+       127.0.0.1, so falling back there would serve board snapshots (task titles
+       and bodies) without authentication — the bundled kanban plugin refuses the
+       same way (raised in review of the catalog PR).
     """
     token = ""
     try:
@@ -215,11 +220,18 @@ def authorize(ws: WebSocket) -> tuple[bool, str]:
 
     try:
         from hermes_cli import web_server_chat as _core
+    except ImportError:
+        # Standalone dev server (no hermes_cli): loopback only, which is exactly
+        # the reachability the HTTP surface already has.
+        return (True, "loopback") if _client_is_loopback(ws) else (False, "no_gate")
 
+    # The import is the ONLY thing allowed to fall back. The gate itself is the
+    # decision: if it raises, refuse — a loopback fallback here would hand board
+    # snapshots to any client behind a loopback reverse proxy.
+    try:
         return (True, "core_gate") if bool(_core._ws_auth_ok(ws)) else (False, "core_reject")
     except Exception:
-        # Standalone dev server (no hermes_cli): loopback only.
-        return (True, "loopback") if _client_is_loopback(ws) else (False, "no_gate")
+        return False, "core_error"
 
 
 # ---------------------------------------------------------------------------
