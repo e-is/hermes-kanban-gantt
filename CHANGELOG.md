@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.3.4 — the websocket gate fails closed, and a finished task can be a parent again
+
+**The `/events` upgrade gate refuses when the core gate raises.** The `try/except`
+around the auth step also wrapped the gate *call*, so an exception inside the gate
+fell back to "accept if the client is loopback" — and behind a loopback reverse
+proxy every client looks like 127.0.0.1, which would have served board snapshots
+(task titles and bodies) without authentication. Raised in review of the catalog
+listing. Only the import falls back now; a raising gate is a refusal, the same
+shape the bundled kanban plugin uses. Four tests pin it, starting with that exact
+regression: a loopback client plus a gate that raises must refuse.
+
+**A finished task can take a parent again.** Dropping a task under a Done task is
+the case the hierarchy exists for — a parent is a prerequisite to finish before
+its children — but the UI refused it: the candidate helper tagged every
+done/archived task with a `terminal` reason, which greyed it out in the
+"move under" picker *and* removed the drag-and-drop target, since both read the
+same map. The domain never refused it, and it only demotes a child when the parent
+is **not** terminal.
+
+**Tests.** `tests/run_tests.sh` now collects the whole tests directory instead of
+naming one file, so a new test file is no longer invisible to the suite
+(39 → 43 pytest; 54 node).
+
 ## 1.3.3 — edit a task's description, and a restart no longer mutes the push
 
 **The drawer edits descriptions.** The DESCRIPTION section carries the pencil the

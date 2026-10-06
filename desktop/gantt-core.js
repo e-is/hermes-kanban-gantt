@@ -65,7 +65,6 @@ function dropCandidates(tasks, draggedId, boardSlug) {
     if (task.id === draggedId) reason = "self";
     else if (below.has(task.id)) reason = "descendant";
     else if (boardSlug && task.board && task.board !== boardSlug) reason = "other-board";
-    else if (isTerminal(task.status)) reason = "terminal";
     else if (alreadyLinked.has(task.id)) reason = "linked";
     return { task, allowed: reason === null, reason };
   });
