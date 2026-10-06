@@ -13,14 +13,14 @@
       "ref": "main",
       "sourceType": "github",
       "skillPath": "skills/autonomous-ai-agents/hermes-agent/SKILL.md",
-      "computedHash": "538bd88a96655d144cfb6837d8600df39605b03bfd04f274b45b8343f8fe2fe6"
+      "computedHash": "4ebbbe9f3fc44c1cce2e57fb68dd6f1bd4c8b138e76b66a3dd4c001ce3248828"
     },
     "hermes-agent-skill-authoring": {
       "source": "NousResearch/hermes-agent",
       "ref": "main",
       "sourceType": "github",
       "skillPath": "skills/software-development/hermes-agent-skill-authoring/SKILL.md",
-      "computedHash": "b69d2298626791f9d2774709926ff4fc7c5b4c1689db547a01d84ab858bc7719"
+      "computedHash": "9af9f6ddc0bc8de19fc1d35a545ac40289dff15d785bba0f35993f0495aede6f"
     },
     "inspecting-hermes-desktop-dom": {
       "source": "NousResearch/hermes-agent",

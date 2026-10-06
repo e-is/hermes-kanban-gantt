@@ -70,6 +70,7 @@ import { subscribeGantt } from './ws'
 import { WS_STATE, canPush } from './core/ws-core'
 import { TitlebarBoardSwitcher } from './ui/TitlebarBoardSwitcher'
 import { NewTaskDialog } from './ui/NewTaskDialog'
+import { MoveTaskDialog } from './ui/MoveTaskDialog'
 import { TaskRelations } from './ui/TaskRelations'
 import { ReparentChoiceDialog, MoveUnderDialog, reasonLabel } from './ui/ReparentChooser'
 
@@ -921,12 +922,30 @@ function StatusBadge({ status, onPick, disabled }) {
   ] })
 }
 
-function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked = false, onToggleDock }) {
+function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked = false, onToggleDock, boards = [] }) {
   const drawerW = useValue($drawerW)
   const i18n = useGanttI18n()
   const queryClient = useQueryClient()
   const scrollContainerRef = useRef(null)
   const prevTaskIdRef = useRef(null)
+
+  // Cross-board move: the dialog owns the confirmations; the mutation runs
+  // here so the success toast + invalidation live next to the other writes.
+  const [moveBoardOpen, setMoveBoardOpen] = useState(false)
+  const shownBoard = board
+  const moveMutation = useMutation({
+    mutationFn: toBoard =>
+      apiFetch(`/tasks/${encodeURIComponent(shownId)}/move?board=${encodeURIComponent(board || '')}`, {
+        method: 'POST',
+        body: { to_board: toBoard }
+      }),
+    onSuccess: result => {
+      setMoveBoardOpen(false)
+      toast('success', i18n.movedTo(result?.to || result?.count || ''))
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+      onClose()
+    }
+  })
 
   // A description draft belongs to the task it was seeded from. The drawer does
   // not remount when the page opens ANOTHER task, so an unsaved draft used to
@@ -1142,6 +1161,23 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                         children: jsxs('span', { className: 'flex items-center gap-2', children: [
                           jsx(Codicon, { name: 'move', size: '0.85rem' }),
                           i18n.moveUnder
+                        ] })
+                      }),
+                      // Cross-board move: opens the board-picker dialog (with
+                      // its own confirmation chain). Requires another board.
+                      jsx(DropdownMenuItem, {
+                        className: 'flex items-center gap-2 px-3 py-1.5',
+                        onClick: () => {
+                          const others = boards.filter(b => b.slug !== shownBoard)
+                          if (others.length === 0) {
+                            toast('warning', i18n.moveNoOtherBoards)
+                            return
+                          }
+                          setMoveBoardOpen(true)
+                        },
+                        children: jsxs('span', { className: 'flex items-center gap-2', children: [
+                          jsx(Codicon, { name: 'arrow-circle-right', size: '0.85rem' }),
+                          i18n.moveToBoard
                         ] })
                       }),
                       more.length ? jsx(DropdownMenuSeparator, {}) : null,
@@ -1476,6 +1512,24 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
             setDescDraft('')
           }
         }
+      }),
+      // Cross-board move: board picker + its own confirmation chain (plain
+      // move, children-must-travel, parent-loss) and a spinner while moving.
+      jsx(MoveTaskDialog, {
+        open: moveBoardOpen,
+        task: data?.task
+          ? {
+              id: shownId,
+              title: data.task.title || shownId,
+              children: data.task.children || [],
+              parents: data.task.parents || []
+            }
+          : null,
+        boards,
+        currentBoard: board || '',
+        i18n,
+        onClose: () => setMoveBoardOpen(false),
+        onMove: toBoard => moveMutation.mutateAsync(toBoard)
       })
     ]
   })
@@ -2166,6 +2220,9 @@ export function KanbanGanttPage() {
             // Unfiltered snapshot: a parent hidden by the current filter must
             // still be listed in the drawer's relations.
             tasks: data?.tasks || [],
+            // Every known board — the cross-board move dialog filters out the
+            // current one itself.
+            boards: boardsData?.boards || [],
             onClose: () => $openTaskId.set(null),
             docked: dockDrawer,
             onToggleDock: () => {

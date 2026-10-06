@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sqlite3
 import time
 from pathlib import Path
@@ -911,6 +912,241 @@ def _parent_ids(conn: sqlite3.Connection, task_id: str) -> list[str]:
 def _status_of(conn: sqlite3.Connection, task_id: str) -> Optional[str]:
     row = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
     return row[0] if row else None
+
+
+class MoveBody(BaseModel):
+    to_board: str
+
+
+_MOVE_TABLES_TASK = ("tasks", "task_comments", "task_events", "task_runs",
+                     "task_attachments", "kanban_notify_subs")
+
+
+def _descendants(conn: sqlite3.Connection, task_id: str) -> list[str]:
+    """The task + its full children closure (task_links parent->child BFS)."""
+    out = [task_id]
+    seen = {task_id}
+    frontier = [task_id]
+    while frontier:
+        nxt = []
+        for pid in frontier:
+            for (cid,) in conn.execute(
+                "SELECT child_id FROM task_links WHERE parent_id = ?", (pid,)
+            ):
+                if cid not in seen:
+                    seen.add(cid)
+                    out.append(cid)
+                    nxt.append(cid)
+        frontier = nxt
+    return out
+
+
+def _insert_rows(conn_t: sqlite3.Connection, table: str, rows: list[sqlite3.Row],
+                 idmap: dict[str, str], id_col: str = "task_id") -> int:
+    """Copy rows into the target board, remapping task ids through ``idmap``.
+    ``task_links`` is handled separately (two id columns)."""
+    n = 0
+    for row in rows:
+        d = dict(row)
+        d[id_col] = idmap.get(d[id_col], d[id_col])
+        cols = list(d.keys())
+        conn_t.execute(
+            f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
+            [d[c] for c in cols],
+        )
+        n += 1
+    return n
+
+
+@router.post("/tasks/{task_id}/move")
+def move_task(task_id: str, payload: MoveBody, board: Optional[str] = Query(None)):
+    """Move a task (with its full children closure) to another board.
+
+    Everything travels: task row (same id when free), comments, runs, events,
+    attachments (files + rows), notification subscriptions and intra-move
+    parent/child links. The moved task's parents stay behind — it arrives
+    parentless (confirmed in the UI). Source rows are deleted only after the
+    target copy is fully written AND verified, so a failure never loses data.
+    """
+    from hermes_cli import kanban_db
+
+    target = (payload.to_board or "").strip().strip("/")
+    if not target or "/" in target or "\\" in target or target in (".", ".."):
+        raise HTTPException(status_code=400, detail="invalid target board")
+    slug = _board_for_task(task_id, board)
+    if target == slug:
+        raise HTTPException(status_code=400, detail="task is already on that board")
+
+    src_path = _board_db_path(slug)
+    tgt_path = _board_db_path(target)   # 503 when the target db is missing
+
+    conn_s = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True)
+    conn_s.row_factory = sqlite3.Row
+    try:
+        row = conn_s.execute("SELECT status, current_run_id FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"task {task_id} not found on {slug}")
+        if row[0] == "running" or row[1]:
+            raise HTTPException(status_code=409, detail="cannot move a running task — wait for the run to end")
+
+        moved_ids = _descendants(conn_s, task_id)
+
+        # The gate the UI enforces is also enforced here: every child travels.
+        stray = [
+            r[0] for r in conn_s.execute(
+                "SELECT DISTINCT child_id FROM task_links WHERE parent_id IN "
+                f"({', '.join('?' for _ in moved_ids)})",
+                moved_ids,
+            ) if r[0] not in set(moved_ids)
+        ]
+        if stray:
+            raise HTTPException(
+                status_code=409,
+                detail=f"task has children that would stay on {slug}: {', '.join(stray[:5])}",
+            )
+
+        conn_t = sqlite3.connect(tgt_path, isolation_level=None)
+        try:
+            conn_t.execute("BEGIN IMMEDIATE")
+            # Same id when the target is free; otherwise remap to a fresh one.
+            idmap: dict[str, str] = {}
+            for tid in moved_ids:
+                exists = conn_t.execute("SELECT 1 FROM tasks WHERE id = ?", (tid,)).fetchone()
+                new_id = tid
+                if exists:
+                    new_id = "t_" + os.urandom(6).hex()
+                    while conn_t.execute("SELECT 1 FROM tasks WHERE id = ?", (new_id,)).fetchone():
+                        new_id = "t_" + os.urandom(6).hex()
+                idmap[tid] = new_id
+
+            copied: dict[str, int] = {}
+            task_cols = [r[1] for r in conn_s.execute("PRAGMA table_info(tasks)")]
+            for tid in moved_ids:
+                r = dict(zip(task_cols, conn_s.execute(
+                    f"SELECT {', '.join(task_cols)} FROM tasks WHERE id = ?", (tid,)).fetchone()))
+                r["id"] = idmap[tid]
+                conn_t.execute(
+                    f"INSERT INTO tasks ({', '.join(task_cols)}) VALUES ({', '.join('?' for _ in task_cols)})",
+                    [r[c] for c in task_cols],
+                )
+                copied["tasks"] = copied.get("tasks", 0) + 1
+
+            for table in ("task_comments", "task_events", "task_runs", "task_attachments"):
+                rows = conn_s.execute(
+                    f"SELECT * FROM {table} WHERE task_id IN ({', '.join('?' for _ in moved_ids)})",
+                    moved_ids,
+                ).fetchall()
+                copied[table] = _insert_rows(conn_t, table, rows, idmap)
+
+            # Notification subscriptions travel with the task.
+            sub_cols = [r[1] for r in conn_s.execute("PRAGMA table_info(kanban_notify_subs)")]
+            for tid in moved_ids:
+                for r in conn_s.execute(
+                    f"SELECT {', '.join(sub_cols)} FROM kanban_notify_subs WHERE task_id = ?", (tid,)
+                ).fetchall():
+                    d = dict(zip(sub_cols, r))
+                    d["task_id"] = idmap[tid]
+                    conn_t.execute(
+                        f"INSERT INTO kanban_notify_subs ({', '.join(sub_cols)}) VALUES ({', '.join('?' for _ in sub_cols)})",
+                        [d[c] for c in sub_cols],
+                    )
+                    copied["kanban_notify_subs"] = copied.get("kanban_notify_subs", 0) + 1
+
+            # Parent/child links: kept ONLY between two moved tasks. A moved
+            # task whose parent stays behind arrives parentless (UI-confirmed);
+            # a non-moved source parent loses its link when the source cleans up.
+            links = conn_s.execute(
+                "SELECT parent_id, child_id FROM task_links WHERE "
+                f"parent_id IN ({', '.join('?' for _ in moved_ids)}) "
+                f"OR child_id IN ({', '.join('?' for _ in moved_ids)})",
+                moved_ids + moved_ids,
+            ).fetchall()
+            kept_links = [(idmap[p], idmap[c]) for (p, c) in links
+                          if p in idmap and c in idmap]
+            for p, c in kept_links:
+                conn_t.execute("INSERT INTO task_links (parent_id, child_id) VALUES (?, ?)", (p, c))
+            copied["task_links"] = len(kept_links)
+
+            # Verify BEFORE touching the source: every copied table must hold
+            # exactly as many target rows as source rows for the moved set.
+            for table, expected in copied.items():
+                if table == "task_links":
+                    continue  # links are filtered by design
+                if table == "tasks":
+                    got = sum(
+                        1 for tid in moved_ids
+                        if conn_t.execute("SELECT 1 FROM tasks WHERE id = ?", (idmap[tid],)).fetchone()
+                    )
+                else:
+                    got = conn_t.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE task_id IN ({', '.join('?' for _ in moved_ids)})",
+                        moved_ids,
+                    ).fetchone()[0]
+                if got != expected:
+                    raise RuntimeError(f"move verify failed on {table}: {got} != {expected}")
+            for tid in moved_ids:
+                if not conn_t.execute("SELECT 1 FROM tasks WHERE id = ?", (idmap[tid],)).fetchone():
+                    raise RuntimeError(f"move verify failed: {idmap[tid]} missing")
+
+            # A trail event so the history shows where the task came from.
+            for tid in moved_ids:
+                conn_t.execute(
+                    "INSERT INTO task_events (task_id, run_id, kind, payload, created_at) "
+                    "VALUES (?, NULL, 'moved_from', ?, ?)",
+                    (idmap[tid], json.dumps({"board": slug}), int(time.time())),
+                )
+
+            # Attachment FILES: copy dir trees into the target board, still
+            # before the source is touched.
+            src_att_root = kanban_db.attachments_root(slug)
+            tgt_att_root = kanban_db.attachments_root(target)
+            for tid in moved_ids:
+                src_dir = src_att_root / tid
+                if src_dir.is_dir():
+                    shutil.copytree(src_dir, tgt_att_root / idmap[tid], dirs_exist_ok=True)
+
+            conn_t.execute("COMMIT")
+        except HTTPException:
+            conn_t.execute("ROLLBACK") if conn_t.in_transaction else None
+            conn_t.close()
+            raise
+        except Exception as exc:
+            conn_t.execute("ROLLBACK") if conn_t.in_transaction else None
+            conn_t.close()
+            raise HTTPException(status_code=500, detail=f"move failed before source cleanup: {exc}")
+        conn_t.close()
+    finally:
+        conn_s.close()
+
+    # ── source cleanup (only reached when the target copy is verified) ────────
+    conn_s = sqlite3.connect(src_path, isolation_level=None)
+    try:
+        conn_s.execute("BEGIN IMMEDIATE")
+        for tid in moved_ids:
+            for table in _MOVE_TABLES_TASK:
+                conn_s.execute(f"DELETE FROM {table} WHERE {'id' if table == 'tasks' else 'task_id'} = ?", (tid,))
+        # every link row touching a moved id goes (both directions)
+        conn_s.execute(
+            f"DELETE FROM task_links WHERE parent_id IN ({', '.join('?' for _ in moved_ids)}) "
+            f"OR child_id IN ({', '.join('?' for _ in moved_ids)})",
+            moved_ids + moved_ids,
+        )
+        conn_s.execute("COMMIT")
+    except Exception as exc:
+        conn_s.execute("ROLLBACK") if conn_s.in_transaction else None
+        raise HTTPException(status_code=500, detail=f"source cleanup failed (task is already copied to {target}): {exc}")
+    finally:
+        conn_s.close()
+
+    # attachment files last — the DB rows are already gone
+    src_att_root = kanban_db.attachments_root(slug)
+    for tid in moved_ids:
+        src_dir = src_att_root / tid
+        if src_dir.is_dir():
+            shutil.rmtree(src_dir, ignore_errors=True)
+
+    return {"moved": [idmap[t] for t in moved_ids], "count": len(moved_ids),
+            "from": slug, "to": target}
 
 
 class ParentBody(BaseModel):
