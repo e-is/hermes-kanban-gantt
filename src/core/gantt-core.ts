@@ -359,7 +359,7 @@ export function treeRows(tasks, opts = {}) {
   // — that is what the renderer draws as a vertical. A node's children inherit
   // its own array plus one entry for ITS level: whether THIS node is followed by
   // a sibling.
-  const walk = (id, depth, isChild, secondary, cont, hasFollowing) => {
+  const walk = (id, depth, isChild, secondary, cont, hasFollowing, parent) => {
     const task = byId.get(id)
     const kids = adj.get(id) || []
     markCovered(id)
@@ -372,7 +372,8 @@ export function treeRows(tasks, opts = {}) {
     const open = search ? true : (fold.has(id) ? !fold.get(id) : !onlySecondary)
     const collapsed = kids.length > 0 && !open
     rows.push({
-      task, depth, isChild, secondary, continuation: cont, lastSibling: !hasFollowing,
+      task, depth, isChild, secondary, parentId: parent || null,
+      continuation: cont, lastSibling: !hasFollowing,
       hasChildren: kids.length > 0,
       secondaryOnly: onlySecondary,
       collapsed,
@@ -391,7 +392,7 @@ export function treeRows(tasks, opts = {}) {
       const isSecondary = shown.has(c)
       const isLast = i === ordered.length - 1
       if (!isSecondary) shown.add(c)      // claim the primary position
-      walk(c, depth + 1, true, isSecondary, [...cont, hasFollowing], !isLast)
+      walk(c, depth + 1, true, isSecondary, [...cont, hasFollowing], !isLast, id)
     })
   }
 
@@ -402,7 +403,7 @@ export function treeRows(tasks, opts = {}) {
   for (const t of tasks) {
     if (hasParent.has(t.id) || shown.has(t.id)) continue
     shown.add(t.id)
-    walk(t.id, 0, false, false, [], false)
+    walk(t.id, 0, false, false, [], false, null)
   }
   // Anything that has neither been walked nor a walked parent (a cycle, or a task
   // whose parents are filtered out) is placed once, flagged as a child like
@@ -411,7 +412,7 @@ export function treeRows(tasks, opts = {}) {
   for (const t of tasks) {
     if (shown.has(t.id) || covered.has(t.id)) continue
     shown.add(t.id)
-    walk(t.id, 0, hasParent.has(t.id), false, [], false)
+    walk(t.id, 0, hasParent.has(t.id), false, [], false, null)
   }
 
   // "n hidden" must count what is ACTUALLY hidden: a descendant that ends up

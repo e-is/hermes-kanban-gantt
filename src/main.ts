@@ -2176,7 +2176,14 @@ export function KanbanGanttPage() {
     onDragEndTask: () => setDragId(null),
     onDropOn: handleDropOn,
     onToggleFold: handleToggleFold
-  }, row.task.id))
+    // The key must identify the POSITION, not the task: on a multi-parent board a
+    // task legitimately holds several rows (its primary position plus one per later
+    // parent that reaches it), and keying those by task id alone hands React
+    // duplicates. It then reuses and abandons nodes, so folded-away rows survive in
+    // the DOM and pile up on every toggle. The primary position keys on the task
+    // (stable while re-parenting within the tree); a secondary one adds the parent
+    // it hangs under, which is what makes that row unique.
+  }, row.secondary ? `${row.task.id}@${row.parentId}` : row.task.id))
 
   // Determine dominant status priority for the top task count badge:
   // blocked > running > review > ready > scheduled > todo > triage > done > archived

@@ -502,6 +502,48 @@ test('the halo follows the selected task descendants, not its ancestors', () => 
   assert.equal(rows.g.descendantOfSelected, false)   // unrelated branch
 })
 
+test('every row carries a unique render key, multi-parent rows included', () => {
+  // The reported defect: toggling a fold only ever ADDED rows, and the strays
+  // looked like DOM leftovers. The renderer keyed rows by task id, but a task on
+  // a multi-parent board legitimately holds several rows — its primary position
+  // plus one under each later parent that reaches it. Duplicate keys make React
+  // reuse and abandon nodes, so folded-away rows survive in the DOM and pile up.
+  // The key must therefore name the POSITION.
+  const key = r => (r.secondary ? `${r.task.id}@${r.parentId}` : r.task.id)
+  const keysOf = rows => rows.map(key)
+
+  for (const fold of [new Map(), new Map([['a', true]]), new Map([['g', true]]),
+                      new Map([['a', true], ['g', true]])]) {
+    const keys = keysOf(treeRows(TREE, { fold }))
+    assert.equal(new Set(keys).size, keys.length,
+                 `duplicate render keys: ${keys.join(', ')}`)
+  }
+  // a search prints the same task under every parent that reaches it…
+  const searched = treeRows(TREE, { search: 'f' })
+  assert.equal(searched.filter(r => r.task.id === 'f').length, 2)
+  const searchKeys = keysOf(searched)
+  assert.equal(new Set(searchKeys).size, searchKeys.length,
+               `duplicate render keys with a search: ${searchKeys.join(', ')}`)
+
+  // …and each of those rows says which parent it hangs under, which is exactly
+  // what makes its key unique. Only roots have no parent.
+  const rows = byId(treeRows(TREE))
+  assert.equal(rows.f.parentId, 'a')                // printed under a, as its child
+  assert.equal(rows.g.parentId, null)               // a root
+  assert.equal(rows.a.parentId, null)
+  assert.equal(rows.b.parentId, 'a')
+  const secondary = treeRows(TREE, { fold: new Map([['g', false]]) }).filter(r => r.secondary)
+  assert.equal(secondary.length, 1)
+  assert.equal(secondary[0].task.id, 'f')
+  assert.equal(secondary[0].parentId, 'g')          // the parent it hangs under
+  const opened = treeRows(TREE, { fold: new Map([['g', false]]) })
+  const fRows = opened.filter(r => r.task.id === 'f')   // primary first, then under g
+  assert.equal(fRows.length, 2)
+  assert.equal(key(fRows[0]), 'f')                      // the primary position
+  assert.equal(key(fRows[1]), 'f@g')                    // the secondary one
+  assert.notEqual(key(fRows[0]), key(fRows[1]))         // …that difference IS the key
+})
+
 // ── treeMarks: the column's geometry, one slot per level ──────────────────────
 
 test('a lone child draws only its elbow, hanging under the PARENT square', () => {

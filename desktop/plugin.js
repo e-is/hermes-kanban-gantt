@@ -948,7 +948,7 @@ function treeRows(tasks, opts = {}) {
       for (const c of adj.get(id) || []) stack.push(c);
     }
   };
-  const walk = (id, depth, isChild, secondary, cont, hasFollowing) => {
+  const walk = (id, depth, isChild, secondary, cont, hasFollowing, parent) => {
     const task = byId.get(id);
     const kids = adj.get(id) || [];
     markCovered(id);
@@ -960,6 +960,7 @@ function treeRows(tasks, opts = {}) {
       depth,
       isChild,
       secondary,
+      parentId: parent || null,
       continuation: cont,
       lastSibling: !hasFollowing,
       hasChildren: kids.length > 0,
@@ -975,18 +976,18 @@ function treeRows(tasks, opts = {}) {
       const isSecondary = shown.has(c);
       const isLast = i === ordered.length - 1;
       if (!isSecondary) shown.add(c);
-      walk(c, depth + 1, true, isSecondary, [...cont, hasFollowing], !isLast);
+      walk(c, depth + 1, true, isSecondary, [...cont, hasFollowing], !isLast, id);
     });
   };
   for (const t of tasks) {
     if (hasParent.has(t.id) || shown.has(t.id)) continue;
     shown.add(t.id);
-    walk(t.id, 0, false, false, [], false);
+    walk(t.id, 0, false, false, [], false, null);
   }
   for (const t of tasks) {
     if (shown.has(t.id) || covered.has(t.id)) continue;
     shown.add(t.id);
-    walk(t.id, 0, hasParent.has(t.id), false, [], false);
+    walk(t.id, 0, hasParent.has(t.id), false, [], false, null);
   }
   const printed = new Set(rows.map((r) => r.task.id));
   for (const row of rows) {
@@ -3412,7 +3413,14 @@ function KanbanGanttPage() {
     onDragEndTask: () => setDragId(null),
     onDropOn: handleDropOn,
     onToggleFold: handleToggleFold
-  }, row.task.id));
+    // The key must identify the POSITION, not the task: on a multi-parent board a
+    // task legitimately holds several rows (its primary position plus one per later
+    // parent that reaches it), and keying those by task id alone hands React
+    // duplicates. It then reuses and abandons nodes, so folded-away rows survive in
+    // the DOM and pile up on every toggle. The primary position keys on the task
+    // (stable while re-parenting within the tree); a secondary one adds the parent
+    // it hangs under, which is what makes that row unique.
+  }, row.secondary ? `${row.task.id}@${row.parentId}` : row.task.id));
   const STATUS_PRIORITY = ["blocked", "running", "review", "ready", "scheduled", "todo", "triage", "done", "archived"];
   const blockedCount = derived.tasks.filter((t) => t.status === "blocked").length;
   const dominantStatus = (() => {

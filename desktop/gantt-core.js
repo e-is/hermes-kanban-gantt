@@ -240,7 +240,7 @@ function treeRows(tasks, opts = {}) {
       for (const c of adj.get(id) || []) stack.push(c);
     }
   };
-  const walk = (id, depth, isChild, secondary, cont, hasFollowing) => {
+  const walk = (id, depth, isChild, secondary, cont, hasFollowing, parent) => {
     const task = byId.get(id);
     const kids = adj.get(id) || [];
     markCovered(id);
@@ -252,6 +252,7 @@ function treeRows(tasks, opts = {}) {
       depth,
       isChild,
       secondary,
+      parentId: parent || null,
       continuation: cont,
       lastSibling: !hasFollowing,
       hasChildren: kids.length > 0,
@@ -267,18 +268,18 @@ function treeRows(tasks, opts = {}) {
       const isSecondary = shown.has(c);
       const isLast = i === ordered.length - 1;
       if (!isSecondary) shown.add(c);
-      walk(c, depth + 1, true, isSecondary, [...cont, hasFollowing], !isLast);
+      walk(c, depth + 1, true, isSecondary, [...cont, hasFollowing], !isLast, id);
     });
   };
   for (const t of tasks) {
     if (hasParent.has(t.id) || shown.has(t.id)) continue;
     shown.add(t.id);
-    walk(t.id, 0, false, false, [], false);
+    walk(t.id, 0, false, false, [], false, null);
   }
   for (const t of tasks) {
     if (shown.has(t.id) || covered.has(t.id)) continue;
     shown.add(t.id);
-    walk(t.id, 0, hasParent.has(t.id), false, [], false);
+    walk(t.id, 0, hasParent.has(t.id), false, [], false, null);
   }
   const printed = new Set(rows.map((r) => r.task.id));
   for (const row of rows) {
