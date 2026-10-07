@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.4.2 — two rendering defects, one cause each
+
+**A fold could only ever ADD rows.** On a multi-parent board a task legitimately holds
+several rows — its primary position, plus one under each later parent that reaches it —
+and the renderer keyed every one of them by task id. Handed duplicate keys, React reuses
+and abandons nodes, so rows a fold had removed were never unmounted: the count crept up
+on each toggle and the strays read as DOM leftovers. Rows now carry the parent they hang
+under and the key names the POSITION. Measured before: one click took the rendered rows
+from 35 to 37. After: four collapse/expand round-trips leave every counter unchanged, and
+the pure core yields 21 rows with 21 distinct keys over the demo board's real 20-task
+graph (24 distinct keys with a search, where four positions share one id).
+
+**The profile initials sat in the lower half of their circle.** Two causes, both
+measured. `text-[8px]` is an arbitrary Tailwind value and the desktop's stylesheet is
+PRECOMPILED, so it was never emitted and the text kept the shell's 11px on a 16.5px line
+— a line box taller than a 15px circle, which cannot be centred. And centring a line box
+is not centring the ink: the baseline still hung 5.69px below the circle's centre. The
+size is now explicit and relative to the circle, the inline box is trimmed to the cap
+height (`text-box-trim` + `text-box-edge`), and the initials own a block — without it the
+trim does nothing, because a text node that is a direct child of a grid lives in an
+anonymous item. Offset after: +0.37px, from -2.69px.
+
+Also: the refactoring snapshot and the demo board's own spike artifacts are gone, and
+`docs/TODO.md` keeps the open work with its finished item corrected.
+
+Tests: 69 node tests + 11 ESM render checks + 45 pytest, plus the move integration run.
+
 ## 1.4.1 — a moved attachment keeps naming a file
 
 **Cross-board moves rewrote everything about an attachment except the one thing
