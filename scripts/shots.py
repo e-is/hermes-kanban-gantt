@@ -657,6 +657,21 @@ def seed_board():
                    "set HERMES_SEED_PYTHON to one that has ruamel.yaml")
 
 
+def render_thumbnail():
+    """Draw the catalogue card (scripts/card.py) — no desktop, no CDP needed."""
+    script = REPO / "scripts" / "card.py"
+    if not script.is_file():
+        print("  ! scripts/card.py not found — skipping the catalogue card")
+        return
+    env = {**os.environ, "PYTHONPATH": str(Path.home() / ".hermes" / "hermes-agent")}
+    out = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, env=env)
+    for line in out.stdout.splitlines():
+        if line.startswith("card:"):
+            print("  " + line)
+    if out.returncode != 0:
+        print("  ! card render failed: " + (out.stderr or out.stdout)[-300:])
+
+
 async def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=int(os.environ.get("HERMES_CDP_PORT", "9222")))
@@ -665,6 +680,8 @@ async def main():
                     help="keep the board as it is (it is dispatchable: agents may have worked on it)")
     ap.add_argument("--keep-board", action="store_true",
                     help="leave the seeded demo board in place (it is dispatched, so it spends tokens)")
+    ap.add_argument("--no-thumbnail", action="store_true",
+                    help="skip the catalogue card (scripts/card.py draws it; no desktop needed)")
     args = ap.parse_args()
 
     if not args.no_seed:
@@ -706,6 +723,8 @@ async def main():
                 await asyncio.sleep(7)
         except Exception as exc:
             print(f"  ! could not restore the shell state: {exc}")
+        if not args.no_thumbnail:
+            render_thumbnail()
         if not args.no_gif:
             try:
                 encode_animation()

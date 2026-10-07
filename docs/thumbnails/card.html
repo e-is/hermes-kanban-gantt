@@ -1,0 +1,80 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1280px; height:640px; }
+  body {
+    background:#0d1117; color:#e6edf3; font-family:ui-monospace, "JetBrains Mono", "Cascadia Mono", "DejaVu Sans Mono", monospace; overflow:hidden;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size:40px 40px, 40px 40px;
+  }
+  .card { position:relative; width:1280px; height:640px; padding:46px 56px 34px; }
+  .top { display:flex; justify-content:space-between; align-items:flex-start; gap:40px; }
+  .cmd { font-size:15px; color:#8b949e; }
+  .cmd b { color:#3fb950; font-weight:600; }
+  h1 { font-size:76px; line-height:1.02; font-weight:700; letter-spacing:-1.5px; color:#dfe6ee; margin-top:14px; }
+  h1 .dash { color:#4a84fe; }
+  .tag { margin-top:14px; font-size:20px; color:#8b949e; }
+  .tag b { color:#e6edf3; font-weight:600; }
+  .specs { text-align:right; font-size:14px; color:#8b949e; line-height:1.85; white-space:nowrap; }
+  .specs .hl { color:#4a84fe; }
+  .gantt { position:absolute; left:56px; right:56px; bottom:86px; }
+  .row { display:grid; grid-template-columns:300px 1fr 190px; align-items:center; height:39px; }
+  .lab { display:flex; align-items:center; gap:8px; font-size:14.5px; color:#c9d1d9; }
+  .name { white-space:pre; }
+  .bx { width:15px; height:15px; flex:0 0 15px; display:inline-flex; align-items:center; justify-content:center;
+        border:1px solid #30363d; border-radius:3px; font-size:11px; color:#8b949e; background:#161b22; }
+  .bx.empty { border-color:transparent; background:transparent; }
+  .track { position:relative; height:26px; border-radius:3px;
+           background:repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 34px), #11161d; }
+  .bar { position:absolute; top:5px; height:16px; border-radius:3px; display:block; }
+  .bar.wait { background:transparent; border:1.5px dashed #d29922; }
+  .note { text-align:right; font-size:13px; color:#8b949e; padding-right:6px; }
+</style></head>
+<body><div class="card">
+  <div class="top">
+    <div>
+      <div class="cmd">$ hermes plugins install <b>kanban-gantt</b></div>
+      <h1>kanban<span class="dash">-</span>gantt</h1>
+      <div class="tag">Gantt timelines for <b>Hermes Agent</b> — every task becomes a bar</div>
+    </div>
+    <div class="specs">
+      SQLite · local store<br>
+      boards · tasks · links<br>
+      <span class="hl">no API keys</span><br>
+      one bar per task · real timestamps
+    </div>
+  </div>
+  <div class="gantt">
+<div class="row">
+  <div class="lab"><span class="bx empty"></span><span class="name">agent · kanban board</span></div>
+  <div class="track"><span class="bar" style="left:0%;width:100%;background:#4a84fe;"></span></div>
+  <div class="note">running</div>
+</div>
+<div class="row">
+  <div class="lab"><span class="bx">−</span><span class="name">└ Provision the cluster</span></div>
+  <div class="track"><span class="bar" style="left:4%;width:62%;background:#3fb950;"></span></div>
+  <div class="note">done ✓</div>
+</div>
+<div class="row">
+  <div class="lab"><span class="bx">−</span><span class="name">  └ Warehouse migration</span></div>
+  <div class="track"><span class="bar" style="left:20%;width:42%;background:#4a84fe;"></span></div>
+  <div class="note">running</div>
+</div>
+<div class="row">
+  <div class="lab"><span class="bx empty"></span><span class="name">    └ Backfill partitions</span></div>
+  <div class="track"><span class="bar wait" style="left:38%;width:42%;border-color:#d29922;"></span></div>
+  <div class="note">waiting on parent</div>
+</div>
+<div class="row">
+  <div class="lab"><span class="bx">+</span><span class="name">└ Retire the dashboard</span></div>
+  <div class="track"><span class="bar" style="left:6%;width:26%;background:#3fb950;"></span></div>
+  <div class="note">done ✓</div>
+</div>
+<div class="row">
+  <div class="lab"><span class="bx empty"></span><span class="name">  └ Operator guide</span></div>
+  <div class="track"><span class="bar wait" style="left:26%;width:74%;border-color:#d29922;"></span></div>
+  <div class="note">todo</div>
+</div></div>
+</div></body></html>

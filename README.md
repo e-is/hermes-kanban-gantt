@@ -158,6 +158,29 @@ puts the appearance and the sidebar back the way it found them when the run ends
 ![](docs/screenshot-en-06-list.png)
 
 
+## Catalogue card
+
+The catalogue entry's `image:` is a **2:1 banner** — measured on four entries:
+1600x800, 1280x640, 1200x600, 1280x640 — so this one is 1280x640.
+
+It is **drawn, not generated**: the other entries are terminal-style cards whose
+typography no image model reproduces reliably (FLUX turns "plugins install" into
+glyph soup). `scripts/card.py` composes it in HTML/CSS and rasterises it with the
+Chromium Hermes ships, so one place holds the wording, the palette and the bars:
+
+```bash
+npm run card                       # -> docs/catalog-card.png (1280x640)
+python3 scripts/card.py --out /tmp/card.png --scale 1
+```
+
+It needs neither the desktop nor a CDP port, and `npm run shots` calls it at the
+end of a capture run (skip with `--no-thumbnail`), so the stills and the card stay
+in sync. The generated `docs/catalog-card.html` sits next to the PNG on purpose:
+that file *is* the source, and editing it (or the constants at the top of
+`card.py`) then re-running is the whole workflow.
+
+![](docs/catalog-card.png)
+
 ## License
 
 GPL-3.0 — see [LICENSE](LICENSE).
