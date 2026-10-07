@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.4.1 — a moved attachment keeps naming a file
+
+**Cross-board moves rewrote everything about an attachment except the one thing
+that matters: where its file is.** `stored_path` is absolute and built as
+`<attachments root>/<task id>/<file>`, so copying the row as-is made a moved
+attachment name the file in the *source* board, under the source's task id — and
+the move's own cleanup then deleted exactly that tree. Every attachment on a moved
+task downloaded nothing, deterministically rather than eventually. The target now
+rewrites `stored_path` to its own root and the task's new id (the same move
+`hermes_cli.kanban_transfer` makes when it rehomes a board), a row whose blob is
+already missing is dropped instead of carried across, and the pre-cleanup
+verification checks that each moved attachment resolves to a file — a move that
+cannot produce the blob now fails while the source is still intact. Reported by
+@teknium1 in review of the 1.4.0 catalogue pin.
+
+`tests/move_integration.py` asserts that the target's `stored_path` *is* the copied
+file and that it does not point into the source board. It is a standalone script,
+so pytest never collected it and nothing ran it: `tests/run_tests.sh` now does, and
+those assertions gate the suite.
+
+Tests: 68 node tests + 11 ESM render checks + 45 pytest, plus that integration run.
+
 ## 1.4.0 — a collapsible tree, a list view, and a capture pipeline that states its own inputs
 
 **The task column is a tree.** Every task with children carries a boxed `+` / `−`
