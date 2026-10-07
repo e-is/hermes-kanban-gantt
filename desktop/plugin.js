@@ -2053,15 +2053,42 @@ function ProfileAvatar({ name, size = "1rem" }) {
     return `${parts[0]?.[0] ?? "?"}${parts[1]?.[0] ?? ""}`.toUpperCase();
   })();
   return jsx6("span", {
-    className: "grid shrink-0 place-items-center rounded-full font-semibold select-none text-[8px]",
+    className: "grid shrink-0 place-items-center rounded-full font-semibold select-none",
     style: {
       backgroundColor: color ? profileColorSoft(color, 22) : "var(--ui-bg-quaternary, rgba(150,150,150,0.15))",
       color: color ?? "var(--ui-text-secondary)",
       height: size,
-      width: size
+      width: size,
+      // The circle inherits the shell's 11px/16.5px text defaults, and a 16.5px line
+      // box cannot be centred inside a 15px circle. The previous `text-[8px]` did
+      // nothing either — an arbitrary Tailwind value is absent from the desktop's
+      // PRECOMPILED stylesheet, so the class was never emitted. Hence an explicit size,
+      // relative to the circle so a caller can pass any size.
+      fontSize: `calc(${size} * 0.5)`
     },
     title: name,
-    children: initials
+    children: jsx6("span", {
+      // The initials get their own block, and that is not decoration: as a direct child
+      // of the grid the text lands in an ANONYMOUS grid item, where `text-box-trim`
+      // does not apply (setting it on the circle changed nothing — measured). A block
+      // of its own owns its line box, so the trim takes effect.
+      style: {
+        display: "block",
+        lineHeight: 1,
+        // Centring the line box is not centring the ink. With `line-height: 1` the box
+        // is 7.6px while the glyph's natural line height is ~10px, so the baseline was
+        // painted 5.7px BELOW the circle's centre (measured: box centre -0.02px,
+        // baseline +5.69px) and the letters sat in the lower half. Trimming the inline
+        // box to the cap height makes the centred box the caps themselves, exactly, for
+        // any font and any size (measured after: +0.37px). Both properties are needed —
+        // `text-box` only sets the EDGE, `text-box-trim` is what removes the leading.
+        // Chromium 133+; elsewhere the declarations are ignored and the previous
+        // behaviour stands rather than a broken one.
+        textBoxTrim: "trim-both",
+        textBoxEdge: "cap alphabetic"
+      },
+      children: initials
+    })
   });
 }
 var ALL_STATUS_KEYS = ["ready", "running", "review", "blocked", "scheduled", "todo", "triage", "done"];
