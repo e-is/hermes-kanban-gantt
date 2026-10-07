@@ -16,9 +16,10 @@ Reference: [`spikes/websocket-protocol-design.md`](spikes/websocket-protocol-des
   *live / degraded* badge, with i18n keys in `en` + `fr`.
 - [ ] **README.** Document `KANBAN_GANTT_WS` (default on, `=0` to disable), the tuning variables
   and the client `ws` storage flag.
-- [ ] **Tests.** Add `tests/ws-core.test.mjs` to `npm test` (today it only runs by hand). Also
-  cover, end to end: a failed handshake falls back to the poll (never a blank page), a gateway
-  restart is picked up by a connected page, and the two heartbeat constants cannot drift.
+- [ ] **Tests.** `tests/ws-core.test.mjs` now runs in `npm test`; still hand-run are
+  `tests/ws_mount_gateway.py` and `tests/ws_proof.py`. Also cover, end to end: a failed handshake
+  falls back to the poll (never a blank page), a gateway restart is picked up by a connected page,
+  and the two heartbeat constants cannot drift.
 - [ ] **Measure** the watcher cost on a board with a running dispatcher, and the push on the
   239-task `sumaris` board (frame size, p95).
 - [ ] Minor: every new subscriber takes a version from the shared counter, so the other windows
