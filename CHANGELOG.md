@@ -1,5 +1,54 @@
 # Changelog
 
+## 1.4.0 — a collapsible tree, a list view, and a capture pipeline that states its own inputs
+
+**The task column is a tree.** Every task with children carries a boxed `+` / `−`
+that folds its **whole** subtree (a leaf keeps the slot, so titles stay aligned),
+with the explorer's connectors: a vertical down every level that still has a
+sibling below it, plus the `├` / `└` elbow for the row itself. A global toggle sits
+in the column header, in front of the master checkbox. The fold state is persisted
+**per board**; a search ignores it — everything opens, matches are flagged — without
+writing to it, so clearing the query restores exactly the branches you had.
+Selecting a task tints its descendants, which is what makes a child not printed
+directly beneath its parent visible. On a multi-parent board a task is still printed
+once, under its first parent: a later parent shows a **dashed** square, closed by
+default, which reprints the child without repeating its subtree — so the link is
+always visible and a task never disappears because its first parent happens to be
+collapsed. The column's arithmetic lives in one pure, tested function (`treeMarks`)
+so the renderer cannot drift from the tests.
+
+**A list view beside the timeline.** A List / Timeline toggle in the header trades
+the bars for full-width columns — task, assignee, status, last activity — for boards
+where most cards are decisions or approvals and the bars show mostly empty track.
+The choice is persisted and the timeline stays the default. Both views share the
+task column, so the fold squares, the connectors and the indentation stay.
+
+**Cross-board moves work at all.** Moving a task to another board failed with
+`UNIQUE constraint failed: task_events.id`: the copy carried every column, including
+the row's own identifier, and comments, events, runs and attachments are numbered
+from 1 independently in each board — so any target with history refused the insert.
+The target now assigns those ids, the task id still travels when it can (and is
+regenerated on a real collision), and `task_events.run_id` is bridged through a map
+so a moved event keeps pointing at a run **of its own task**.
+
+**Bulk assign stores.** The selection bar dropped the `assignee` field, so the
+backend received a bare `action: 'assign'`, answered 400, and nothing surfaced. The
+field travels, per-task failures raise a toast, the assignee choices merge the
+board's assignees with the Hermes profiles, and each row shows its assignee.
+
+**The capture pipeline states what it wants.** It forces the timeline before the
+first still, fixes the task column's width and the shell's light appearance (and puts
+both back afterwards), drops the drag-and-drop capture — it was near-useless, and the
+drag it left behind contaminated every later still — and captures the folded tree and
+the list view alongside the rest.
+
+**A catalogue card, drawn not generated.** `scripts/card.py` composes the 2:1 banner
+in HTML/CSS and rasterises it with the Chromium Hermes ships; `npm run card` renders
+it alone and `npm run shots` calls it at the end, so the card cannot drift from the
+release it describes.
+
+Tests: 68 node tests + 11 ESM render checks + 45 pytest (124 in total).
+
 ## 1.3.4 — the websocket gate fails closed, and a finished task can be a parent again
 
 **The `/events` upgrade gate refuses when the core gate raises.** The `try/except`
