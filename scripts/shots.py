@@ -55,10 +55,9 @@ ANIM = DOCS / "animations"
 FRAMES = REPO / ".agents" / "plans" / "shot-frames"
 DEMO_BOARD = "gantt-demo"
 
-# A detail-rich task to open, and two rows to animate the drag between.
+# A detail-rich task to open. (The drag pair that used to live here went with the
+# drag capture: leaving a drag behind contaminated every later still.)
 OPEN_TASK = "Retire the legacy dashboard"
-DRAG_FROM = "Ask the vendor for a quota increase"
-DRAG_TO = "Ingest pipeline — retry storm on the vendor feed"
 
 
 class Dead(Exception):
@@ -345,6 +344,23 @@ async def ensure_current_board(ui: Desktop):
     print(f"  current board: {out.stdout.strip()}")
 
     await ui.call("Page.enable")
+    # UI state the frames must not inherit. The label column's width is persisted,
+    # and a previous run (or a manual drag) can leave the timeline crushed against
+    # the drawer; the view mode is persisted too. Reset both to the plugin's own
+    # defaults while the page is about to be reloaded anyway, so the captures show
+    # the layout the catalog should show rather than whatever the last run left.
+    # The frames must not inherit what a previous run — or a manual test — left
+    # behind: the column width, the view mode, and the SHELL's own light/dark mode
+    # (this machine follows the system, and a switch to dark turned every capture
+    # dark). Both shell values are put back at the end of the run.
+    RESTORE["mode"] = await ui.ev("(() => localStorage.getItem('hermes-desktop-mode-v1'))")
+    RESTORE["sidebar"] = await resize_sidebar(ui)
+    await ui.ev("""(() => {
+      localStorage.setItem('hermes.plugin.kanban-gantt.labelW', '400');
+      localStorage.setItem('hermes.plugin.kanban-gantt.viewMode', '"timeline"');
+      localStorage.setItem('hermes-desktop-mode-v1', 'light');
+      return true;
+    })()""")
     await ui.call("Page.reload", {"ignoreCache": False})
     await asyncio.sleep(9)
 
@@ -366,6 +382,56 @@ async def collapse_private_sections(ui: Desktop):
 
 
 # ── the scenario ────────────────────────────────────────────────────────────
+SIDEBAR_W = 232       # px — what the shell's sidebar is dragged to for a capture
+RESTORE: dict = {}    # shell state the run must put back (mode, sidebar width)
+
+
+async def resize_sidebar(ui: Desktop, target: int = SIDEBAR_W):
+    """Drag the shell's sidebar sash in, the way a user would.
+
+    The sidebar owns a third of the frame otherwise, and nothing it shows is the
+    subject. The width is the shell's own persisted layout, so the run leaves it
+    where the user finds it — hence the printed before/after, and the one drag
+    that puts it back if you want the old value.
+    """
+    box = await ui.ev("""(() => {
+      const s = [...document.querySelectorAll('[role=separator]')].find(e => {
+        const r = e.getBoundingClientRect();
+        return /col-resize/.test(getComputedStyle(e).cursor) && r.x < 600 && r.height > 400;
+      });
+      if (!s) return null;
+      const r = s.getBoundingClientRect();
+      return JSON.stringify({ x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2),
+                              before: Math.round(r.x) });
+    })()""")
+    if not box:
+        print("  ! sidebar sash not found — leaving the sidebar alone")
+        return None
+    b = json.loads(box)
+    if abs(b["before"] - target) < 4:
+        print(f"  sidebar: already {b['before']}px")
+        return b["before"]
+    await ui.call("Input.dispatchMouseEvent", {"type": "mousePressed", "x": b["x"], "y": b["y"],
+                                               "button": "left", "clickCount": 1})
+    for i in range(1, 9):
+        x = round(b["x"] + (target - b["before"]) * i / 8)
+        await ui.call("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": b["y"],
+                                                   "button": "left"})
+        await asyncio.sleep(0.03)
+    await ui.call("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": round(b["x"] + (target - b["before"])),
+                                               "y": b["y"], "button": "left", "clickCount": 1})
+    await asyncio.sleep(0.5)
+    after = await ui.ev("""(() => {
+      const s = [...document.querySelectorAll('[role=separator]')].find(e => {
+        const r = e.getBoundingClientRect();
+        return /col-resize/.test(getComputedStyle(e).cursor) && r.x < 600 && r.height > 400;
+      });
+      return s ? Math.round(s.getBoundingClientRect().x) : null;
+    })()""")
+    print(f"  sidebar: {b['before']}px -> {after}px")
+    return b["before"]
+
+
 async def open_plugin(ui: Desktop):
     ok = await ui.ev("""(() => {
       const span = [...document.querySelectorAll('span')].find(s => s.textContent.trim() === 'Kanban Gantt');
@@ -392,6 +458,12 @@ async def select_board(ui: Desktop):
 
 async def run_scenario(ui: Desktop, *, make_gif: bool):
     print("scenario")
+    # The view mode is PERSISTED, so a previous run — or a manual test — can leave
+    # the app in list mode. Force the timeline first: every capture up to the list
+    # shot at the end of this function is a timeline, whatever the run found.
+    before = await ui.ev("(() => localStorage.getItem('hermes.plugin.kanban-gantt.viewMode'))")
+    await ui.click_text("Timeline")
+    await asyncio.sleep(1.0)
     await ui.shot("screenshot-en-01")
 
     # the enrichments the drawer has to show
@@ -418,30 +490,71 @@ async def run_scenario(ui: Desktop, *, make_gif: bool):
     await ui.ev("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
     await asyncio.sleep(0.6)
 
-    # The move: refused target first (red), then the accepted drop. The screencast
-    # owns the surface while it runs — Page.captureScreenshot returns no frame
-    # during a screencast — so the stills are all taken before it starts and the
-    # last one only after it stops.
+    # The drag-and-drop step that used to be captured here is GONE: the still was
+    # near-useless in a catalogue, and the drag it left behind kept its outline on
+    # the source row and its highlight on the target — which contaminated every
+    # still taken after it. What the animation records instead is what the column
+    # and the toggle actually do, at the end of this function.
+
+
+    # ── the tree column: fold a branch, so the affordance reads on screen ─────
+    # A collapsed parent is what the column is for: the boxed `+`, the hidden
+    # count in its tooltip, and the connectors that survive around it.
+    async def toggle_first(prefix: str) -> bool:
+        """Click the first fold square whose aria-label starts with `prefix`."""
+        return bool(await ui.ev(f"""(() => {{
+          const sq = [...document.querySelectorAll('span[role=button]')]
+            .find(s => (s.getAttribute('aria-label') || '').startsWith({json.dumps(prefix)}));
+          if (!sq) return false;
+          sq.click();
+          return true;
+        }})()"""))
+
+    if await toggle_first("Collapse "):
+        await asyncio.sleep(0.9)
+        await ui.shot("screenshot-en-05-tree-folded")
+        await toggle_first("Expand ")          # the list shots show the whole tree
+        await asyncio.sleep(0.7)
+    else:
+        print("  ! no fold square found — skipping the folded-tree shot")
+
+    # ── the list view: the LAST captures are in list mode ────────────────────
+    # Same page, same board: the toggle trades the timeline for task / assignee /
+    # status / last activity.
+    if await ui.click_text("List"):
+        await asyncio.sleep(1.2)
+        await ui.shot("screenshot-en-06-list")
+        # and the point of the two views sharing one column: a row in list mode
+        # keeps its fold square, its connectors and its indentation
+        if await toggle_first("Collapse "):
+            await asyncio.sleep(0.9)
+            await ui.shot("screenshot-en-07-list-folded")
+            await toggle_first("Expand ")
+            await asyncio.sleep(0.6)
+    else:
+        print("  ! list toggle not found — skipping the list-view shots")
+
+    # The animation, LAST: Page.captureScreenshot returns no frame while a
+    # screencast runs, so every still above has to be taken first.
     if make_gif:
         await ui.start_screencast()
-    await ui.ev(f"""(() => {{
-      const want = {json.dumps(DRAG_FROM)};
-      const from = [...document.querySelectorAll('*')].find(e => e.children.length === 0 && e.textContent.trim() === want);
-      const to = [...document.querySelectorAll('*')].find(e => e.children.length === 0 && e.textContent.trim() === {json.dumps(DRAG_TO)});
-      if (!from || !to) return false;
-      const cell = from.closest('[draggable=true]') || from.parentElement;
-      const target = to.closest('tr,div');
-      const data = new DataTransfer();
-      cell.dispatchEvent(new DragEvent('dragstart', {{bubbles: true, dataTransfer: data}}));
-      target.dispatchEvent(new DragEvent('dragover', {{bubbles: true, dataTransfer: data}}));
-      target.dispatchEvent(new DragEvent('drop', {{bubbles: true, dataTransfer: data}}));
-      return true;
-    }})()""")
-    await asyncio.sleep(2.0)
-    if make_gif:
+        await toggle_first("Collapse ")
+        await asyncio.sleep(0.9)
+        await toggle_first("Expand ")
+        await asyncio.sleep(0.7)
+        await ui.click_text("Timeline")
+        await asyncio.sleep(0.4)
+        await ui.click_text("List")
+        await asyncio.sleep(1.0)
         await ui.stop_screencast()
+        await asyncio.sleep(0.4)
+
+    # Leave the app in the mode the run found it in.
+    if before and "list" in str(before):
+        await ui.click_text("List")
+    else:
+        await ui.click_text("Timeline")
     await asyncio.sleep(0.6)
-    await ui.shot("screenshot-en-04-move")
 
 
 def cleanup_board():
@@ -579,6 +692,20 @@ async def main():
         if ui.screencasting:
             await ui.stop_screencast()
             ui.screencasting = False
+        # Put the shell back the way the run found it: a capture has no business
+        # leaving the user in light mode with a narrower sidebar.
+        try:
+            if RESTORE.get("sidebar"):
+                await resize_sidebar(ui, int(RESTORE["sidebar"]))
+            if RESTORE.get("mode") is not None:
+                await ui.ev(f"""(() => {{
+                  localStorage.setItem('hermes-desktop-mode-v1', {json.dumps(str(RESTORE['mode']))});
+                  return true;
+                }})()""")
+                await ui.call("Page.reload", {"ignoreCache": False})
+                await asyncio.sleep(7)
+        except Exception as exc:
+            print(f"  ! could not restore the shell state: {exc}")
         if not args.no_gif:
             try:
                 encode_animation()
