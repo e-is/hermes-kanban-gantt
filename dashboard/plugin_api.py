@@ -941,19 +941,56 @@ def _descendants(conn: sqlite3.Connection, task_id: str) -> list[str]:
     return out
 
 
+def _autoincrement_pk(conn: sqlite3.Connection, table: str) -> Optional[str]:
+    """The ``INTEGER PRIMARY KEY AUTOINCREMENT`` column of ``table``, if it has one.
+
+    Those columns are the row's OWN identity, not the task's: comments, events,
+    runs and attachments each get one, and every board numbers them from 1 — so
+    they must never be copied between boards.
+    """
+    try:
+        for r in conn.execute(f"PRAGMA table_info({table})"):
+            if r[5] and (r[2] or "").upper().startswith("INT"):
+                return r[1]
+    except sqlite3.Error:
+        return None
+    return None
+
+
 def _insert_rows(conn_t: sqlite3.Connection, table: str, rows: list[sqlite3.Row],
-                 idmap: dict[str, str], id_col: str = "task_id") -> int:
+                 idmap: dict[str, str], id_col: str = "task_id",
+                 run_map: Optional[dict[int, int]] = None) -> int:
     """Copy rows into the target board, remapping task ids through ``idmap``.
-    ``task_links`` is handled separately (two id columns)."""
+
+    ``task_links`` is handled separately (two id columns).
+
+    The row's own primary key is DROPPED from the INSERT: the target assigns its
+    own. Carrying the source's value collided with whatever the target already
+    held ("UNIQUE constraint failed: task_events.id") and made every cross-board
+    move fail before the source cleanup.
+
+    Renumbering ``task_runs`` would also break ``task_events.run_id``, so the run
+    ids are bridged through ``run_map`` (old -> new) and the events are rewritten
+    to match; an event whose run did not travel gets NULL rather than pointing at
+    an unrelated run of another task in the target board. ``task_runs`` must
+    therefore be copied BEFORE ``task_events``.
+    """
+    row_pk = _autoincrement_pk(conn_t, table)
     n = 0
     for row in rows:
         d = dict(row)
         d[id_col] = idmap.get(d[id_col], d[id_col])
+        old_pk = d.pop(row_pk, None) if row_pk else None
+        if run_map is not None and table == "task_events" and "run_id" in d:
+            rid = d.get("run_id")
+            d["run_id"] = run_map.get(rid) if rid is not None else None
         cols = list(d.keys())
-        conn_t.execute(
+        cur = conn_t.execute(
             f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
             [d[c] for c in cols],
         )
+        if run_map is not None and table == "task_runs" and old_pk is not None and cur.lastrowid is not None:
+            run_map[old_pk] = int(cur.lastrowid)
         n += 1
     return n
 
@@ -1031,12 +1068,15 @@ def move_task(task_id: str, payload: MoveBody, board: Optional[str] = Query(None
                 )
                 copied["tasks"] = copied.get("tasks", 0) + 1
 
-            for table in ("task_comments", "task_events", "task_runs", "task_attachments"):
+            # Runs BEFORE events: the events' run_id is rewritten through run_map,
+            # so the runs must already be in place to have their new ids recorded.
+            run_map: dict[int, int] = {}
+            for table in ("task_comments", "task_runs", "task_events", "task_attachments"):
                 rows = conn_s.execute(
                     f"SELECT * FROM {table} WHERE task_id IN ({', '.join('?' for _ in moved_ids)})",
                     moved_ids,
                 ).fetchall()
-                copied[table] = _insert_rows(conn_t, table, rows, idmap)
+                copied[table] = _insert_rows(conn_t, table, rows, idmap, run_map=run_map)
 
             # Notification subscriptions travel with the task.
             sub_cols = [r[1] for r in conn_s.execute("PRAGMA table_info(kanban_notify_subs)")]
@@ -1068,19 +1108,23 @@ def move_task(task_id: str, payload: MoveBody, board: Optional[str] = Query(None
             copied["task_links"] = len(kept_links)
 
             # Verify BEFORE touching the source: every copied table must hold
-            # exactly as many target rows as source rows for the moved set.
+            # exactly as many target rows as source rows for the moved set. The
+            # count must use the MAPPED ids: when the target already owns one of
+            # them the task arrives under a fresh handle, and counting by the
+            # original id found 0 rows and aborted a move that had in fact worked.
+            mapped_ids = [idmap[t] for t in moved_ids]
             for table, expected in copied.items():
                 if table == "task_links":
                     continue  # links are filtered by design
                 if table == "tasks":
                     got = sum(
-                        1 for tid in moved_ids
-                        if conn_t.execute("SELECT 1 FROM tasks WHERE id = ?", (idmap[tid],)).fetchone()
+                        1 for tid in mapped_ids
+                        if conn_t.execute("SELECT 1 FROM tasks WHERE id = ?", (tid,)).fetchone()
                     )
                 else:
                     got = conn_t.execute(
-                        f"SELECT COUNT(*) FROM {table} WHERE task_id IN ({', '.join('?' for _ in moved_ids)})",
-                        moved_ids,
+                        f"SELECT COUNT(*) FROM {table} WHERE task_id IN ({', '.join('?' for _ in mapped_ids)})",
+                        mapped_ids,
                     ).fetchone()[0]
                 if got != expected:
                     raise RuntimeError(f"move verify failed on {table}: {got} != {expected}")

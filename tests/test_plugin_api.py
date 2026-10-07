@@ -22,6 +22,7 @@ roots are simply not mounted into the sandbox.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sys
 import time
@@ -702,3 +703,125 @@ def test_reparent_is_visible_in_the_gantt_snapshot(client):
     freed = _gantt(http, board["slug"])
     assert freed[board["child"]]["parents"] == []
     assert freed[board["solo"]]["children"] == []
+
+
+def test_move_to_a_board_that_already_has_history(client):
+    """Reproduction: the target already owns rows whose ids the source reuses.
+
+    ``task_comments`` / ``task_events`` / ``task_runs`` / ``task_attachments`` all
+    key on ``INTEGER PRIMARY KEY AUTOINCREMENT``, and every board numbers them from
+    1 — so carrying the source row's OWN id into the target collides with whatever
+    the target already holds ("UNIQUE constraint failed: task_events.id"). The move
+    then aborted before the source cleanup, which is the failure the drawer showed.
+
+    The moved task is the finished parent WITH its child: that closure carries
+    events, a run and an intra-move link, so the test also proves the history keeps
+    its internal references after the ids are renumbered.
+    """
+    http, board = client
+    target = "kanban-gantt-move-target"
+    tconn = kbc.connect(board=target)
+    # Two residents make the target's event ids overlap the source's.
+    kanban_db.create_task(tconn, title="[TEST] target resident", created_by="test")
+    resident2 = kanban_db.create_task(tconn, title="[TEST] target resident 2", created_by="test")
+    kanban_db.add_comment(tconn, resident2, author="test", body="resident comment")
+    tconn.close()
+
+    # what the source holds right now, so the target can be compared row for row
+    sconn = kbc.connect(board=board["slug"])
+    moved_ids = (board["parent"], board["child"])
+    want = {
+        table: sconn.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE task_id IN (?, ?)", moved_ids
+        ).fetchone()[0]
+        for table in ("task_events", "task_runs", "task_comments", "task_attachments")
+    }
+    sconn.close()
+    assert want["task_events"] > 0, "the fixture must produce history to carry"
+
+    r = http.post(f"/tasks/{board['parent']}/move?board={board['slug']}",
+                  json={"to_board": target})
+    assert r.status_code == 200, r.text          # before the fix: 500, UNIQUE on event id
+    assert r.json()["to"] == target
+    assert r.json()["count"] == 2                # the parent and its child closure
+
+    # the source is cleaned up, both tasks are gone from it
+    src = kbc.connect(board=board["slug"])
+    for tid in moved_ids:
+        assert src.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (tid,)).fetchone()[0] == 0
+    src.close()
+
+    tgt = kbc.connect(board=target)
+    for tid in moved_ids:
+        assert tgt.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (tid,)).fetchone()[0] == 1
+    # every row of the moved set arrived, in the same amount
+    for table, expected in want.items():
+        got = tgt.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE task_id IN (?, ?)", moved_ids
+        ).fetchone()[0]
+        # task_events also gains the route's OWN trail event ("moved_from", one per
+        # moved task, see the tail of the move route); every other table must arrive
+        # in exactly the amount that left the source.
+        extra = len(moved_ids) if table == "task_events" else 0
+        assert got == expected + extra, f"{table}: {got} rows arrived, {expected} left the source"
+    assert tgt.execute(
+        "SELECT COUNT(*) FROM task_events WHERE task_id IN (?, ?) AND kind = 'moved_from'",
+        moved_ids,
+    ).fetchone()[0] == len(moved_ids)
+    # the parent -> child link travelled with them
+    assert tgt.execute(
+        "SELECT COUNT(*) FROM task_links WHERE parent_id = ? AND child_id = ?",
+        (board["parent"], board["child"]),
+    ).fetchone()[0] == 1
+    # and the events still point at the runs of THEIR OWN task: the ids were
+    # renumbered independently by the target, so a stale run_id would silently
+    # attach a moved event to an unrelated run of another task.
+    dangling = tgt.execute(
+        "SELECT COUNT(*) FROM task_events e WHERE e.task_id IN (?, ?) "
+        "AND e.run_id IS NOT NULL AND NOT EXISTS ("
+        "  SELECT 1 FROM task_runs r WHERE r.id = e.run_id AND r.task_id = e.task_id)",
+        moved_ids,
+    ).fetchone()[0]
+    assert dangling == 0
+    tgt.close()
+
+
+def test_move_keeps_the_task_id_unless_the_target_already_uses_it(client):
+    """The task's `t_…` id travels with it; only a REAL collision forces a new one.
+
+    The id is the handle the desktop carries (drawer, query keys, notification
+    subscriptions), so it must be preserved across boards whenever the target is
+    free — and when it is not, the moved task gets a freshly generated `t_…` id
+    while the target's own row keeps its id untouched.
+    """
+    http, board = client
+    target = "kanban-gantt-move-idclash"
+    tconn = kbc.connect(board=target)
+    # A resident that squats the id we are about to move.
+    tconn.execute(
+        "INSERT INTO tasks (id, title, status, created_at) VALUES (?, ?, 'ready', ?)",
+        (board["solo"], "[TEST] id squatter", 1_800_000_000),
+    )
+    tconn.commit()
+    tconn.close()
+
+    r = http.post(f"/tasks/{board['solo']}/move?board={board['slug']}",
+                  json={"to_board": target})
+    assert r.status_code == 200, r.text
+    new_id = r.json()["moved"][0]
+    assert new_id != board["solo"], "the squatted id must not be reused"
+    assert new_id.startswith("t_"), "a fresh id keeps the kanban task-id shape"
+    assert re.fullmatch(r"t_[0-9a-f]+", new_id), "prefix + hex, like every other task id"
+
+    tgt = kbc.connect(board=target)
+    # the squatter is still there, under its own id and title
+    assert tgt.execute("SELECT title FROM tasks WHERE id = ?", (board["solo"],)).fetchone()[0] \
+        == "[TEST] id squatter"
+    # and the moved task arrived under the new handle, with its own title
+    assert tgt.execute("SELECT title FROM tasks WHERE id = ?", (new_id,)).fetchone()[0] \
+        == "no prefix task"
+    tgt.close()
+
+    src = kbc.connect(board=board["slug"])
+    assert src.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (board["solo"],)).fetchone()[0] == 0
+    src.close()
