@@ -542,7 +542,20 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
                 : null,
               name
             ]
-          })
+          }),
+          // Assignee at a glance: avatar when assigned, a faint dashed ring when not.
+          task.assignee
+            ? jsx('span', {
+                className: 'shrink-0 inline-flex',
+                title: `${i18n.assignLabel} ${task.assignee}`,
+                children: jsx(ProfileAvatar, { name: task.assignee, size: '0.95rem' })
+              })
+            : jsx('span', {
+                className: 'shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60',
+                style: { width: '0.95rem', height: '0.95rem' },
+                title: i18n.unassigned,
+                'aria-label': i18n.unassigned
+              })
         ]
       }),
       jsxs('div', {
@@ -1943,17 +1956,33 @@ export function KanbanGanttPage() {
   }, [selectedIds, derived])
 
   const bulkMutation = useMutation({
-    mutationFn: ({ action, ids }) =>
+    // `assignee` must travel: the backend switches to mass-assign on its
+    // presence ('' = unassign). Dropping it sent a bare action 'assign', which
+    // the backend refused as unknown, so a batch assign never stored anything.
+    mutationFn: ({ action, ids, assignee }) =>
       apiFetch(`/tasks/bulk${board ? `?board=${encodeURIComponent(board)}` : ''}`, {
         method: 'POST',
-        body: { ids, action }
+        body: assignee !== undefined ? { ids, assignee } : { ids, action }
       }),
-    onSuccess: () => {
+    onSuccess: response => {
+      const failed = (response?.results || []).filter(r => !r.ok)
+      if (failed.length > 0) {
+        toast('error', i18n.bulkFailed(failed.length, failed[0]?.error || failed[0]?.id))
+      }
       setSelectedIds(new Set())
       setBulkAssignee('')
       void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
-    }
+    },
+    onError: error => toast('error', String(error?.message || error))
   })
+
+  // Assignee choices = Hermes profiles + anyone already assigned on the board,
+  // so a board where nobody is assigned yet still offers every profile.
+  const assigneeChoices = useMemo(() => {
+    const fromBoard = (derived && derived.allAssignees) || []
+    const fromProfiles = (profilesData && profilesData.profiles) || []
+    return Array.from(new Set([...fromProfiles, ...fromBoard])).sort()
+  }, [derived, profilesData])
 
   const handleZoomChange = val => {
     setZoom(val)
@@ -2250,7 +2279,7 @@ export function KanbanGanttPage() {
                     bulkMutation.mutate({ action: 'delete', ids: [...selectedIds] })
                   }
                 },
-                assignees: derived.allAssignees || [],
+                assignees: assigneeChoices,
                 busy: bulkMutation.isPending
               }),
               jsxs('div', {
@@ -2347,7 +2376,7 @@ export function KanbanGanttPage() {
         ? jsx(TaskDrawer, {
             taskId: openTaskId,
             board,
-            assignees: derived.allAssignees || [],
+            assignees: assigneeChoices,
             // Unfiltered snapshot: a parent hidden by the current filter must
             // still be listed in the drawer's relations.
             tasks: data?.tasks || [],
@@ -2367,11 +2396,7 @@ export function KanbanGanttPage() {
       jsx(NewTaskDialog, {
         open: Boolean(newTask),
         boardSlug: board && board !== 'all' && board !== '*' ? board : undefined,
-        assignees: (() => {
-          const fromBoard = (derived && derived.allAssignees) || []
-          const fromProfiles = (profilesData && profilesData.profiles) || []
-          return Array.from(new Set([...fromProfiles, ...fromBoard])).sort()
-        })(),
+        assignees: assigneeChoices,
         tasks: (data && data.tasks) || [],
         projects: (projectsData && projectsData.projects) || [],
         defaultParentId: newTask ? newTask.parentId : '',

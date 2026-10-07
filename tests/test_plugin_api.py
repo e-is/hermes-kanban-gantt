@@ -287,6 +287,23 @@ def test_bulk_status_update(client):
     res = r.json()["results"]
     assert len(res) == 2
     assert all(item["ok"] for item in res)
+    by_id = {t["id"]: t for t in http.get(f"/gantt?board={board['slug']}").json()["tasks"]}
+    assert by_id[board["child"]]["assignee"] == by_id[board["solo"]]["assignee"] == "senior-coder"
+
+    # Mass unassign: an empty assignee clears every selected task.
+    r = http.post(
+        f"/tasks/bulk?board={board['slug']}",
+        json={"ids": [board["child"], board["solo"]], "assignee": ""}
+    )
+    assert all(item["ok"] for item in r.json()["results"])
+    by_id = {t["id"]: t for t in http.get(f"/gantt?board={board['slug']}").json()["tasks"]}
+    assert by_id[board["child"]]["assignee"] is None and by_id[board["solo"]]["assignee"] is None
+
+    # The action name alone is not an assign: without `assignee` it is refused,
+    # which is how the renderer's dropped field failed silently before.
+    r = http.post(f"/tasks/bulk?board={board['slug']}",
+                  json={"ids": [board["solo"]], "action": "assign"})
+    assert r.status_code == 400
 
 
 # ---------------------------------------------------------------------------
