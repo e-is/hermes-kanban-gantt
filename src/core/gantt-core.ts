@@ -471,6 +471,32 @@ export function computeDomain(visible, minBarSec) {
   hi += min;
   return { min: lo, max: hi };
 }
+/** Most recent real timestamp on a task (seconds), or null when it has none. */
+export function lastActivity(task) {
+  const stamps = [task.completed_at, task.run_ended_at, task.run_started_at, task.started_at, task.created_at]
+  for (const run of task.runs || []) stamps.push(run.ended_at, run.started_at)
+  const valid = stamps.filter(s => typeof s === 'number' && s > 0)
+  return valid.length ? Math.max(...valid) : null
+}
+/** Compact age for a list cell: 'now', '5m', '3h', '2d', '6w', '4mo', '2y'.
+ *
+ * `units` lets a locale translate the suffixes (they are concatenated to the
+ * number, so a language that needs a separator puts it in the string itself);
+ * the defaults are the English abbreviations. The arithmetic stays here, in the
+ * pure core, so it can still be unit-tested without a renderer.
+ */
+export function relativeAge(ts, now, units = {}) {
+  const u = { now: 'now', m: 'm', h: 'h', d: 'd', w: 'w', mo: 'mo', y: 'y', ...units }
+  if (ts == null) return ''
+  const s = Math.max(0, now - ts)
+  if (s < 60) return u.now
+  if (s < 3600) return `${Math.floor(s / 60)}${u.m}`
+  if (s < DAY) return `${Math.floor(s / 3600)}${u.h}`
+  if (s < 14 * DAY) return `${Math.floor(s / DAY)}${u.d}`
+  if (s < 60 * DAY) return `${Math.floor(s / (7 * DAY))}${u.w}`
+  if (s < 365 * DAY) return `${Math.floor(s / (30 * DAY))}${u.mo}`
+  return `${Math.floor(s / (365 * DAY))}${u.y}`
+}
 export function tickUnit(span) {
   return (span <= 120 * DAY ? 'day' : span <= 730 * DAY ? 'week' : 'month');
 }

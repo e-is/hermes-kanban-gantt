@@ -541,3 +541,31 @@ test('a root has no elbow, and a leaf keeps its slot width', () => {
   assert.equal(deep.squareX, TREE_INSET + 3 * TREE_SLOT)
   assert.equal(deep.elbowHalf, true)                          // last of its group
 })
+test('lastActivity is the newest real timestamp on the task, runs included', () => {
+  const { lastActivity } = core
+  assert.equal(lastActivity({ created_at: NOW - 5 * DAY }), NOW - 5 * DAY)
+  assert.equal(lastActivity({ created_at: NOW - 5 * DAY, started_at: NOW - 2 * DAY,
+    runs: [{ started_at: NOW - DAY, ended_at: NOW - H }] }), NOW - H)
+  assert.equal(lastActivity({}), null)
+})
+
+test('relativeAge grows with the gap and is empty without a timestamp', () => {
+  const { relativeAge } = core
+  assert.equal(relativeAge(null, NOW), '')
+  const order = [NOW - 30, NOW - 5 * 60, NOW - 3 * H, NOW - 2 * DAY, NOW - 30 * DAY, NOW - 200 * DAY, NOW - 800 * DAY]
+  const out = order.map(t => relativeAge(t, NOW))
+  assert.equal(new Set(out).size, out.length)
+  assert.equal(relativeAge(NOW + 10, NOW), 'now')
+})
+
+test('relativeAge speaks the locale it is given', () => {
+  const { relativeAge } = core
+  // The suffixes are the only localizable part: the arithmetic is unchanged, so a
+  // French stack reads "5 min" where the English one reads "5m".
+  assert.equal(relativeAge(NOW - 300, NOW, { m: ' min' }), '5 min')
+  assert.equal(relativeAge(NOW - 3 * H, NOW, { h: ' h' }), '3 h')
+  assert.equal(relativeAge(NOW - 2, NOW, { now: "à l'instant" }), "à l'instant")
+  assert.equal(relativeAge(NOW - 2 * DAY, NOW, { d: ' j' }), '2 j')
+  // a partial map keeps the English default for whatever it omits
+  assert.equal(relativeAge(NOW - 5 * 60, NOW, { h: ' h' }), '5m')
+})
