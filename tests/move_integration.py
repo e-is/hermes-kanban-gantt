@@ -33,6 +33,14 @@ att_root = kb.attachments_root('src-board') / parent
 att_root.mkdir(parents=True, exist_ok=True)
 (att_root / 'notes.txt').write_text('attachment content')
 
+# The metadata row, not just the blob: a moved attachment row has to end up
+# pointing at the copy in the TARGET board. Carrying the source's absolute
+# stored_path across means pointing at a file the source cleanup deletes.
+conn = sqlite3.connect(_board_db_path('src-board'))
+kb.add_attachment(conn, parent, filename='notes.txt', stored_path=str((att_root / 'notes.txt').resolve()),
+                  content_type='text/plain', size=len('attachment content'), uploaded_by='tester')
+conn.commit(); conn.close()
+
 # move parent (+child) to the other board
 r = c.post(f'/tasks/{parent}/move?board=src-board', json={'to_board': 'tgt-board'})
 print("move:", r.status_code, r.text[:400])
@@ -42,7 +50,7 @@ assert r.json()['count'] == 2
 src_db = sqlite3.connect(f"file:{_board_db_path('src-board')}?mode=ro", uri=True)
 tgt_db = sqlite3.connect(_board_db_path('tgt-board'))
 # source empty of moved ids
-for t in ('tasks', 'task_comments', 'task_events', 'task_runs', 'task_links'):
+for t in ('tasks', 'task_comments', 'task_events', 'task_runs', 'task_links', 'task_attachments'):
     n = src_db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
     assert n == 0, f"source {t} still has {n} rows"
 # target holds everything, same ids
@@ -54,6 +62,20 @@ assert tgt_db.execute("SELECT COUNT(*) FROM task_links WHERE parent_id=?", (pare
 assert tgt_db.execute("SELECT COUNT(*) FROM task_events WHERE kind='moved_from'").fetchone()[0] == 2
 att = kb.attachments_root('tgt-board') / parent / 'notes.txt'
 assert att.is_file() and att.read_text() == 'attachment content'
+# ...and the ROW has to say so. The file travelling is not enough: a row still
+# carrying the source board's absolute path downloads nothing (or worse, reads a
+# same-named file that the cleanup has already unlinked).
+rows = tgt_db.execute("SELECT task_id, filename, stored_path FROM task_attachments").fetchall()
+assert len(rows) == 1, f"expected 1 moved attachment row, got {rows}"
+att_task, att_name, att_path = rows[0]
+assert att_task == parent and att_name == 'notes.txt', rows
+assert Path(att_path).is_absolute(), att_path
+assert Path(att_path).is_file(), f"target stored_path is not a file: {att_path}"
+assert Path(att_path).read_text() == 'attachment content', att_path
+assert Path(att_path) == att.resolve(), f"stored_path {att_path} != the copied blob {att.resolve()}"
+src_root, tgt_root = kb.attachments_root('src-board'), kb.attachments_root('tgt-board')
+assert str(tgt_root) in att_path and str(src_root) not in att_path, (
+    f"stored_path still points into the source board: {att_path}")
 # readback through the API on the target board
 r2 = c.get(f"/tasks/{parent}?board=tgt-board")
 d = r2.json()['task']

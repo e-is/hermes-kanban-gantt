@@ -959,7 +959,8 @@ def _autoincrement_pk(conn: sqlite3.Connection, table: str) -> Optional[str]:
 
 def _insert_rows(conn_t: sqlite3.Connection, table: str, rows: list[sqlite3.Row],
                  idmap: dict[str, str], id_col: str = "task_id",
-                 run_map: Optional[dict[int, int]] = None) -> int:
+                 run_map: Optional[dict[int, int]] = None,
+                 att_root: Optional[Path] = None) -> int:
     """Copy rows into the target board, remapping task ids through ``idmap``.
 
     ``task_links`` is handled separately (two id columns).
@@ -974,6 +975,14 @@ def _insert_rows(conn_t: sqlite3.Connection, table: str, rows: list[sqlite3.Row]
     to match; an event whose run did not travel gets NULL rather than pointing at
     an unrelated run of another task in the target board. ``task_runs`` must
     therefore be copied BEFORE ``task_events``.
+
+    ``att_root`` (``task_attachments`` only) rewrites ``stored_path``, which is
+    an absolute ``<attachments root>/<task id>/<file>``: copied verbatim it names
+    the file in the SOURCE board, under the source's task id, and the source
+    cleanup unlinks exactly that tree — the row would download nothing. Rewriting
+    it to the target root with the task's new id is what
+    ``hermes_cli.kanban_transfer`` does when it rehomes attachments, for the same
+    reason.
     """
     row_pk = _autoincrement_pk(conn_t, table)
     n = 0
@@ -981,6 +990,8 @@ def _insert_rows(conn_t: sqlite3.Connection, table: str, rows: list[sqlite3.Row]
         d = dict(row)
         d[id_col] = idmap.get(d[id_col], d[id_col])
         old_pk = d.pop(row_pk, None) if row_pk else None
+        if att_root is not None and table == "task_attachments" and d.get("stored_path"):
+            d["stored_path"] = str(att_root / d[id_col] / Path(d["stored_path"]).name)
         if run_map is not None and table == "task_events" and "run_id" in d:
             rid = d.get("run_id")
             d["run_id"] = run_map.get(rid) if rid is not None else None
@@ -1071,12 +1082,20 @@ def move_task(task_id: str, payload: MoveBody, board: Optional[str] = Query(None
             # Runs BEFORE events: the events' run_id is rewritten through run_map,
             # so the runs must already be in place to have their new ids recorded.
             run_map: dict[int, int] = {}
+            tgt_att_root = kanban_db.attachments_root(target)
             for table in ("task_comments", "task_runs", "task_events", "task_attachments"):
                 rows = conn_s.execute(
                     f"SELECT * FROM {table} WHERE task_id IN ({', '.join('?' for _ in moved_ids)})",
                     moved_ids,
                 ).fetchall()
-                copied[table] = _insert_rows(conn_t, table, rows, idmap, run_map=run_map)
+                if table == "task_attachments":
+                    # A row whose blob is not on disk names nothing: the task is
+                    # leaving, so the row leaves with it rather than shipping a
+                    # path that resolves to a missing file. Same call as
+                    # kanban_transfer makes when it rehomes a board.
+                    rows = [r for r in rows if Path(r["stored_path"]).is_file()]
+                copied[table] = _insert_rows(conn_t, table, rows, idmap, run_map=run_map,
+                                             att_root=tgt_att_root)
 
             # Notification subscriptions travel with the task.
             sub_cols = [r[1] for r in conn_s.execute("PRAGMA table_info(kanban_notify_subs)")]
@@ -1143,11 +1162,22 @@ def move_task(task_id: str, payload: MoveBody, board: Optional[str] = Query(None
             # Attachment FILES: copy dir trees into the target board, still
             # before the source is touched.
             src_att_root = kanban_db.attachments_root(slug)
-            tgt_att_root = kanban_db.attachments_root(target)
             for tid in moved_ids:
                 src_dir = src_att_root / tid
                 if src_dir.is_dir():
                     shutil.copytree(src_dir, tgt_att_root / idmap[tid], dirs_exist_ok=True)
+
+            # An attachment row is only as good as the file it names, and those
+            # names now point at the target board. Confirm every one resolves to a
+            # file HERE — the source rows and files are deleted a few lines down,
+            # so a move that cannot produce the blob must fail while everything is
+            # still in place.
+            for tid in mapped_ids:
+                for att in conn_t.execute(
+                    "SELECT stored_path FROM task_attachments WHERE task_id = ?", (tid,)
+                ).fetchall():
+                    if not Path(att[0]).is_file():
+                        raise RuntimeError(f"move verify failed: attachment missing at {att[0]}")
 
             conn_t.execute("COMMIT")
         except HTTPException:

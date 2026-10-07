@@ -78,4 +78,11 @@ unset HERMES_DELEGATED_CHILD_CONTEXT
 unset HERMES_KANBAN_DB
 unset HERMES_KANBAN_BOARD
 cd "$SCRIPT_DIR"
+
+# The move test is a standalone script — its own temp kanban home, real board
+# DBs and real blob files — so pytest never collects it. Run it explicitly:
+# it is where the cross-board attachment-path assertions live, and a test that
+# nothing executes gates nothing. It asserts, so `set -e` stops the suite here.
+PYTHONPATH="$(dirname "$SCRIPT_DIR")/dashboard:$PYTHONPATH" "$PY" "$SCRIPT_DIR/move_integration.py"
+
 exec "$PY" -m pytest "$SCRIPT_DIR" "$@"
