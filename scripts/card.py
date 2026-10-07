@@ -13,7 +13,7 @@ It needs neither the desktop nor a CDP port, so it runs anywhere:
     python3 scripts/card.py --out /tmp/x.png --scale 1 --keep-html
 
 `scripts/shots.py` calls it at the end of a capture run (skip with
-`--no-thumbnail`), so one command keeps the stills and the catalogue card in sync.
+`--no-card`), so one command keeps the stills and the catalogue card in sync.
 
 Format: the catalogue's entries are all 2:1 banners — measured on four of them:
 1600x800, 1280x640, 1200x600, 1280x640 — so 1280x640 is the default, rendered at

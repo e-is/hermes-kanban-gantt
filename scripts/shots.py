@@ -657,7 +657,7 @@ def seed_board():
                    "set HERMES_SEED_PYTHON to one that has ruamel.yaml")
 
 
-def render_thumbnail():
+def render_card():
     """Draw the catalogue card (scripts/card.py) — no desktop, no CDP needed."""
     script = REPO / "scripts" / "card.py"
     if not script.is_file():
@@ -680,7 +680,7 @@ async def main():
                     help="keep the board as it is (it is dispatchable: agents may have worked on it)")
     ap.add_argument("--keep-board", action="store_true",
                     help="leave the seeded demo board in place (it is dispatched, so it spends tokens)")
-    ap.add_argument("--no-thumbnail", action="store_true",
+    ap.add_argument("--no-card", action="store_true",
                     help="skip the catalogue card (scripts/card.py draws it; no desktop needed)")
     args = ap.parse_args()
 
@@ -723,8 +723,8 @@ async def main():
                 await asyncio.sleep(7)
         except Exception as exc:
             print(f"  ! could not restore the shell state: {exc}")
-        if not args.no_thumbnail:
-            render_thumbnail()
+        if not args.no_card:
+            render_card()
         if not args.no_gif:
             try:
                 encode_animation()

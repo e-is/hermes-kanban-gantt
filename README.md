@@ -174,7 +174,7 @@ python3 scripts/card.py --out /tmp/card.png --scale 1
 ```
 
 It needs neither the desktop nor a CDP port, and `npm run shots` calls it at the
-end of a capture run (skip with `--no-thumbnail`), so the stills and the card stay
+end of a capture run (skip with `--no-card`), so the stills and the card stay
 in sync. The generated `docs/catalog-card.html` sits next to the PNG on purpose:
 that file *is* the source, and editing it (or the constants at the top of
 `card.py`) then re-running is the whole workflow.
