@@ -39,7 +39,7 @@ import {
   Loader,
   profileColor,
   profileColorSoft,
-  Streamdown,
+  MessageTextContent,
   Switch,
   Textarea,
   useMutation,
@@ -1446,8 +1446,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                     ] })
                   : data?.task?.body
                     ? jsx('div', {
-                        className: 'text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)',
-                        children: jsx(Streamdown, { children: data.task.body })
+                        className: 'border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)',
+                        children: jsx(MessageTextContent, { media: false, text: data.task.body })
                       })
                     : jsx('p', { className: 'text-[11px] text-(--ui-text-quaternary)', children: i18n.noDescription })
               ] }),
@@ -1457,8 +1457,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 ? jsxs('div', { className: 'flex flex-col gap-1', children: [
                     jsx('div', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: i18n.result }),
                     jsx('div', {
-                      className: 'text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)',
-                      children: jsx(Streamdown, { children: data.task.result })
+                      className: 'border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)',
+                      children: jsx(MessageTextContent, { media: false, text: data.task.result })
                     })
                   ] })
                 : null,
@@ -1469,14 +1469,14 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                     jsx('div', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: i18n.latestSummary }),
                     jsx('div', {
                       className: cn(
-                        'text-[11px] prose prose-sm kg-prose max-w-none rounded p-2.5 transition-colors',
+                        'rounded p-2.5 transition-colors',
                         data?.task?.status === 'blocked'
                           ? 'border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300'
                           : data?.task?.status === 'done' || data?.task?.status === 'archived'
                             ? 'border border-emerald-500/35 bg-emerald-500/10'
                             : 'border border-(--ui-stroke-tertiary) bg-(--ui-bg-subtle, transparent)'
                       ),
-                      children: jsx(Streamdown, { children: data.task.latest_summary })
+                      children: jsx(MessageTextContent, { media: false, text: data.task.latest_summary })
                     })
                   ] })
                 : null,
@@ -1526,7 +1526,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                             dateStr ? jsx('span', { className: 'text-(--ui-text-quaternary) ml-auto text-[9.5px]', children: dateStr }) : null
                           ] }),
                           r.summary
-                            ? jsx('div', { className: 'prose prose-sm kg-prose max-w-none text-[11px] mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50', children: jsx(Streamdown, { children: r.summary }) })
+                            ? jsx('div', { className: 'mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50', children: jsx(MessageTextContent, { media: false, text: r.summary }) })
                             : null
                         ]
                       })
@@ -1578,7 +1578,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                             jsx('span', { className: 'font-medium text-(--ui-text-secondary)', children: c.author || '?' }),
                             dateStr ? jsx('span', { className: 'ml-auto text-(--ui-text-quaternary)', children: dateStr }) : null
                           ] }),
-                          jsx('div', { className: 'prose prose-sm kg-prose max-w-none text-[11px]', children: jsx(Streamdown, { children: c.body || '' }) })
+                          jsx('div', { className: 'min-w-0', children: jsx(MessageTextContent, { media: false, text: c.body || '' }) })
                         ]
                       })
                     }),
@@ -2657,40 +2657,14 @@ const plugin = {
 }
 @keyframes kg-arc-spin { to { --kg-arc-angle: 360deg; } }
 /* Readability: ticket bodies, results, summaries and comments render agent
-   markdown through Streamdown into Tailwind typography containers (prose),
-   whose palette defaults to light-background ink (#374151) and is illegible
-   on the app's dark surfaces. Typography reads every colour from a
-   --tw-prose-* custom property, so map those onto the app's own theme tokens
-   (which flip with :root.dark) instead of pinning literals: one block that is
-   readable in BOTH themes, scoped to .kg-prose so drawer chrome, cards and
-   controls are untouched. */
-.kg-prose {
-  --tw-prose-body: var(--ui-text-primary);
-  --tw-prose-headings: var(--ui-text-primary);
-  --tw-prose-lead: var(--ui-text-secondary);
-  --tw-prose-links: var(--ui-accent);
-  --tw-prose-bold: var(--ui-text-primary);
-  --tw-prose-counters: var(--ui-text-secondary);
-  --tw-prose-bullets: var(--ui-text-tertiary);
-  --tw-prose-hr: var(--ui-stroke-tertiary);
-  --tw-prose-quotes: var(--ui-text-primary);
-  --tw-prose-quote-borders: var(--ui-stroke-tertiary);
-  --tw-prose-captions: var(--ui-text-tertiary);
-  --tw-prose-code: var(--ui-text-primary);
-  --tw-prose-pre-code: var(--ui-text-primary);
-  --tw-prose-pre-bg: var(--ui-bg-tertiary);
-  --tw-prose-th-borders: var(--ui-stroke-secondary);
-  --tw-prose-td-borders: var(--ui-stroke-tertiary);
-  color: var(--tw-prose-body);
-}
-/* Typography paints code/pre from its own dark palette; keep them on the app's
-   surfaces. Link decoration and list indent are the two typography choices
-   worth keeping explicit at this size. */
-.kg-prose :where(code) { background: var(--ui-bg-tertiary); padding: .08em .32em; border-radius: 3px; }
-.kg-prose :where(pre) { background: var(--ui-bg-tertiary); padding: .5em .6em; border-radius: 4px; }
-.kg-prose :where(pre code) { background: transparent; padding: 0; }
-.kg-prose a { text-decoration: underline; }
-.kg-prose :where(ul, ol) { padding-left: 1.1em; }
+   Markdown is rendered by the SDK's MessageTextContent — the same renderer chat and
+   the official kanban plugin use — so descriptions, run summaries and comments inherit
+   the app's own markdown typography instead of a hand-written one. The kg-prose colour
+   mapping that used to live here went with it: it existed only to make Tailwind
+   Typography readable on the app's surfaces, and the SMALL typography variant
+   (prose-sm) is not in the desktop's precompiled stylesheet at all — measured, 0
+   occurrences — so the base variant's heading ratios applied and titles rendered far
+   too large for an 11px body. */
 `
       document.head.appendChild(style)
     }

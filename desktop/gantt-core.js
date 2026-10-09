@@ -169,7 +169,8 @@ function matchesSearch(task, query) {
   if (!q) return true;
   const label = (task.label || "").toLowerCase();
   const title = (task.title || "").toLowerCase();
-  return label.includes(q) || title.includes(q);
+  const id = (task.id || "").toLowerCase();
+  return label.includes(q) || title.includes(q) || id.includes(q) || q.startsWith("t_") && id.startsWith(q) || id.startsWith(`t_${q}`);
 }
 function buildRows(tasks) {
   const set = new Set(tasks.map((t) => t.id));

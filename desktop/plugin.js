@@ -24,7 +24,7 @@ import {
   Loader,
   profileColor,
   profileColorSoft,
-  Streamdown,
+  MessageTextContent,
   Textarea,
   useMutation,
   useQuery as useQuery2,
@@ -116,6 +116,21 @@ var GANTT_LOCALES = {
     noBoard: "no board",
     dockDrawer: "Dock the drawer next to the gantt",
     undockDrawer: "Undock the drawer",
+    openInModal: "Open the detail in a modal window",
+    dockDetail: "Dock the detail beside the gantt",
+    detailMeta: "Information",
+    metaStatus: "Status",
+    metaAssignee: "Assignee",
+    metaWorkspace: "Workspace",
+    metaCreated: "Created",
+    metaLastActivity: "Last activity",
+    attachments: (n) => `Attachments (${n})`,
+    noAttachments: "No attachments",
+    downloadAttachment: (name) => `Download ${name}`,
+    previewMarkdown: (name) => `Preview ${name}`,
+    previewTitle: (name) => `Preview — ${name}`,
+    previewFailed: "Could not read this attachment.",
+    closeWindow: "Close",
     filterCards: "Filter cards…",
     zoomTimeline: "Zoom timeline",
     nothingToDisplay: "Nothing to display",
@@ -305,6 +320,21 @@ var GANTT_LOCALES = {
     noBoard: "aucun board",
     dockDrawer: "Ancrer la vue à côté du gantt",
     undockDrawer: "Détacher la vue",
+    openInModal: "Ouvrir le détail dans une fenêtre modale",
+    dockDetail: "Ancrer le détail à côté du gantt",
+    detailMeta: "Informations",
+    metaStatus: "Statut",
+    metaAssignee: "Assigné à",
+    metaWorkspace: "Espace de travail",
+    metaCreated: "Créée",
+    metaLastActivity: "Dernière activité",
+    attachments: (n) => `Pièces jointes (${n})`,
+    noAttachments: "Aucune pièce jointe",
+    downloadAttachment: (name) => `Télécharger ${name}`,
+    previewMarkdown: (name) => `Afficher ${name}`,
+    previewTitle: (name) => `Aperçu — ${name}`,
+    previewFailed: "Impossible de lire cette pièce jointe.",
+    closeWindow: "Fermer",
     filterCards: "Filtrer les tâches…",
     zoomTimeline: "Zoom timeline",
     nothingToDisplay: "Rien à afficher",
@@ -900,7 +930,8 @@ function matchesSearch(task, query) {
   if (!q) return true;
   const label = (task.label || "").toLowerCase();
   const title = (task.title || "").toLowerCase();
-  return label.includes(q) || title.includes(q);
+  const id = (task.id || "").toLowerCase();
+  return label.includes(q) || title.includes(q) || id.includes(q) || q.startsWith("t_") && id.startsWith(q) || id.startsWith(`t_${q}`);
 }
 var TREE_SLOT = 16;
 var TREE_SQUARE = 13;
@@ -2823,16 +2854,16 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
               children: i18n.save
             })
           ] }) : data?.task?.body ? jsx6("div", {
-            className: "text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
-            children: jsx6(Streamdown, { children: data.task.body })
+            className: "border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
+            children: jsx6(MessageTextContent, { media: false, text: data.task.body })
           }) : jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.noDescription })
         ] }),
         // 2. Result (no max-h clamp)
         data?.task?.result ? jsxs6("div", { className: "flex flex-col gap-1", children: [
           jsx6("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.result }),
           jsx6("div", {
-            className: "text-[11px] prose prose-sm kg-prose max-w-none border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
-            children: jsx6(Streamdown, { children: data.task.result })
+            className: "border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
+            children: jsx6(MessageTextContent, { media: false, text: data.task.result })
           })
         ] }) : null,
         // 3. Latest summary (highlighted when blocked or done/completed)
@@ -2840,10 +2871,10 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
           jsx6("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.latestSummary }),
           jsx6("div", {
             className: cn3(
-              "text-[11px] prose prose-sm kg-prose max-w-none rounded p-2.5 transition-colors",
+              "rounded p-2.5 transition-colors",
               data?.task?.status === "blocked" ? "border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300" : data?.task?.status === "done" || data?.task?.status === "archived" ? "border border-emerald-500/35 bg-emerald-500/10" : "border border-(--ui-stroke-tertiary) bg-(--ui-bg-subtle, transparent)"
             ),
-            children: jsx6(Streamdown, { children: data.task.latest_summary })
+            children: jsx6(MessageTextContent, { media: false, text: data.task.latest_summary })
           })
         ] }) : null,
         // 4. Run history (Collapsible section, collapsed by default, no internal scrollbar)
@@ -2888,7 +2919,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                   durationStr ? jsx6("span", { className: "text-(--ui-text-tertiary)", children: `⏱ ${durationStr}` }) : null,
                   dateStr ? jsx6("span", { className: "text-(--ui-text-quaternary) ml-auto text-[9.5px]", children: dateStr }) : null
                 ] }),
-                r.summary ? jsx6("div", { className: "prose prose-sm kg-prose max-w-none text-[11px] mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50", children: jsx6(Streamdown, { children: r.summary }) }) : null
+                r.summary ? jsx6("div", { className: "mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50", children: jsx6(MessageTextContent, { media: false, text: r.summary }) }) : null
               ]
             });
           }) }) : null
@@ -2934,7 +2965,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                       jsx6("span", { className: "font-medium text-(--ui-text-secondary)", children: c.author || "?" }),
                       dateStr ? jsx6("span", { className: "ml-auto text-(--ui-text-quaternary)", children: dateStr }) : null
                     ] }),
-                    jsx6("div", { className: "prose prose-sm kg-prose max-w-none text-[11px]", children: jsx6(Streamdown, { children: c.body || "" }) })
+                    jsx6("div", { className: "min-w-0", children: jsx6(MessageTextContent, { media: false, text: c.body || "" }) })
                   ]
                 });
               }),
@@ -3844,40 +3875,14 @@ var plugin = {
 }
 @keyframes kg-arc-spin { to { --kg-arc-angle: 360deg; } }
 /* Readability: ticket bodies, results, summaries and comments render agent
-   markdown through Streamdown into Tailwind typography containers (prose),
-   whose palette defaults to light-background ink (#374151) and is illegible
-   on the app's dark surfaces. Typography reads every colour from a
-   --tw-prose-* custom property, so map those onto the app's own theme tokens
-   (which flip with :root.dark) instead of pinning literals: one block that is
-   readable in BOTH themes, scoped to .kg-prose so drawer chrome, cards and
-   controls are untouched. */
-.kg-prose {
-  --tw-prose-body: var(--ui-text-primary);
-  --tw-prose-headings: var(--ui-text-primary);
-  --tw-prose-lead: var(--ui-text-secondary);
-  --tw-prose-links: var(--ui-accent);
-  --tw-prose-bold: var(--ui-text-primary);
-  --tw-prose-counters: var(--ui-text-secondary);
-  --tw-prose-bullets: var(--ui-text-tertiary);
-  --tw-prose-hr: var(--ui-stroke-tertiary);
-  --tw-prose-quotes: var(--ui-text-primary);
-  --tw-prose-quote-borders: var(--ui-stroke-tertiary);
-  --tw-prose-captions: var(--ui-text-tertiary);
-  --tw-prose-code: var(--ui-text-primary);
-  --tw-prose-pre-code: var(--ui-text-primary);
-  --tw-prose-pre-bg: var(--ui-bg-tertiary);
-  --tw-prose-th-borders: var(--ui-stroke-secondary);
-  --tw-prose-td-borders: var(--ui-stroke-tertiary);
-  color: var(--tw-prose-body);
-}
-/* Typography paints code/pre from its own dark palette; keep them on the app's
-   surfaces. Link decoration and list indent are the two typography choices
-   worth keeping explicit at this size. */
-.kg-prose :where(code) { background: var(--ui-bg-tertiary); padding: .08em .32em; border-radius: 3px; }
-.kg-prose :where(pre) { background: var(--ui-bg-tertiary); padding: .5em .6em; border-radius: 4px; }
-.kg-prose :where(pre code) { background: transparent; padding: 0; }
-.kg-prose a { text-decoration: underline; }
-.kg-prose :where(ul, ol) { padding-left: 1.1em; }
+   Markdown is rendered by the SDK's MessageTextContent — the same renderer chat and
+   the official kanban plugin use — so descriptions, run summaries and comments inherit
+   the app's own markdown typography instead of a hand-written one. The kg-prose colour
+   mapping that used to live here went with it: it existed only to make Tailwind
+   Typography readable on the app's surfaces, and the SMALL typography variant
+   (prose-sm) is not in the desktop's precompiled stylesheet at all — measured, 0
+   occurrences — so the base variant's heading ratios applied and titles rendered far
+   too large for an 11px body. */
 `;
       document.head.appendChild(style);
     }
