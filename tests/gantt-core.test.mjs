@@ -545,19 +545,26 @@ test('every row carries a unique render key, multi-parent rows included', () => 
 })
 
 test('a search finds a task by its id, with or without the t_ prefix', () => {
+  // Ids are how tasks are referred to outside the board, so pasting one into the
+  // search field has to work. This is matchesSearch, NOT treeRows: the row list
+  // applies the predicate upstream, treeRows only consumes the fold state.
   const T = [
-    { id: 't_fb50c792', title: 'Refactor the importer', status: 'todo', children: [], parents: [] },
-    { id: 't_11223344', title: 'Unrelated card', status: 'todo', children: [], parents: [] }
+    { id: 't_fb50c792', title: 'Refactor the importer', label: '', status: 'todo' },
+    { id: 't_11223344', title: 'Unrelated card', label: '', status: 'todo' }
   ]
-  const ids = q => treeRows(T, { search: q }).map(r => r.task.id)
-  assert.deepEqual(ids('t_fb50c792'), ['t_fb50c792'])   // the id as it appears in the UI
-  assert.deepEqual(ids('fb50c792'), ['t_fb50c792'])     // pasted without the prefix
-  assert.deepEqual(ids('FB50C792'), ['t_fb50c792'])     // case does not matter
-  assert.deepEqual(ids('fb50'), ['t_fb50c792'])         // a fragment is enough
-  assert.deepEqual(ids('11223344'), ['t_11223344'])
-  assert.deepEqual(ids('importer'), ['t_fb50c792'])     // titles still match
-  assert.deepEqual(ids('nope'), [])
-  assert.deepEqual(ids('t_'), T.map(t => t.id))         // an empty-ish query matches all
+  const hit = (q, id) => core.matchesSearch(T.find(t => t.id === id), q)
+
+  assert.equal(hit('t_fb50c792', 't_fb50c792'), true)   // the id as the UI shows it
+  assert.equal(hit('t_fb50c792', 't_11223344'), false)
+  assert.equal(hit('fb50c792', 't_fb50c792'), true)     // pasted without the prefix
+  assert.equal(hit('FB50C792', 't_fb50c792'), true)     // case does not matter
+  assert.equal(hit('fb50', 't_fb50c792'), true)         // a fragment is enough
+  assert.equal(hit('11223344', 't_11223344'), true)
+  assert.equal(hit('importer', 't_fb50c792'), true)      // titles still match
+  assert.equal(hit('unrelated', 't_11223344'), true)
+  assert.equal(hit('unrelated', 't_fb50c792'), false)
+  assert.equal(hit('nope', 't_fb50c792'), false)
+  assert.equal(hit('', 't_11223344'), true)              // an empty query keeps everything
 })
 
 // ── treeMarks: the column's geometry, one slot per level ──────────────────────
