@@ -30,6 +30,7 @@ like every user plugin.
 from __future__ import annotations
 
 import json
+import base64
 import os
 import re
 import shutil
@@ -533,9 +534,88 @@ def get_task(task_id: str, board: Optional[str] = Query(None)):
             {"id": cid, "title": _short_title(conn, cid), "relation": "child"}
             for cid in detail["children"]
         ]
+        # Attachments: the rows only. The bytes are served one at a time by
+        # /attachments/{id}/content so a drawer never pulls every blob to show a list,
+        # and so `stored_path` can be validated before anything is read.
+        detail["attachments"] = [
+            {
+                "id": r[0], "filename": r[1], "stored_path": r[2], "content_type": r[3],
+                "size": r[4], "uploaded_by": r[5], "created_at": r[6],
+            }
+            for r in conn.execute(
+                "SELECT id, filename, stored_path, content_type, size, uploaded_by, created_at "
+                "FROM task_attachments WHERE task_id = ? ORDER BY created_at, id",
+                (task_id,),
+            ).fetchall()
+        ]
         return {"task": detail}
     finally:
         conn.close()
+
+
+# Extensions the drawer will offer to RENDER rather than download. Anything else is
+# still readable through the same route (base64), the client just cannot preview it.
+_TEXT_SUFFIXES = (".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".log",
+                  ".py", ".ts", ".js", ".sh", ".html", ".css")
+
+
+@router.get("/tasks/{task_id}/attachments/{attachment_id}/content")
+def get_attachment_content(task_id: str, attachment_id: int, board: Optional[str] = Query(None)):
+    """One attachment's bytes: decoded text when it is text-like, base64 otherwise.
+
+    Served through this route rather than a static mount for one reason: `stored_path`
+    is an absolute path written by the application, so a hand-edited row could otherwise
+    turn this endpoint into an arbitrary file reader. The resolved path must sit inside
+    the board's own attachments tree, and anything else answers 404 — the same answer as
+    a missing file, so the route never confirms what exists outside the board.
+
+    Base64 rather than a binary response because the desktop plugin fetches it through
+    the plugin REST client, which speaks JSON; text is returned as a plain string so the
+    markdown preview needs no decoding round trip.
+    """
+    from hermes_cli import kanban_db
+
+    slug = _board_for_task(task_id, board)
+    conn = _connect(slug, ro=True)
+    try:
+        row = conn.execute(
+            "SELECT id, filename, stored_path, content_type, size "
+            "FROM task_attachments WHERE id = ? AND task_id = ?",
+            (attachment_id, task_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="attachment not found")
+        att_id, filename, stored_path, content_type, size = row[0], row[1], row[2], row[3], row[4]
+        is_markdown = (filename or "").lower().endswith((".md", ".markdown"))
+    finally:
+        conn.close()
+
+    root = kanban_db.attachments_root(slug).resolve()
+    path = Path(stored_path or "").expanduser()
+    resolved = path.resolve() if path.is_absolute() else (root / path).resolve()
+    # `is_relative_to` is the whole guard: resolve() also collapses `..`, so a row
+    # pointing at ../../etc/passwd lands outside `root` and is refused here.
+    if not resolved.is_relative_to(root) or not resolved.is_file():
+        raise HTTPException(status_code=404, detail="attachment file not found")
+
+    data = resolved.read_bytes()
+    looks_text = (content_type or "").startswith("text/") or \
+        (filename or "").lower().endswith(_TEXT_SUFFIXES)
+    if not looks_text:
+        try:
+            looks_text = b"\x00" not in data and data.decode("utf-8") is not None
+        except UnicodeDecodeError:
+            looks_text = False
+
+    body = {
+        "id": att_id, "filename": filename, "content_type": content_type,
+        "size": size, "is_markdown": is_markdown,
+    }
+    if looks_text:
+        body.update({"encoding": "utf-8", "text": data.decode("utf-8")})
+    else:
+        body.update({"encoding": "base64", "text": base64.b64encode(data).decode("ascii")})
+    return body
 
 
 def _short_title(conn: sqlite3.Connection, task_id: str) -> str:

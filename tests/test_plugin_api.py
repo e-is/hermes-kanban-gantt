@@ -21,6 +21,7 @@ roots are simply not mounted into the sandbox.
 
 from __future__ import annotations
 
+import base64
 import os
 import re
 import shutil
@@ -193,6 +194,99 @@ def test_task_detail(client):
 def test_task_detail_404(client):
     http, board = client
     assert http.get(f"/tasks/t_missing?board={board['slug']}").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Attachments — rows in the detail, bytes (text or base64) one at a time
+# ---------------------------------------------------------------------------
+
+def _attach(board, task_id, name, data, content_type="text/markdown"):
+    """Write a blob and its row exactly as the application does.
+
+    Returns the attachment id. The file lands in the per-task directory the app
+    uses, with an ABSOLUTE stored_path, because that is the shape the content route
+    has to validate.
+    """
+    conn = kbc.connect(board=board["slug"])
+    dest_dir = kanban_db.task_attachments_dir(task_id, board=board["slug"])
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    path = dest_dir / name
+    path.write_bytes(data)
+    aid = kanban_db.add_attachment(conn, task_id, filename=name, stored_path=str(path.resolve()),
+                                   content_type=content_type, size=len(data), uploaded_by="test")
+    conn.close()
+    return aid
+
+
+def test_task_detail_lists_attachments(client):
+    http, board = client
+    _attach(board, board["child"], "notes.md", b"# Notes\n\nbody\n")
+    task = http.get(f"/tasks/{board['child']}?board={board['slug']}").json()["task"]
+    assert len(task["attachments"]) == 1
+    att = task["attachments"][0]
+    assert att["filename"] == "notes.md"
+    assert att["size"] == len(b"# Notes\n\nbody\n")
+    assert att["uploaded_by"] == "test"
+    assert att["stored_path"].endswith("notes.md")
+    # the row carries no content: the drawer must not pull every blob to list them
+    assert "text" not in att and "content" not in att
+
+
+def test_attachment_content_returns_markdown_as_text(client):
+    http, board = client
+    body = b"# Notes\n\n**bold**\n\n- one\n"
+    aid = _attach(board, board["child"], "notes.md", body)
+    r = http.get(f"/tasks/{board['child']}/attachments/{aid}/content?board={board['slug']}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["encoding"] == "utf-8"
+    assert data["text"] == body.decode()
+    assert data["is_markdown"] is True
+    assert data["filename"] == "notes.md"
+
+
+def test_attachment_content_returns_binary_as_base64(client):
+    http, board = client
+    blob = bytes(range(256))          # not valid UTF-8, so it must not be decoded
+    aid = _attach(board, board["child"], "frame.png", blob, content_type="image/png")
+    r = http.get(f"/tasks/{board['child']}/attachments/{aid}/content?board={board['slug']}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["encoding"] == "base64"
+    assert base64.b64decode(data["text"]) == blob
+    assert data["is_markdown"] is False
+
+
+def test_attachment_content_404_for_an_unknown_id(client):
+    http, board = client
+    assert http.get(f"/tasks/{board['child']}/attachments/9999/content"
+                    f"?board={board['slug']}").status_code == 404
+
+
+def test_attachment_content_refuses_a_path_outside_the_board(client):
+    """A hand-edited row must not turn the route into a file reader."""
+    http, board = client
+    outside = Path(os.environ["HERMES_HOME"]) / "outside.md"
+    outside.write_text("secret")
+    conn = kbc.connect(board=board["slug"])
+    aid = kanban_db.add_attachment(conn, board["child"], filename="outside.md",
+                                   stored_path=str(outside.resolve()),
+                                   content_type="text/markdown", size=6, uploaded_by="test")
+    conn.close()
+    r = http.get(f"/tasks/{board['child']}/attachments/{aid}/content?board={board['slug']}")
+    assert r.status_code == 404
+    assert "secret" not in r.text
+
+    # …and a traversal written into the column is refused for the same reason
+    conn = kbc.connect(board=board["slug"])
+    root = kanban_db.attachments_root(board["slug"])
+    traversal = str((root / ".." / ".." / "outside.md"))
+    aid2 = kanban_db.add_attachment(conn, board["child"], filename="passwd",
+                                    stored_path=traversal, content_type="text/plain",
+                                    size=6, uploaded_by="test")
+    conn.close()
+    assert http.get(f"/tasks/{board['child']}/attachments/{aid2}/content"
+                    f"?board={board['slug']}").status_code == 404
 
 
 def test_description_is_editable_and_recorded_as_an_edit(client):
