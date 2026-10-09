@@ -544,6 +544,22 @@ test('every row carries a unique render key, multi-parent rows included', () => 
   assert.notEqual(key(fRows[0]), key(fRows[1]))         // …that difference IS the key
 })
 
+test('a search finds a task by its id, with or without the t_ prefix', () => {
+  const T = [
+    { id: 't_fb50c792', title: 'Refactor the importer', status: 'todo', children: [], parents: [] },
+    { id: 't_11223344', title: 'Unrelated card', status: 'todo', children: [], parents: [] }
+  ]
+  const ids = q => treeRows(T, { search: q }).map(r => r.task.id)
+  assert.deepEqual(ids('t_fb50c792'), ['t_fb50c792'])   // the id as it appears in the UI
+  assert.deepEqual(ids('fb50c792'), ['t_fb50c792'])     // pasted without the prefix
+  assert.deepEqual(ids('FB50C792'), ['t_fb50c792'])     // case does not matter
+  assert.deepEqual(ids('fb50'), ['t_fb50c792'])         // a fragment is enough
+  assert.deepEqual(ids('11223344'), ['t_11223344'])
+  assert.deepEqual(ids('importer'), ['t_fb50c792'])     // titles still match
+  assert.deepEqual(ids('nope'), [])
+  assert.deepEqual(ids('t_'), T.map(t => t.id))         // an empty-ish query matches all
+})
+
 // ── treeMarks: the column's geometry, one slot per level ──────────────────────
 
 test('a lone child draws only its elbow, hanging under the PARENT square', () => {
