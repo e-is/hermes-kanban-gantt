@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.5.0 — the detail as a modal, attachments at last, and two fixes measured rather than guessed
+
+**The task detail opens as a modal.** A switch in the detail header — next to the close
+button, where a window-level control belongs — presents the same body either as the panel
+beside the gantt (unchanged, still dockable and resizable) or as a centred modal whose
+right-hand column carries the facts worth a column: status, assignee, workspace, created,
+last activity and the attachments. The body is built once and rendered into whichever
+container is asked for, so the two presentations cannot drift apart. The dock control is
+hidden in the modal, where there is nothing to dock.
+
+**Attachments are visible.** Every task lists its files under the description, with a
+download button on each and a preview button on the markdown ones; a preview opens its own
+closable dialog and renders the markdown with the app's own renderer. The plugin REST door
+speaks JSON only, so a new backend route answers with decoded text when the file is
+text-like and base64 otherwise, and the client rebuilds a Blob from that. The route
+resolves the stored path and refuses anything outside the board's own attachments tree with
+a 404 — the same answer as a missing file — so a hand-edited row cannot turn it into a file
+reader.
+
+**The search finds a task by its id.** Ids are how tasks are referred to outside the board
+— a comment, a log line, another task's summary — so `t_fb50c792`, `fb50c792`, `FB50C792`
+and `fb50` all find it, while titles and labels keep matching as before.
+
+**Markdown no longer renders oversized.** Measured rather than guessed: the bodies asked
+for Tailwind Typography's `prose-sm`, and that variant is not in the desktop's precompiled
+stylesheet at all — 0 occurrences, while the base `prose` variant and its heading rules are
+compiled — so the base ratios applied (h1 at 2.25em) on a body pinned to 11px. Descriptions,
+results, run summaries and comments now render through the SDK's `MessageTextContent`, the
+component the chat and the official kanban plugin use, and the hand-written colour mapping
+that existed only for the old renderer is gone with it.
+
+**The `default` board is served.** The board-path guard modelled `default`'s back-compat
+database as `boards_root().parent` — one directory too deep, `<root>/kanban/kanban.db` —
+so on a stock layout it refused the very file the core resolves, and `?board=default`
+answered 404 with a message about pinning that was not in play. The path now comes from the
+core (`kanban_home()/"kanban.db"`) instead of being re-derived. The refusal also stopped
+being reported as "backend unreachable": a board-path refusal names a cause as specific as
+a missing database does. Reported by @Helios766 (#10).
+
+Tests: 70 node tests + 11 ESM render checks + 51 pytest, plus the standalone move
+integration run.
+
 ## 1.4.2 — two rendering defects, one cause each
 
 **A fold could only ever ADD rows.** On a multi-parent board a task legitimately holds
