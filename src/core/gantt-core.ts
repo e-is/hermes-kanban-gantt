@@ -229,7 +229,12 @@ export function isMissingBoardError(error) {
   const message = typeof error === 'string'
     ? error
     : (error && (error.message || error.detail || error.error)) || '';
-  return /database not found|does not exist|no such board/i.test(String(message));
+  // The last alternative is the board-PATH refusal: the resolved file is not the one
+  // that board owns. It names a cause as specific as a missing DB does, and leaving it
+  // out reported it as "backend unreachable" — sending the reader to restart a gateway
+  // that was healthy (issue #10).
+  return /database not found|does not exist|no such board|is not this board's own database/i
+    .test(String(message));
 }
 
 export function shortId(id) {

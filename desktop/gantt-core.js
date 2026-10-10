@@ -159,7 +159,7 @@ function resolveBoardSlug(stored, known, current) {
 }
 function isMissingBoardError(error) {
   const message = typeof error === "string" ? error : error && (error.message || error.detail || error.error) || "";
-  return /database not found|does not exist|no such board/i.test(String(message));
+  return /database not found|does not exist|no such board|is not this board's own database/i.test(String(message));
 }
 function shortId(id) {
   return (id || "").replace(/^t_/, "").slice(0, 6);

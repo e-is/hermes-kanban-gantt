@@ -384,6 +384,8 @@ test('a board-specific failure is told apart from a dead backend', () => {
     `GET /gantt → HTTP 503: {"detail":"board 'obsfish' database not found at /home/b/.hermes/kanban/boards/obsfish/kanban.db"}`), true)
   assert.equal(isMissingBoardError(
     `404: {"detail":"board 'gantt-demo' does not exist"}`), true)
+  assert.equal(isMissingBoardError(
+    `404: {"detail":"board 'default' resolved to /home/agent/.hermes/kanban.db — that is not this board's own database, so it is refused (HERMES_KANBAN_DB pinning?)"}`), true)
   assert.equal(isMissingBoardError(new Error('backend not ready')), false)
   assert.equal(isMissingBoardError(new Error('GET /boards → HTTP 500')), false)
   assert.equal(isMissingBoardError(undefined), false)

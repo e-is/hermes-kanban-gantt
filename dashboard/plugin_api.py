@@ -111,7 +111,17 @@ def _board_db_path(slug: str) -> Path:
     # worse than a 404.
     resolved = path.resolve()
     expected = (_boards_root() / slug / "kanban.db").resolve()
-    legacy_default = (_boards_root().parent / "kanban.db").resolve()
+    # The `default` board is the one exception, and it is asked of the core instead of
+    # re-derived: kanban_home()/"kanban.db". Deriving it as boards_root().parent pointed
+    # one directory too deep — at <root>/kanban/kanban.db, while boards_root()'s own
+    # docstring says the default DB stays at <root>/kanban.db — so on a stock layout the
+    # guard refused the path the core had just resolved, and `default` could never be
+    # served (issue #10: `?board=default` answered 404 on Hermes 0.21.6). The fallback
+    # keeps a standalone server working when hermes_cli has no kanban_home().
+    try:
+        legacy_default = (_kb().kanban_home() / "kanban.db").resolve()
+    except Exception:
+        legacy_default = (_boards_root().parent.parent / "kanban.db").resolve()
     if resolved != expected and not (slug == "default" and resolved == legacy_default):
         raise HTTPException(
             status_code=404,

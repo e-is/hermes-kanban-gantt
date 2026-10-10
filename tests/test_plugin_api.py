@@ -165,6 +165,29 @@ def test_a_board_resolving_outside_its_own_directory_is_refused(monkeypatch, tmp
     assert "refused" in str(exc.value)
 
 
+def test_the_default_board_is_served_rather_than_refused(client):
+    """`default` does not live under boards/: the core keeps it at <root>/kanban.db.
+
+    The guard modelled that back-compat path as `boards_root().parent` — which is
+    <root>/kanban, so it pointed at <root>/kanban/kanban.db, one directory too deep.
+    On a stock layout the guard therefore refused the very file the core had just
+    resolved for `default`, and the page reported the refusal as "Backend
+    kanban-gantt unreachable" (issue #10).
+    """
+    http, board = client
+    home = Path(os.environ["HERMES_KANBAN_HOME"])
+    (home / "kanban").mkdir(parents=True, exist_ok=True)
+    conn = kbc.connect(board="default")
+    kanban_db.create_task(conn, title="[TEST] task on the default board", priority=1,
+                          created_by="test")
+    conn.close()
+
+    assert (home / "kanban.db").is_file(), "the core keeps the default DB at <root>/kanban.db"
+    r = http.get("/gantt?board=default")
+    assert r.status_code == 200, r.text
+    assert any(t["title"] == "[TEST] task on the default board" for t in r.json()["tasks"])
+
+
 def test_a_board_in_its_own_directory_is_served(monkeypatch, tmp_path):
     """The assertion must not reject the honest case it exists to protect."""
     import types
