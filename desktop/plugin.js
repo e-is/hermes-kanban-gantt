@@ -13,6 +13,9 @@ import {
   Codicon as Codicon5,
   ConfirmDialog,
   Contribute,
+  Dialog as Dialog4,
+  DialogContent as DialogContent4,
+  DialogTitle as DialogTitle4,
   DropdownMenu as DropdownMenu3,
   DropdownMenuContent as DropdownMenuContent3,
   DropdownMenuItem as DropdownMenuItem3,
@@ -50,6 +53,7 @@ var $connectionScope = atom("");
 var $labelW = atom(LABEL_W);
 var $drawerW = atom(416);
 var $drawerDocked = atom(false);
+var $detailModal = atom(false);
 var LABEL_W_MIN = 160;
 var LABEL_W_MAX = 640;
 var DRAWER_W_MIN = 320;
@@ -2531,13 +2535,98 @@ function StatusBadge({ status, onPick, disabled }) {
     })
   ] });
 }
+async function fetchAttachment(taskId, board, attachmentId) {
+  return apiFetch(`/tasks/${encodeURIComponent(taskId)}/attachments/${attachmentId}/content?board=${encodeURIComponent(board || "")}`);
+}
+async function downloadAttachment(taskId, board, att, i18n) {
+  try {
+    const data = await fetchAttachment(taskId, board, att.id);
+    const bytes = data.encoding === "base64" ? Uint8Array.from(atob(data.text || ""), (c) => c.charCodeAt(0)) : new TextEncoder().encode(data.text || "");
+    const url = URL.createObjectURL(new Blob([bytes], {
+      type: data.content_type || "application/octet-stream"
+    }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = data.filename || att.filename || "attachment";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1e4);
+  } catch (error) {
+    host.notify({ kind: "error", message: `${i18n.previewFailed} — ${att.filename}` });
+  }
+}
+function AttachmentPreview({ taskId, board, att, i18n, onClose }) {
+  const query = useQuery2({
+    queryKey: ["kanban-gantt", "attachment", taskId, att.id],
+    queryFn: () => fetchAttachment(taskId, board, att.id)
+  });
+  return jsx6(Dialog4, {
+    open: true,
+    onOpenChange: (next) => {
+      if (!next) onClose();
+    },
+    children: jsx6(DialogContent4, {
+      className: "flex max-h-[80vh] w-[min(46rem,92vw)] max-w-none flex-col overflow-hidden",
+      children: [
+        jsx6("div", { className: "flex items-center gap-2 pr-8 pb-2", children: [
+          jsx6(Codicon5, { name: "markdown", size: "0.85rem", className: "text-(--ui-text-tertiary)" }),
+          jsx6(DialogTitle4, {
+            className: "truncate text-[12px] font-medium",
+            children: i18n.previewTitle(att.filename)
+          })
+        ] }),
+        jsx6("div", {
+          className: "min-h-0 overflow-y-auto",
+          children: query.isLoading ? jsx6("div", { className: "grid h-24 place-items-center", children: jsx6(Loader, {}) }) : query.isError || !query.data ? jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.previewFailed }) : jsx6(MessageTextContent, { media: false, text: query.data.text || "" })
+        })
+      ]
+    })
+  });
+}
+function AttachmentsSection({ taskId, board, attachments, i18n, onPreview }) {
+  if (!attachments || !attachments.length) return null;
+  return jsxs6("div", { className: "flex flex-col gap-1", children: [
+    jsx6("div", {
+      className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)",
+      children: i18n.attachments(attachments.length)
+    }),
+    jsx6("ul", { className: "flex flex-col gap-0.5", children: attachments.map((att) => {
+      const isMarkdown = /\.(md|markdown)$/i.test(att.filename || "");
+      return jsxs6("li", {
+        className: "flex min-w-0 items-center gap-1.5 text-[11px] text-(--ui-text-secondary)",
+        children: [
+          jsx6("span", { className: "truncate", title: att.filename, children: att.filename }),
+          isMarkdown ? jsx6(Button5, {
+            size: "icon-xs",
+            variant: "ghost",
+            "aria-label": i18n.previewMarkdown(att.filename),
+            title: i18n.previewMarkdown(att.filename),
+            onClick: () => onPreview(att),
+            children: jsx6(Codicon5, { name: "open-preview", size: "0.75rem" })
+          }) : null,
+          jsx6(Button5, {
+            size: "icon-xs",
+            variant: "ghost",
+            "aria-label": i18n.downloadAttachment(att.filename),
+            title: i18n.downloadAttachment(att.filename),
+            onClick: () => void downloadAttachment(taskId, board, att, i18n),
+            children: jsx6(Codicon5, { name: "cloud-download", size: "0.75rem" })
+          })
+        ]
+      }, att.id);
+    }) })
+  ] });
+}
 function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked = false, onToggleDock, boards = [] }) {
   const drawerW = useValue2($drawerW);
+  const detailModal = useValue2($detailModal);
   const i18n = useGanttI18n();
   const queryClient = useQueryClient2();
   const scrollContainerRef = useRef2(null);
   const prevTaskIdRef = useRef2(null);
   const [moveBoardOpen, setMoveBoardOpen] = useState4(false);
+  const [previewAtt, setPreviewAtt] = useState4(null);
   const shownBoard = board;
   const moveMutation = useMutation({
     mutationFn: (toBoard) => apiFetch(`/tasks/${encodeURIComponent(shownId)}/move?board=${encodeURIComponent(board || "")}`, {
@@ -2637,432 +2726,504 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const matrix = ACTION_MATRIX[st] || { primary: [], more: [] };
   const more = matrix.more || [];
   const actionLabel = (a) => i18n.actions?.[a] || a;
-  return jsxs6("div", {
-    className: docked ? "relative flex flex-col h-full min-h-0 border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) pt-3.5 px-4" : "absolute inset-y-0 right-0 z-50 max-w-full border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) shadow-xl flex flex-col pt-3.5 px-4",
-    "data-glass-opaque": true,
-    role: "dialog",
-    "aria-label": i18n.taskDetail,
-    style: { width: `${drawerW}px` },
-    children: [
-      jsx6(ResizeHandle, {
-        get: () => $drawerW.get(),
-        set: (w) => $drawerW.set(w),
-        min: DRAWER_W_MIN,
-        max: DRAWER_W_MAX,
-        resetTo: 416,
-        storageKey: "drawerW",
-        growDirection: "left"
-      }),
-      // Pinned top section: header, actions and title with bottom separator
-      jsxs6("div", {
-        className: "flex flex-col gap-2 pb-3 border-b border-(--ui-stroke-tertiary) shrink-0",
-        children: [
-          // Top row: status, assignee, task id, [...] menu, close
-          jsxs6("div", {
-            className: "flex items-center justify-between gap-1.5",
-            children: [
-              jsxs6("div", { className: "flex flex-wrap items-center gap-1.5 min-w-0", children: [
-                jsx6(Button5, { size: "icon-xs", variant: "ghost", onClick: onToggleDock, "aria-label": docked ? i18n.undockDrawer : i18n.dockDrawer, title: docked ? i18n.undockDrawer : i18n.dockDrawer, children: docked ? "»" : "«" }),
-                StatusBadge({
-                  status: data?.task?.status,
-                  disabled: statusMutation.isPending,
-                  onPick: (next) => {
-                    const action = next === "done" ? "done" : next === "blocked" ? "blocked" : next === "ready" ? "ready" : next === "todo" ? "todo" : next === "review" ? "review" : next === "triage" ? "triage" : null;
-                    if (action) statusMutation.mutate({ action });
-                  }
+  const inner = [
+    jsx6(ResizeHandle, {
+      get: () => $drawerW.get(),
+      set: (w) => $drawerW.set(w),
+      min: DRAWER_W_MIN,
+      max: DRAWER_W_MAX,
+      resetTo: 416,
+      storageKey: "drawerW",
+      growDirection: "left"
+    }),
+    // Pinned top section: header, actions and title with bottom separator
+    jsxs6("div", {
+      className: "flex flex-col gap-2 pb-3 border-b border-(--ui-stroke-tertiary) shrink-0",
+      children: [
+        // Top row: status, assignee, task id, [...] menu, close
+        jsxs6("div", {
+          className: "flex items-center justify-between gap-1.5",
+          children: [
+            jsxs6("div", { className: "flex flex-wrap items-center gap-1.5 min-w-0", children: [
+              jsx6(Button5, { size: "icon-xs", variant: "ghost", onClick: onToggleDock, "aria-label": docked ? i18n.undockDrawer : i18n.dockDrawer, title: docked ? i18n.undockDrawer : i18n.dockDrawer, children: docked ? "»" : "«" }),
+              // Same detail, two presentations: the panel beside the gantt, or a
+              // centred modal with the metadata in its own column (the official
+              // kanban plugin's detail is a modal, and this is the way back).
+              jsx6(Button5, {
+                size: "icon-xs",
+                variant: "ghost",
+                onClick: () => $detailModal.set(!detailModal),
+                "aria-label": detailModal ? i18n.dockDetail : i18n.openInModal,
+                title: detailModal ? i18n.dockDetail : i18n.openInModal,
+                children: jsx6(Codicon5, { name: detailModal ? "screen-normal" : "screen-full", size: "0.75rem" })
+              }),
+              StatusBadge({
+                status: data?.task?.status,
+                disabled: statusMutation.isPending,
+                onPick: (next) => {
+                  const action = next === "done" ? "done" : next === "blocked" ? "blocked" : next === "ready" ? "ready" : next === "todo" ? "todo" : next === "review" ? "review" : next === "triage" ? "triage" : null;
+                  if (action) statusMutation.mutate({ action });
+                }
+              }),
+              jsx6(AssigneeBadge, {
+                assignee: data?.task?.assignee,
+                assignees,
+                disabled: assignMutation.isPending,
+                onAssign: (profile) => assignMutation.mutate(profile)
+              }),
+              jsx6("span", {
+                className: "text-[11px] font-mono text-(--ui-text-quaternary) hover:text-(--ui-text-secondary) cursor-help select-all",
+                title: i18n.copyHint(shownId),
+                children: shortId(shownId)
+              })
+            ] }),
+            jsxs6("div", { className: "flex items-center gap-1 shrink-0", children: [
+              jsxs6(DropdownMenu3, { children: [
+                jsx6(DropdownMenuTrigger3, {
+                  asChild: true,
+                  children: jsx6("button", {
+                    type: "button",
+                    className: "inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent",
+                    "aria-label": i18n.actionsMenu,
+                    children: jsx6(Codicon5, { name: "ellipsis", size: "0.9rem" })
+                  })
                 }),
-                jsx6(AssigneeBadge, {
-                  assignee: data?.task?.assignee,
-                  assignees,
-                  disabled: assignMutation.isPending,
-                  onAssign: (profile) => assignMutation.mutate(profile)
-                }),
-                jsx6("span", {
-                  className: "text-[11px] font-mono text-(--ui-text-quaternary) hover:text-(--ui-text-secondary) cursor-help select-all",
-                  title: i18n.copyHint(shownId),
-                  children: shortId(shownId)
+                jsxs6(DropdownMenuContent3, {
+                  align: "end",
+                  className: "min-w-[11rem] p-1 text-xs",
+                  children: [
+                    jsx6(DropdownMenuItem3, {
+                      className: "flex items-center gap-2 px-3 py-1.5",
+                      onClick: () => void navigator.clipboard.writeText(shownId),
+                      children: i18n.copyTaskId
+                    }),
+                    jsx6(DropdownMenuItem3, {
+                      className: "flex items-center gap-2 px-3 py-1.5",
+                      onClick: () => {
+                        if (data?.task?.title) void navigator.clipboard.writeText(data.task.title);
+                      },
+                      children: i18n.copyTitle
+                    }),
+                    jsx6(DropdownMenuSeparator3, {}),
+                    // Creation verb reachable from a task: the new task starts
+                    // as a child of this one.
+                    jsx6(DropdownMenuItem3, {
+                      className: "flex items-center gap-2 px-3 py-1.5",
+                      onClick: () => $newTask.set({ parentId: shownId }),
+                      children: jsxs6("span", { className: "flex items-center gap-2", children: [
+                        jsx6(Codicon5, { name: "add", size: "0.85rem" }),
+                        i18n.createSubtask
+                      ] })
+                    }),
+                    // Keyboard-reachable twin of the drag & drop: opens the
+                    // page's task picker for this task.
+                    jsx6(DropdownMenuItem3, {
+                      className: "flex items-center gap-2 px-3 py-1.5",
+                      onClick: () => $moveUnderId.set(shownId),
+                      children: jsxs6("span", { className: "flex items-center gap-2", children: [
+                        jsx6(Codicon5, { name: "move", size: "0.85rem" }),
+                        i18n.moveUnder
+                      ] })
+                    }),
+                    // Cross-board move: opens the board-picker dialog (with
+                    // its own confirmation chain). Requires another board.
+                    jsx6(DropdownMenuItem3, {
+                      className: "flex items-center gap-2 px-3 py-1.5",
+                      onClick: () => {
+                        const others = boards.filter((b) => b.slug !== shownBoard);
+                        if (others.length === 0) {
+                          toast("warning", i18n.moveNoOtherBoards);
+                          return;
+                        }
+                        setMoveBoardOpen(true);
+                      },
+                      children: jsxs6("span", { className: "flex items-center gap-2", children: [
+                        jsx6(Codicon5, { name: "arrow-circle-right", size: "0.85rem" }),
+                        i18n.moveToBoard
+                      ] })
+                    }),
+                    more.length ? jsx6(DropdownMenuSeparator3, {}) : null,
+                    more.map((a) => jsx6(DropdownMenuItem3, {
+                      key: a,
+                      className: "flex items-center gap-2 px-3 py-1.5",
+                      onClick: () => statusMutation.mutate({ action: a }),
+                      children: actionLabel(a)
+                    })),
+                    jsx6(DropdownMenuSeparator3, {}),
+                    jsx6(DropdownMenuItem3, {
+                      className: "flex items-center gap-2 px-3 py-1.5 text-red-500 hover:bg-red-500/10",
+                      onClick: () => {
+                        if (confirm(i18n.confirmDelete(shownId))) {
+                          statusMutation.mutate({ action: "delete" });
+                          onClose();
+                        }
+                      },
+                      children: i18n.delete
+                    })
+                  ]
                 })
               ] }),
-              jsxs6("div", { className: "flex items-center gap-1 shrink-0", children: [
-                jsxs6(DropdownMenu3, { children: [
-                  jsx6(DropdownMenuTrigger3, {
-                    asChild: true,
-                    children: jsx6("button", {
-                      type: "button",
-                      className: "inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent",
-                      "aria-label": i18n.actionsMenu,
-                      children: jsx6(Codicon5, { name: "ellipsis", size: "0.9rem" })
-                    })
-                  }),
-                  jsxs6(DropdownMenuContent3, {
-                    align: "end",
-                    className: "min-w-[11rem] p-1 text-xs",
-                    children: [
-                      jsx6(DropdownMenuItem3, {
-                        className: "flex items-center gap-2 px-3 py-1.5",
-                        onClick: () => void navigator.clipboard.writeText(shownId),
-                        children: i18n.copyTaskId
-                      }),
-                      jsx6(DropdownMenuItem3, {
-                        className: "flex items-center gap-2 px-3 py-1.5",
-                        onClick: () => {
-                          if (data?.task?.title) void navigator.clipboard.writeText(data.task.title);
-                        },
-                        children: i18n.copyTitle
-                      }),
-                      jsx6(DropdownMenuSeparator3, {}),
-                      // Creation verb reachable from a task: the new task starts
-                      // as a child of this one.
-                      jsx6(DropdownMenuItem3, {
-                        className: "flex items-center gap-2 px-3 py-1.5",
-                        onClick: () => $newTask.set({ parentId: shownId }),
-                        children: jsxs6("span", { className: "flex items-center gap-2", children: [
-                          jsx6(Codicon5, { name: "add", size: "0.85rem" }),
-                          i18n.createSubtask
-                        ] })
-                      }),
-                      // Keyboard-reachable twin of the drag & drop: opens the
-                      // page's task picker for this task.
-                      jsx6(DropdownMenuItem3, {
-                        className: "flex items-center gap-2 px-3 py-1.5",
-                        onClick: () => $moveUnderId.set(shownId),
-                        children: jsxs6("span", { className: "flex items-center gap-2", children: [
-                          jsx6(Codicon5, { name: "move", size: "0.85rem" }),
-                          i18n.moveUnder
-                        ] })
-                      }),
-                      // Cross-board move: opens the board-picker dialog (with
-                      // its own confirmation chain). Requires another board.
-                      jsx6(DropdownMenuItem3, {
-                        className: "flex items-center gap-2 px-3 py-1.5",
-                        onClick: () => {
-                          const others = boards.filter((b) => b.slug !== shownBoard);
-                          if (others.length === 0) {
-                            toast("warning", i18n.moveNoOtherBoards);
-                            return;
-                          }
-                          setMoveBoardOpen(true);
-                        },
-                        children: jsxs6("span", { className: "flex items-center gap-2", children: [
-                          jsx6(Codicon5, { name: "arrow-circle-right", size: "0.85rem" }),
-                          i18n.moveToBoard
-                        ] })
-                      }),
-                      more.length ? jsx6(DropdownMenuSeparator3, {}) : null,
-                      more.map((a) => jsx6(DropdownMenuItem3, {
-                        key: a,
-                        className: "flex items-center gap-2 px-3 py-1.5",
-                        onClick: () => statusMutation.mutate({ action: a }),
-                        children: actionLabel(a)
-                      })),
-                      jsx6(DropdownMenuSeparator3, {}),
-                      jsx6(DropdownMenuItem3, {
-                        className: "flex items-center gap-2 px-3 py-1.5 text-red-500 hover:bg-red-500/10",
-                        onClick: () => {
-                          if (confirm(i18n.confirmDelete(shownId))) {
-                            statusMutation.mutate({ action: "delete" });
-                            onClose();
-                          }
-                        },
-                        children: i18n.delete
-                      })
-                    ]
-                  })
-                ] }),
-                jsx6(Button5, { size: "icon-xs", variant: "ghost", onClick: onClose, "aria-label": i18n.close, children: "✕" })
-              ] })
-            ]
-          }),
-          // Primary actions bar placed ABOVE the title
-          (matrix.primary || []).length ? jsxs6("div", { className: "flex flex-wrap items-center gap-1.5 py-0.5", children: [
-            jsx6("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary) mr-1", children: i18n.action }),
-            (matrix.primary || []).map((a) => jsx6(Button5, {
-              key: a,
-              size: "xs",
-              disabled: statusMutation.isPending,
-              onClick: () => statusMutation.mutate({ action: a }),
-              children: actionLabel(a)
-            }))
-          ] }) : null,
-          // Title kept always visible
-          jsx6("div", { className: "text-base font-semibold leading-snug", children: cleanTitle(data?.task?.title, data?.task?.label) })
-        ]
+              jsx6(Button5, { size: "icon-xs", variant: "ghost", onClick: onClose, "aria-label": i18n.close, children: "✕" })
+            ] })
+          ]
+        }),
+        // Primary actions bar placed ABOVE the title
+        (matrix.primary || []).length ? jsxs6("div", { className: "flex flex-wrap items-center gap-1.5 py-0.5", children: [
+          jsx6("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary) mr-1", children: i18n.action }),
+          (matrix.primary || []).map((a) => jsx6(Button5, {
+            key: a,
+            size: "xs",
+            disabled: statusMutation.isPending,
+            onClick: () => statusMutation.mutate({ action: a }),
+            children: actionLabel(a)
+          }))
+        ] }) : null,
+        // Title kept always visible
+        jsx6("div", { className: "text-base font-semibold leading-snug", children: cleanTitle(data?.task?.title, data?.task?.label) })
+      ]
+    }),
+    // Scrollable content underneath the pinned header + title
+    isLoading ? jsx6("div", { className: "py-8 flex justify-center", children: jsx6(Loader, {}) }) : isError ? jsx6(ErrorState, { title: i18n.taskUnreadable, description: i18n.taskUnreadableDesc }) : jsxs6("div", { ref: scrollContainerRef, className: "flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pt-1", children: [
+      // 0. Relations — parents (removable, behind a confirmation) and
+      //    children (read-only for now: removing that link means
+      //    re-parenting the child itself). Clicking a name opens that
+      //    task's detail, which also selects its row in the gantt.
+      jsx6(TaskRelations, {
+        heading: i18n.parents,
+        tasks: relations.parents,
+        emptyLabel: relations.parents.length === 0 ? i18n.noParents : void 0,
+        onOpen: (id) => $openTaskId.set(id),
+        onRemove: (id) => {
+          const parent = relations.parents.find((t) => t.id === id);
+          setPendingUnlink({ id, title: parent ? parent.title : id });
+        },
+        removeLabel: i18n.removeParentLink,
+        openLabel: i18n.openTask,
+        disabled: unlinkMutation.isPending
       }),
-      // Scrollable content underneath the pinned header + title
-      isLoading ? jsx6("div", { className: "py-8 flex justify-center", children: jsx6(Loader, {}) }) : isError ? jsx6(ErrorState, { title: i18n.taskUnreadable, description: i18n.taskUnreadableDesc }) : jsxs6("div", { ref: scrollContainerRef, className: "flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pt-1", children: [
-        // 0. Relations — parents (removable, behind a confirmation) and
-        //    children (read-only for now: removing that link means
-        //    re-parenting the child itself). Clicking a name opens that
-        //    task's detail, which also selects its row in the gantt.
-        jsx6(TaskRelations, {
-          heading: i18n.parents,
-          tasks: relations.parents,
-          emptyLabel: relations.parents.length === 0 ? i18n.noParents : void 0,
-          onOpen: (id) => $openTaskId.set(id),
-          onRemove: (id) => {
-            const parent = relations.parents.find((t) => t.id === id);
-            setPendingUnlink({ id, title: parent ? parent.title : id });
-          },
-          removeLabel: i18n.removeParentLink,
-          openLabel: i18n.openTask,
-          disabled: unlinkMutation.isPending
-        }),
-        jsx6(TaskRelations, {
-          heading: i18n.children,
-          tasks: relations.children,
-          emptyLabel: relations.children.length === 0 ? i18n.noChildren : void 0,
-          onOpen: (id) => $openTaskId.set(id),
-          openLabel: i18n.openTask
-        }),
-        // 1. Description (no max-h clamp). Always rendered, so a task that has
-        // no description yet can be given one; the pencil at the right of the
-        // label mirrors the reference kanban drawer's DescriptionSection, and
-        // the editor shows the raw markdown with an explicit Save.
-        jsxs6("div", { className: "flex flex-col gap-1", children: [
-          jsxs6("div", { className: "flex items-center justify-between gap-2", children: [
-            jsx6("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.description }),
-            jsx6(Button5, {
-              variant: "ghost",
-              size: "icon-xs",
-              "aria-label": descOwner ? i18n.cancelEdit : i18n.editDescription,
-              title: descOwner ? i18n.cancelEdit : i18n.editDescription,
-              onClick: () => {
-                if (descOwner) {
-                  setDescOwner(null);
-                  setDescDraft("");
-                } else {
-                  setDescOwner(shownId);
-                  setDescDraft(data?.task?.body || "");
-                }
-              },
-              children: jsx6(Codicon5, { name: descOwner ? "close" : "edit", size: "0.75rem" })
-            })
-          ] }),
-          descOwner ? jsxs6("div", { className: "flex flex-col gap-1.5", children: [
-            jsx6(Textarea, {
-              className: "min-h-24 text-[11px]",
-              value: descDraft,
-              disabled: descriptionMutation.isPending,
-              onChange: (event) => setDescDraft(event.target.value)
-            }),
-            jsx6(Button5, {
-              className: "self-end",
-              size: "xs",
-              variant: "secondary",
-              disabled: descriptionMutation.isPending,
-              onClick: () => descriptionMutation.mutate(descDraft),
-              children: i18n.save
-            })
-          ] }) : data?.task?.body ? jsx6("div", {
-            className: "border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
-            children: jsx6(MessageTextContent, { media: false, text: data.task.body })
-          }) : jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.noDescription })
+      jsx6(TaskRelations, {
+        heading: i18n.children,
+        tasks: relations.children,
+        emptyLabel: relations.children.length === 0 ? i18n.noChildren : void 0,
+        onOpen: (id) => $openTaskId.set(id),
+        openLabel: i18n.openTask
+      }),
+      // 1. Description (no max-h clamp). Always rendered, so a task that has
+      // no description yet can be given one; the pencil at the right of the
+      // label mirrors the reference kanban drawer's DescriptionSection, and
+      // the editor shows the raw markdown with an explicit Save.
+      jsxs6("div", { className: "flex flex-col gap-1", children: [
+        jsxs6("div", { className: "flex items-center justify-between gap-2", children: [
+          jsx6("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.description }),
+          jsx6(Button5, {
+            variant: "ghost",
+            size: "icon-xs",
+            "aria-label": descOwner ? i18n.cancelEdit : i18n.editDescription,
+            title: descOwner ? i18n.cancelEdit : i18n.editDescription,
+            onClick: () => {
+              if (descOwner) {
+                setDescOwner(null);
+                setDescDraft("");
+              } else {
+                setDescOwner(shownId);
+                setDescDraft(data?.task?.body || "");
+              }
+            },
+            children: jsx6(Codicon5, { name: descOwner ? "close" : "edit", size: "0.75rem" })
+          })
         ] }),
-        // 2. Result (no max-h clamp)
-        data?.task?.result ? jsxs6("div", { className: "flex flex-col gap-1", children: [
-          jsx6("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.result }),
-          jsx6("div", {
-            className: "border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
-            children: jsx6(MessageTextContent, { media: false, text: data.task.result })
+        descOwner ? jsxs6("div", { className: "flex flex-col gap-1.5", children: [
+          jsx6(Textarea, {
+            className: "min-h-24 text-[11px]",
+            value: descDraft,
+            disabled: descriptionMutation.isPending,
+            onChange: (event) => setDescDraft(event.target.value)
+          }),
+          jsx6(Button5, {
+            className: "self-end",
+            size: "xs",
+            variant: "secondary",
+            disabled: descriptionMutation.isPending,
+            onClick: () => descriptionMutation.mutate(descDraft),
+            children: i18n.save
           })
-        ] }) : null,
-        // 3. Latest summary (highlighted when blocked or done/completed)
-        data?.task?.latest_summary ? jsxs6("div", { className: "flex flex-col gap-1", children: [
-          jsx6("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.latestSummary }),
-          jsx6("div", {
-            className: cn3(
-              "rounded p-2.5 transition-colors",
-              data?.task?.status === "blocked" ? "border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300" : data?.task?.status === "done" || data?.task?.status === "archived" ? "border border-emerald-500/35 bg-emerald-500/10" : "border border-(--ui-stroke-tertiary) bg-(--ui-bg-subtle, transparent)"
-            ),
-            children: jsx6(MessageTextContent, { media: false, text: data.task.latest_summary })
-          })
-        ] }) : null,
-        // 4. Run history (Collapsible section, collapsed by default, no internal scrollbar)
-        (data?.task?.runs || []).length ? jsxs6("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5", children: [
+        ] }) : data?.task?.body ? jsx6("div", {
+          className: "border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
+          children: jsx6(MessageTextContent, { media: false, text: data.task.body })
+        }) : jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.noDescription })
+      ] }),
+      // 1b. Attachments: markdown ones open in their own dialog, any of them
+      // can be saved. The bytes are fetched per file, never with the detail.
+      jsx6(AttachmentsSection, {
+        taskId: shownId,
+        board,
+        i18n,
+        attachments: data?.task?.attachments || [],
+        onPreview: (att) => setPreviewAtt(att)
+      }),
+      previewAtt ? jsx6(AttachmentPreview, {
+        taskId: shownId,
+        board,
+        i18n,
+        att: previewAtt,
+        onClose: () => setPreviewAtt(null)
+      }) : null,
+      // 2. Result (no max-h clamp)
+      data?.task?.result ? jsxs6("div", { className: "flex flex-col gap-1", children: [
+        jsx6("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.result }),
+        jsx6("div", {
+          className: "border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
+          children: jsx6(MessageTextContent, { media: false, text: data.task.result })
+        })
+      ] }) : null,
+      // 3. Latest summary (highlighted when blocked or done/completed)
+      data?.task?.latest_summary ? jsxs6("div", { className: "flex flex-col gap-1", children: [
+        jsx6("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.latestSummary }),
+        jsx6("div", {
+          className: cn3(
+            "rounded p-2.5 transition-colors",
+            data?.task?.status === "blocked" ? "border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300" : data?.task?.status === "done" || data?.task?.status === "archived" ? "border border-emerald-500/35 bg-emerald-500/10" : "border border-(--ui-stroke-tertiary) bg-(--ui-bg-subtle, transparent)"
+          ),
+          children: jsx6(MessageTextContent, { media: false, text: data.task.latest_summary })
+        })
+      ] }) : null,
+      // 4. Run history (Collapsible section, collapsed by default, no internal scrollbar)
+      (data?.task?.runs || []).length ? jsxs6("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5", children: [
+        jsxs6("button", {
+          type: "button",
+          className: "flex items-center justify-between w-full text-left py-1 px-1 -mx-1 rounded hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent text-(--ui-text-primary)",
+          onClick: () => setRunsOpen((o) => !o),
+          children: [
+            jsxs6("div", { className: "flex items-center gap-1.5", children: [
+              jsx6("span", { className: "text-[10px] text-(--ui-text-tertiary) select-none", children: runsOpen ? "▼" : "▶" }),
+              jsx6("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.runs(data.task.runs.length) })
+            ] }),
+            jsx6("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: runsOpen ? i18n.hide : i18n.show })
+          ]
+        }),
+        runsOpen ? jsx6("div", { className: "flex flex-col gap-2 pt-1", children: data.task.runs.map((r, i) => {
+          const failed = ["crashed", "failed", "timed_out", "gave_up"].includes(r.outcome || r.status);
+          const isDiffProfile = r.profile && data?.task?.assignee && r.profile !== data.task.assignee;
+          const durationStr = (() => {
+            if (!r.started_at) return "";
+            const end = r.ended_at || Math.floor(Date.now() / 1e3);
+            const sec = Math.max(0, end - r.started_at);
+            if (sec < 60) return `${sec}s`;
+            if (sec < 3600) return `${Math.floor(sec / 60)}m`;
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor(sec % 3600 / 60);
+            return m > 0 ? `${h}h ${m}m` : `${h}h`;
+          })();
+          const dateStr = r.started_at ? new Intl.DateTimeFormat(void 0, { dateStyle: "medium", timeStyle: "short" }).format(new Date(r.started_at * 1e3)) : "";
+          return jsxs6("div", {
+            key: r.id || i,
+            className: "flex flex-col gap-1 text-[11px] border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
+            children: [
+              jsxs6("div", { className: "flex flex-wrap items-center gap-1.5 text-[10px]", children: [
+                jsx6(Badge, { size: "xs", variant: failed ? "destructive" : r.ended_at ? "muted" : "secondary", children: r.outcome || r.status || "run" }),
+                r.profile ? jsxs6("span", { className: cn3("font-medium", isDiffProfile ? "text-amber-500 font-semibold" : "text-(--ui-text-secondary)"), children: [
+                  "👤 ",
+                  r.profile,
+                  isDiffProfile ? jsx6("span", { className: "text-[9px] text-(--ui-text-quaternary) ml-1", children: i18n.reassigned }) : null
+                ] }) : null,
+                durationStr ? jsx6("span", { className: "text-(--ui-text-tertiary)", children: `⏱ ${durationStr}` }) : null,
+                dateStr ? jsx6("span", { className: "text-(--ui-text-quaternary) ml-auto text-[9.5px]", children: dateStr }) : null
+              ] }),
+              r.summary ? jsx6("div", { className: "mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50", children: jsx6(MessageTextContent, { media: false, text: r.summary }) }) : null
+            ]
+          });
+        }) }) : null
+      ] }) : null,
+      // 5. Commentaires (Collapsible section, open by default, 3 latest by default with button to show previous, no internal scrollbar)
+      (() => {
+        const commentsList = data?.task?.comments || [];
+        const totalComments = commentsList.length;
+        const visibleComments = showAllComments ? commentsList : commentsList.slice(-3);
+        const hiddenCount = totalComments - visibleComments.length;
+        return jsxs6("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5", children: [
           jsxs6("button", {
             type: "button",
             className: "flex items-center justify-between w-full text-left py-1 px-1 -mx-1 rounded hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent text-(--ui-text-primary)",
-            onClick: () => setRunsOpen((o) => !o),
+            onClick: () => {
+              setCommentsOpen((o) => {
+                if (o) setShowAllComments(false);
+                return !o;
+              });
+            },
             children: [
               jsxs6("div", { className: "flex items-center gap-1.5", children: [
-                jsx6("span", { className: "text-[10px] text-(--ui-text-tertiary) select-none", children: runsOpen ? "▼" : "▶" }),
-                jsx6("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.runs(data.task.runs.length) })
+                jsx6("span", { className: "text-[10px] text-(--ui-text-tertiary) select-none", children: commentsOpen ? "▼" : "▶" }),
+                jsx6("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.comments(totalComments) })
               ] }),
-              jsx6("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: runsOpen ? i18n.hide : i18n.show })
+              jsx6("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: commentsOpen ? i18n.hide : i18n.show })
             ]
           }),
-          runsOpen ? jsx6("div", { className: "flex flex-col gap-2 pt-1", children: data.task.runs.map((r, i) => {
-            const failed = ["crashed", "failed", "timed_out", "gave_up"].includes(r.outcome || r.status);
-            const isDiffProfile = r.profile && data?.task?.assignee && r.profile !== data.task.assignee;
-            const durationStr = (() => {
-              if (!r.started_at) return "";
-              const end = r.ended_at || Math.floor(Date.now() / 1e3);
-              const sec = Math.max(0, end - r.started_at);
-              if (sec < 60) return `${sec}s`;
-              if (sec < 3600) return `${Math.floor(sec / 60)}m`;
-              const h = Math.floor(sec / 3600);
-              const m = Math.floor(sec % 3600 / 60);
-              return m > 0 ? `${h}h ${m}m` : `${h}h`;
-            })();
-            const dateStr = r.started_at ? new Intl.DateTimeFormat(void 0, { dateStyle: "medium", timeStyle: "short" }).format(new Date(r.started_at * 1e3)) : "";
-            return jsxs6("div", {
-              key: r.id || i,
-              className: "flex flex-col gap-1 text-[11px] border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
-              children: [
-                jsxs6("div", { className: "flex flex-wrap items-center gap-1.5 text-[10px]", children: [
-                  jsx6(Badge, { size: "xs", variant: failed ? "destructive" : r.ended_at ? "muted" : "secondary", children: r.outcome || r.status || "run" }),
-                  r.profile ? jsxs6("span", { className: cn3("font-medium", isDiffProfile ? "text-amber-500 font-semibold" : "text-(--ui-text-secondary)"), children: [
-                    "👤 ",
-                    r.profile,
-                    isDiffProfile ? jsx6("span", { className: "text-[9px] text-(--ui-text-quaternary) ml-1", children: i18n.reassigned }) : null
-                  ] }) : null,
-                  durationStr ? jsx6("span", { className: "text-(--ui-text-tertiary)", children: `⏱ ${durationStr}` }) : null,
-                  dateStr ? jsx6("span", { className: "text-(--ui-text-quaternary) ml-auto text-[9.5px]", children: dateStr }) : null
-                ] }),
-                r.summary ? jsx6("div", { className: "mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50", children: jsx6(MessageTextContent, { media: false, text: r.summary }) }) : null
-              ]
-            });
-          }) }) : null
-        ] }) : null,
-        // 5. Commentaires (Collapsible section, open by default, 3 latest by default with button to show previous, no internal scrollbar)
-        (() => {
-          const commentsList = data?.task?.comments || [];
-          const totalComments = commentsList.length;
-          const visibleComments = showAllComments ? commentsList : commentsList.slice(-3);
-          const hiddenCount = totalComments - visibleComments.length;
-          return jsxs6("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5", children: [
-            jsxs6("button", {
+          commentsOpen ? jsxs6("div", { className: "flex flex-col gap-1.5 pt-1", children: [
+            hiddenCount > 0 ? jsx6("button", {
               type: "button",
-              className: "flex items-center justify-between w-full text-left py-1 px-1 -mx-1 rounded hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent text-(--ui-text-primary)",
-              onClick: () => {
-                setCommentsOpen((o) => {
-                  if (o) setShowAllComments(false);
-                  return !o;
-                });
-              },
-              children: [
-                jsxs6("div", { className: "flex items-center gap-1.5", children: [
-                  jsx6("span", { className: "text-[10px] text-(--ui-text-tertiary) select-none", children: commentsOpen ? "▼" : "▶" }),
-                  jsx6("span", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.comments(totalComments) })
-                ] }),
-                jsx6("span", { className: "text-[10px] text-(--ui-text-quaternary)", children: commentsOpen ? i18n.hide : i18n.show })
-              ]
+              className: "text-[10.5px] text-(--ui-accent) hover:underline cursor-pointer border-0 bg-transparent text-left py-0.5 select-none",
+              onClick: () => setShowAllComments(true),
+              children: `↑ ${i18n.showPreviousComments(hiddenCount)}`
+            }) : null,
+            visibleComments.map((c, i) => {
+              const dateStr = c.created_at ? new Intl.DateTimeFormat(void 0, { dateStyle: "medium", timeStyle: "short" }).format(new Date(c.created_at * 1e3)) : "";
+              return jsxs6("div", {
+                key: c.id || i,
+                className: "text-[11px] border border-(--ui-stroke-tertiary)/60 rounded p-1.5 bg-(--ui-bg-subtle, transparent)",
+                children: [
+                  jsxs6("div", { className: "flex items-center gap-1.5 text-[10px] text-(--ui-text-tertiary) mb-0.5", children: [
+                    jsx6("span", { className: "font-medium text-(--ui-text-secondary)", children: c.author || "?" }),
+                    dateStr ? jsx6("span", { className: "ml-auto text-(--ui-text-quaternary)", children: dateStr }) : null
+                  ] }),
+                  jsx6("div", { className: "min-w-0", children: jsx6(MessageTextContent, { media: false, text: c.body || "" }) })
+                ]
+              });
             }),
-            commentsOpen ? jsxs6("div", { className: "flex flex-col gap-1.5 pt-1", children: [
-              hiddenCount > 0 ? jsx6("button", {
-                type: "button",
-                className: "text-[10.5px] text-(--ui-accent) hover:underline cursor-pointer border-0 bg-transparent text-left py-0.5 select-none",
-                onClick: () => setShowAllComments(true),
-                children: `↑ ${i18n.showPreviousComments(hiddenCount)}`
-              }) : null,
-              visibleComments.map((c, i) => {
-                const dateStr = c.created_at ? new Intl.DateTimeFormat(void 0, { dateStyle: "medium", timeStyle: "short" }).format(new Date(c.created_at * 1e3)) : "";
-                return jsxs6("div", {
-                  key: c.id || i,
-                  className: "text-[11px] border border-(--ui-stroke-tertiary)/60 rounded p-1.5 bg-(--ui-bg-subtle, transparent)",
-                  children: [
-                    jsxs6("div", { className: "flex items-center gap-1.5 text-[10px] text-(--ui-text-tertiary) mb-0.5", children: [
-                      jsx6("span", { className: "font-medium text-(--ui-text-secondary)", children: c.author || "?" }),
-                      dateStr ? jsx6("span", { className: "ml-auto text-(--ui-text-quaternary)", children: dateStr }) : null
-                    ] }),
-                    jsx6("div", { className: "min-w-0", children: jsx6(MessageTextContent, { media: false, text: c.body || "" }) })
-                  ]
-                });
-              }),
-              jsxs6("div", { className: "flex gap-1.5 mt-1", children: [
-                jsx6("input", {
-                  type: "text",
-                  value: comment,
-                  placeholder: i18n.addCommentPlaceholder,
-                  className: "flex-1 bg-transparent border border-(--ui-stroke-tertiary) rounded px-1.5 py-0.5 text-[11px]",
-                  onInput: (event) => setComment(event.target.value),
-                  onKeyDown: (event) => {
-                    if (event.key === "Enter" && comment.trim()) {
-                      commentMutation.mutate({ body: comment.trim() });
-                      setComment("");
-                    }
-                  }
-                }),
-                jsx6(Button5, {
-                  size: "xs",
-                  disabled: !comment.trim() || commentMutation.isPending,
-                  onClick: () => {
+            jsxs6("div", { className: "flex gap-1.5 mt-1", children: [
+              jsx6("input", {
+                type: "text",
+                value: comment,
+                placeholder: i18n.addCommentPlaceholder,
+                className: "flex-1 bg-transparent border border-(--ui-stroke-tertiary) rounded px-1.5 py-0.5 text-[11px]",
+                onInput: (event) => setComment(event.target.value),
+                onKeyDown: (event) => {
+                  if (event.key === "Enter" && comment.trim()) {
                     commentMutation.mutate({ body: comment.trim() });
                     setComment("");
-                  },
-                  children: i18n.send
-                })
-              ] })
-            ] }) : null
-          ] });
-        })(),
-        // 6. Activité (Derniers événements)
-        (data?.task?.events || []).length ? jsxs6("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1", children: [
-          jsx6("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.activity(data.task.events.length) }),
-          jsx6("div", { className: "flex flex-col gap-0.5 max-h-32 overflow-auto", children: data.task.events.slice(-12).reverse().map((e, i) => jsx6("div", {
-            key: i,
-            className: "text-[10px] text-(--ui-text-tertiary)",
-            children: String(e.kind || "event")
-          }, i)) })
-        ] }) : null
-      ] }),
-      // Drops a parent link — behind a confirmation, so a stray click on the
-      // row's ✕ never silently rewires the tree.
-      jsx6(ConfirmDialog, {
-        open: Boolean(pendingUnlink),
-        onClose: () => setPendingUnlink(null),
-        onConfirm: () => unlinkMutation.mutateAsync(pendingUnlink.id),
-        title: i18n.removeParentConfirmTitle(pendingUnlink ? pendingUnlink.title : ""),
-        description: i18n.removeParentConfirmDesc,
-        confirmLabel: i18n.removeParentLink(pendingUnlink ? pendingUnlink.title : ""),
-        cancelLabel: i18n.cancel,
-        destructive: true
-      }),
-      // The description draft guard: the page asked for another task while the
-      // draft was unsaved. Three ways out — write it and open the task, drop it
-      // and open it, or cancel the switch and stay here with the editor as it is.
-      jsx6(ConfirmDialog, {
-        open: descSwitchPending,
-        onClose: () => {
-          const resolved = switchResolvedRef.current;
-          switchResolvedRef.current = false;
-          if (!resolved && descOwner) $openTaskId.set(descOwner);
-        },
-        onConfirm: async () => {
-          await descriptionMutation.mutateAsync(descDraft);
-          switchResolvedRef.current = true;
+                  }
+                }
+              }),
+              jsx6(Button5, {
+                size: "xs",
+                disabled: !comment.trim() || commentMutation.isPending,
+                onClick: () => {
+                  commentMutation.mutate({ body: comment.trim() });
+                  setComment("");
+                },
+                children: i18n.send
+              })
+            ] })
+          ] }) : null
+        ] });
+      })(),
+      // 6. Activité (Derniers événements)
+      (data?.task?.events || []).length ? jsxs6("div", { className: "border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1", children: [
+        jsx6("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.activity(data.task.events.length) }),
+        jsx6("div", { className: "flex flex-col gap-0.5 max-h-32 overflow-auto", children: data.task.events.slice(-12).reverse().map((e, i) => jsx6("div", {
+          key: i,
+          className: "text-[10px] text-(--ui-text-tertiary)",
+          children: String(e.kind || "event")
+        }, i)) })
+      ] }) : null
+    ] }),
+    // Drops a parent link — behind a confirmation, so a stray click on the
+    // row's ✕ never silently rewires the tree.
+    jsx6(ConfirmDialog, {
+      open: Boolean(pendingUnlink),
+      onClose: () => setPendingUnlink(null),
+      onConfirm: () => unlinkMutation.mutateAsync(pendingUnlink.id),
+      title: i18n.removeParentConfirmTitle(pendingUnlink ? pendingUnlink.title : ""),
+      description: i18n.removeParentConfirmDesc,
+      confirmLabel: i18n.removeParentLink(pendingUnlink ? pendingUnlink.title : ""),
+      cancelLabel: i18n.cancel,
+      destructive: true
+    }),
+    // The description draft guard: the page asked for another task while the
+    // draft was unsaved. Three ways out — write it and open the task, drop it
+    // and open it, or cancel the switch and stay here with the editor as it is.
+    jsx6(ConfirmDialog, {
+      open: descSwitchPending,
+      onClose: () => {
+        const resolved = switchResolvedRef.current;
+        switchResolvedRef.current = false;
+        if (!resolved && descOwner) $openTaskId.set(descOwner);
+      },
+      onConfirm: async () => {
+        await descriptionMutation.mutateAsync(descDraft);
+        switchResolvedRef.current = true;
+        setDescOwner(null);
+        setDescDraft("");
+      },
+      title: i18n.unsavedDescTitle,
+      description: i18n.unsavedDescBody,
+      confirmLabel: i18n.saveAndOpen,
+      cancelLabel: i18n.keepEditing,
+      secondaryAction: {
+        label: i18n.discardChanges,
+        onClick: () => {
           setDescOwner(null);
           setDescDraft("");
-        },
-        title: i18n.unsavedDescTitle,
-        description: i18n.unsavedDescBody,
-        confirmLabel: i18n.saveAndOpen,
-        cancelLabel: i18n.keepEditing,
-        secondaryAction: {
-          label: i18n.discardChanges,
-          onClick: () => {
-            setDescOwner(null);
-            setDescDraft("");
-          }
         }
-      }),
-      // Cross-board move: board picker + its own confirmation chain (plain
-      // move, children-must-travel, parent-loss) and a spinner while moving.
-      jsx6(MoveTaskDialog, {
-        open: moveBoardOpen,
-        task: data?.task ? {
-          id: shownId,
-          title: data.task.title || shownId,
-          children: data.task.children || [],
-          parents: data.task.parents || []
-        } : null,
-        boards,
-        currentBoard: board || "",
-        i18n,
-        onClose: () => setMoveBoardOpen(false),
-        onMove: (toBoard) => moveMutation.mutateAsync(toBoard)
-      })
-    ]
+      }
+    }),
+    // Cross-board move: board picker + its own confirmation chain (plain
+    // move, children-must-travel, parent-loss) and a spinner while moving.
+    jsx6(MoveTaskDialog, {
+      open: moveBoardOpen,
+      task: data?.task ? {
+        id: shownId,
+        title: data.task.title || shownId,
+        children: data.task.children || [],
+        parents: data.task.parents || []
+      } : null,
+      boards,
+      currentBoard: board || "",
+      i18n,
+      onClose: () => setMoveBoardOpen(false),
+      onMove: (toBoard) => moveMutation.mutateAsync(toBoard)
+    })
+  ];
+  if (!detailModal) {
+    return jsxs6("div", {
+      className: docked ? "relative flex flex-col h-full min-h-0 border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) pt-3.5 px-4" : "absolute inset-y-0 right-0 z-50 max-w-full border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) shadow-xl flex flex-col pt-3.5 px-4",
+      "data-glass-opaque": true,
+      role: "dialog",
+      "aria-label": i18n.taskDetail,
+      style: { width: `${drawerW}px` },
+      children: inner
+    });
+  }
+  const task = data?.task;
+  const when = (ts) => ts ? new Date(Number(ts) * 1e3).toLocaleString() : "—";
+  const metaRow = (label, value) => jsxs6("div", { className: "flex flex-col gap-0.5", children: [
+    jsx6("div", {
+      className: "text-[10px] uppercase font-semibold text-(--ui-text-quaternary)",
+      children: label
+    }),
+    jsx6("div", { className: "break-words text-[11px] text-(--ui-text-secondary)", children: value })
+  ] });
+  return jsx6(Dialog4, {
+    open: true,
+    onOpenChange: (next) => {
+      if (!next) onClose();
+    },
+    children: jsx6(DialogContent4, {
+      className: "flex max-h-[min(84vh,54rem)] w-[min(62rem,94vw)] max-w-none flex-col overflow-hidden",
+      children: jsxs6("div", { className: "flex min-h-0 flex-1 gap-4", children: [
+        jsx6("div", { className: "min-w-0 flex-1 overflow-y-auto pr-1", children: inner }),
+        jsxs6("aside", {
+          className: "flex w-56 shrink-0 flex-col gap-2.5 overflow-y-auto border-l border-(--ui-stroke-tertiary) pl-3",
+          children: [
+            jsx6("div", {
+              className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)",
+              children: i18n.detailMeta
+            }),
+            metaRow(i18n.metaStatus, task?.status || "—"),
+            metaRow(i18n.metaAssignee, task?.assignee || "—"),
+            task?.workspace_path ? metaRow(i18n.metaWorkspace, task.workspace_path) : null,
+            metaRow(i18n.metaCreated, when(task?.created_at)),
+            metaRow(
+              i18n.metaLastActivity,
+              when(task?.completed_at || task?.started_at || task?.created_at)
+            ),
+            task?.attachments?.length ? metaRow(
+              i18n.attachments(task.attachments.length),
+              task.attachments.map((a) => a.filename).join(", ")
+            ) : null
+          ]
+        })
+      ] })
+    })
   });
 }
 function KanbanGanttPage() {

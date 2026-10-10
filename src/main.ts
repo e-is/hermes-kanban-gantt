@@ -28,6 +28,9 @@ import {
   Codicon,
   ConfirmDialog,
   Contribute,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -58,7 +61,7 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 import {
   setPluginDoors,
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
-  $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $openTaskId,
+  $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $detailModal, $openTaskId,
   $newTask, $moveUnderId, $wsEnabled, $connectionScope,
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
   createTask, fetchProjects, fetchProfiles,
@@ -1069,8 +1072,107 @@ function StatusBadge({ status, onPick, disabled }) {
   ] })
 }
 
+/** One attachment's bytes, through the plugin REST door (JSON both ways). */
+async function fetchAttachment(taskId, board, attachmentId) {
+  return apiFetch(`/tasks/${encodeURIComponent(taskId)}/attachments/${attachmentId}/content`
+    + `?board=${encodeURIComponent(board || '')}`)
+}
+
+/** Save an attachment to disk.
+ *
+ * The plugin bridge only speaks JSON, so the route hands back text when the file is
+ * text-like and base64 otherwise — and the browser turns that back into a real Blob
+ * here, which is also what names the file in the save dialog.
+ */
+async function downloadAttachment(taskId, board, att, i18n) {
+  try {
+    const data = await fetchAttachment(taskId, board, att.id)
+    const bytes = data.encoding === 'base64'
+      ? Uint8Array.from(atob(data.text || ''), c => c.charCodeAt(0))
+      : new TextEncoder().encode(data.text || '')
+    const url = URL.createObjectURL(new Blob([bytes], {
+      type: data.content_type || 'application/octet-stream'
+    }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = data.filename || att.filename || 'attachment'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    // Revoking immediately cancels the download in Chromium: give it time to start.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  } catch (error) {
+    host.notify({ kind: 'error', message: `${i18n.previewFailed} — ${att.filename}` })
+  }
+}
+
+/** The markdown viewer: its own dialog, dismissed like every other overlay here. */
+function AttachmentPreview({ taskId, board, att, i18n, onClose }) {
+  const query = useQuery({
+    queryKey: ['kanban-gantt', 'attachment', taskId, att.id],
+    queryFn: () => fetchAttachment(taskId, board, att.id)
+  })
+  return jsx(Dialog, {
+    open: true,
+    onOpenChange: next => { if (!next) onClose() },
+    children: jsx(DialogContent, {
+      className: 'flex max-h-[80vh] w-[min(46rem,92vw)] max-w-none flex-col overflow-hidden',
+      children: [
+        jsx('div', { className: 'flex items-center gap-2 pr-8 pb-2', children: [
+          jsx(Codicon, { name: 'markdown', size: '0.85rem', className: 'text-(--ui-text-tertiary)' }),
+          jsx(DialogTitle, {
+            className: 'truncate text-[12px] font-medium',
+            children: i18n.previewTitle(att.filename)
+          })
+        ] }),
+        jsx('div', { className: 'min-h-0 overflow-y-auto', children:
+          query.isLoading
+            ? jsx('div', { className: 'grid h-24 place-items-center', children: jsx(Loader, {}) })
+            : query.isError || !query.data
+              ? jsx('p', { className: 'text-[11px] text-(--ui-text-quaternary)', children: i18n.previewFailed })
+              : jsx(MessageTextContent, { media: false, text: query.data.text || '' })
+        })
+      ]
+    })
+  })
+}
+
+/** The task's attachments: preview the markdown ones, download any of them. */
+function AttachmentsSection({ taskId, board, attachments, i18n, onPreview }) {
+  if (!attachments || !attachments.length) return null
+  return jsxs('div', { className: 'flex flex-col gap-1', children: [
+    jsx('div', {
+      className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)',
+      children: i18n.attachments(attachments.length)
+    }),
+    jsx('ul', { className: 'flex flex-col gap-0.5', children: attachments.map(att => {
+      const isMarkdown = /\.(md|markdown)$/i.test(att.filename || '')
+      return jsxs('li', {
+        className: 'flex min-w-0 items-center gap-1.5 text-[11px] text-(--ui-text-secondary)',
+        children: [
+          jsx('span', { className: 'truncate', title: att.filename, children: att.filename }),
+          isMarkdown
+            ? jsx(Button, {
+                size: 'icon-xs', variant: 'ghost', 'aria-label': i18n.previewMarkdown(att.filename),
+                title: i18n.previewMarkdown(att.filename), onClick: () => onPreview(att),
+                children: jsx(Codicon, { name: 'open-preview', size: '0.75rem' })
+              })
+            : null,
+          jsx(Button, {
+            size: 'icon-xs', variant: 'ghost', 'aria-label': i18n.downloadAttachment(att.filename),
+            title: i18n.downloadAttachment(att.filename),
+            onClick: () => void downloadAttachment(taskId, board, att, i18n),
+            children: jsx(Codicon, { name: 'cloud-download', size: '0.75rem' })
+          })
+        ]
+      }, att.id)
+    }) })
+  ] })
+}
+
 function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked = false, onToggleDock, boards = [] }) {
   const drawerW = useValue($drawerW)
+  const detailModal = useValue($detailModal)
   const i18n = useGanttI18n()
   const queryClient = useQueryClient()
   const scrollContainerRef = useRef(null)
@@ -1079,6 +1181,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   // Cross-board move: the dialog owns the confirmations; the mutation runs
   // here so the success toast + invalidation live next to the other writes.
   const [moveBoardOpen, setMoveBoardOpen] = useState(false)
+  // The attachment being previewed, if any: its dialog is its own overlay.
+  const [previewAtt, setPreviewAtt] = useState(null)
   const shownBoard = board
   const moveMutation = useMutation({
     mutationFn: toBoard =>
@@ -1209,15 +1313,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const more = matrix.more || []
   const actionLabel = a => i18n.actions?.[a] || a
 
-  return jsxs('div', {
-    className: docked
-      ? 'relative flex flex-col h-full min-h-0 border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) pt-3.5 px-4'
-      : 'absolute inset-y-0 right-0 z-50 max-w-full border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) shadow-xl flex flex-col pt-3.5 px-4',
-    'data-glass-opaque': true,
-    role: 'dialog',
-    'aria-label': i18n.taskDetail,
-    style: { width: `${drawerW}px` },
-    children: [
+  const inner = [
       jsx(ResizeHandle, {
         get: () => $drawerW.get(),
         set: w => $drawerW.set(w),
@@ -1237,6 +1333,16 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
             children: [
               jsxs('div', { className: 'flex flex-wrap items-center gap-1.5 min-w-0', children: [
                 jsx(Button, { size: 'icon-xs', variant: 'ghost', onClick: onToggleDock, 'aria-label': docked ? i18n.undockDrawer : i18n.dockDrawer, title: docked ? i18n.undockDrawer : i18n.dockDrawer, children: docked ? '»' : '«' }),
+                // Same detail, two presentations: the panel beside the gantt, or a
+                // centred modal with the metadata in its own column (the official
+                // kanban plugin's detail is a modal, and this is the way back).
+                jsx(Button, {
+                  size: 'icon-xs', variant: 'ghost',
+                  onClick: () => $detailModal.set(!detailModal),
+                  'aria-label': detailModal ? i18n.dockDetail : i18n.openInModal,
+                  title: detailModal ? i18n.dockDetail : i18n.openInModal,
+                  children: jsx(Codicon, { name: detailModal ? 'screen-normal' : 'screen-full', size: '0.75rem' })
+                }),
                 StatusBadge({
                   status: data?.task?.status,
                   disabled: statusMutation.isPending,
@@ -1451,6 +1557,20 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                       })
                     : jsx('p', { className: 'text-[11px] text-(--ui-text-quaternary)', children: i18n.noDescription })
               ] }),
+
+              // 1b. Attachments: markdown ones open in their own dialog, any of them
+              // can be saved. The bytes are fetched per file, never with the detail.
+              jsx(AttachmentsSection, {
+                taskId: shownId, board, i18n,
+                attachments: data?.task?.attachments || [],
+                onPreview: att => setPreviewAtt(att)
+              }),
+              previewAtt
+                ? jsx(AttachmentPreview, {
+                    taskId: shownId, board, i18n, att: previewAtt,
+                    onClose: () => setPreviewAtt(null)
+                  })
+                : null,
 
               // 2. Result (no max-h clamp)
               data?.task?.result
@@ -1678,7 +1798,62 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
         onClose: () => setMoveBoardOpen(false),
         onMove: toBoard => moveMutation.mutateAsync(toBoard)
       })
-    ]
+  ]
+
+  // The panel, as it has always been: docked beside the gantt or overlaying it.
+  if (!detailModal) {
+    return jsxs('div', {
+      className: docked
+        ? 'relative flex flex-col h-full min-h-0 border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) pt-3.5 px-4'
+        : 'absolute inset-y-0 right-0 z-50 max-w-full border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) shadow-xl flex flex-col pt-3.5 px-4',
+      'data-glass-opaque': true,
+      role: 'dialog',
+      'aria-label': i18n.taskDetail,
+      style: { width: `${drawerW}px` },
+      children: inner
+    })
+  }
+
+  // The modal: the same body, centred, with the facts that are worth a column of
+  // their own on the right — status, assignee, workspace, created, last activity and
+  // the attachments, which is the shape the official kanban plugin's sidebar uses.
+  const task = data?.task
+  const when = ts => (ts ? new Date(Number(ts) * 1000).toLocaleString() : '—')
+  const metaRow = (label, value) => jsxs('div', { className: 'flex flex-col gap-0.5', children: [
+    jsx('div', {
+      className: 'text-[10px] uppercase font-semibold text-(--ui-text-quaternary)',
+      children: label
+    }),
+    jsx('div', { className: 'break-words text-[11px] text-(--ui-text-secondary)', children: value })
+  ] })
+  return jsx(Dialog, {
+    open: true,
+    onOpenChange: next => { if (!next) onClose() },
+    children: jsx(DialogContent, {
+      className: 'flex max-h-[min(84vh,54rem)] w-[min(62rem,94vw)] max-w-none flex-col overflow-hidden',
+      children: jsxs('div', { className: 'flex min-h-0 flex-1 gap-4', children: [
+        jsx('div', { className: 'min-w-0 flex-1 overflow-y-auto pr-1', children: inner }),
+        jsxs('aside', {
+          className: 'flex w-56 shrink-0 flex-col gap-2.5 overflow-y-auto border-l border-(--ui-stroke-tertiary) pl-3',
+          children: [
+            jsx('div', {
+              className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)',
+              children: i18n.detailMeta
+            }),
+            metaRow(i18n.metaStatus, task?.status || '—'),
+            metaRow(i18n.metaAssignee, task?.assignee || '—'),
+            task?.workspace_path ? metaRow(i18n.metaWorkspace, task.workspace_path) : null,
+            metaRow(i18n.metaCreated, when(task?.created_at)),
+            metaRow(i18n.metaLastActivity,
+              when(task?.completed_at || task?.started_at || task?.created_at)),
+            task?.attachments?.length
+              ? metaRow(i18n.attachments(task.attachments.length),
+                        task.attachments.map(a => a.filename).join(', '))
+              : null
+          ]
+        })
+      ] })
+    })
   })
 }
 

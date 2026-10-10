@@ -29,6 +29,9 @@ export const $labelW = atom(LABEL_W)
 export const $drawerW = atom(416)
 /** Whether the task drawer docks beside the gantt instead of overlaying it. */
 export const $drawerDocked = atom(false)
+
+/** Present the detail as a centred modal instead of a panel beside the gantt. */
+export const $detailModal = atom(false)
 export const LABEL_W_MIN = 160
 export const LABEL_W_MAX = 640
 export const DRAWER_W_MIN = 320
