@@ -2745,18 +2745,9 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
           className: "flex items-center justify-between gap-1.5",
           children: [
             jsxs6("div", { className: "flex flex-wrap items-center gap-1.5 min-w-0", children: [
-              jsx6(Button5, { size: "icon-xs", variant: "ghost", onClick: onToggleDock, "aria-label": docked ? i18n.undockDrawer : i18n.dockDrawer, title: docked ? i18n.undockDrawer : i18n.dockDrawer, children: docked ? "»" : "«" }),
-              // Same detail, two presentations: the panel beside the gantt, or a
-              // centred modal with the metadata in its own column (the official
-              // kanban plugin's detail is a modal, and this is the way back).
-              jsx6(Button5, {
-                size: "icon-xs",
-                variant: "ghost",
-                onClick: () => $detailModal.set(!detailModal),
-                "aria-label": detailModal ? i18n.dockDetail : i18n.openInModal,
-                title: detailModal ? i18n.dockDetail : i18n.openInModal,
-                children: jsx6(Codicon5, { name: detailModal ? "screen-normal" : "screen-full", size: "0.75rem" })
-              }),
+              // Docking the panel beside the gantt only means something for the
+              // panel: in the modal there is nothing to dock or undock.
+              detailModal ? null : jsx6(Button5, { size: "icon-xs", variant: "ghost", onClick: onToggleDock, "aria-label": docked ? i18n.undockDrawer : i18n.dockDrawer, title: docked ? i18n.undockDrawer : i18n.dockDrawer, children: docked ? "»" : "«" }),
               StatusBadge({
                 status: data?.task?.status,
                 disabled: statusMutation.isPending,
@@ -2863,6 +2854,17 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                   ]
                 })
               ] }),
+              // Same detail, two presentations: the panel beside the gantt or a
+              // centred modal. The switch sits next to the close button — where a
+              // window-level control belongs — and its icon shows which way it goes.
+              jsx6(Button5, {
+                size: "icon-xs",
+                variant: "ghost",
+                onClick: () => $detailModal.set(!detailModal),
+                "aria-label": detailModal ? i18n.dockDetail : i18n.openInModal,
+                title: detailModal ? i18n.dockDetail : i18n.openInModal,
+                children: jsx6(Codicon5, { name: detailModal ? "screen-normal" : "screen-full", size: "0.75rem" })
+              }),
               jsx6(Button5, { size: "icon-xs", variant: "ghost", onClick: onClose, "aria-label": i18n.close, children: "✕" })
             ] })
           ]
