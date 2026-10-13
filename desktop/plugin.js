@@ -54,6 +54,7 @@ var $labelW = atom(LABEL_W);
 var $drawerW = atom(416);
 var $drawerDocked = atom(false);
 var $detailModal = atom(false);
+var $titlePrefixTags = atom(false);
 var LABEL_W_MIN = 160;
 var LABEL_W_MAX = 640;
 var DRAWER_W_MIN = 320;
@@ -139,6 +140,10 @@ var GANTT_LOCALES = {
     zoomTimeline: "Zoom timeline",
     zoomWheelHint: "Wheel over the timeline: zoom · Shift+Wheel: pan · Double-click the ruler: reset",
     nowMarker: "Now",
+    untitled: "Untitled",
+    viewOptions: "View options",
+    titlePrefixTags: "Show title prefixes as tags",
+    titlePrefixTagsHint: "A leading [EPIC] becomes a chip — the title itself is always shown as written",
     nothingToDisplay: "Nothing to display",
     noTasksMatch: "No tasks match the search or filter criteria.",
     emptyBoard: "No data",
@@ -345,6 +350,10 @@ var GANTT_LOCALES = {
     zoomTimeline: "Zoom timeline",
     zoomWheelHint: "Molette sur la chronologie : zoom · Maj+molette : défilement · Double-clic sur la règle : réinitialiser",
     nowMarker: "Maintenant",
+    untitled: "Sans titre",
+    viewOptions: "Options d'affichage",
+    titlePrefixTags: "Afficher les préfixes des titres sous forme de tag",
+    titlePrefixTagsHint: "Un préfixe « [EPIC] » devient une pastille — le titre lui-même reste affiché tel quel",
     nothingToDisplay: "Rien à afficher",
     noTasksMatch: "Aucune tâche ne correspond aux critères de recherche ou de filtre.",
     emptyBoard: "Aucune donnée",
@@ -523,6 +532,10 @@ var GANTT_LOCALES = {
   zh: {
     title: "看板甘特图",
     nav: "看板甘特图",
+    untitled: "无标题",
+    viewOptions: "视图选项",
+    titlePrefixTags: "将标题前缀显示为标签",
+    titlePrefixTagsHint: "开头的 [EPIC] 会显示为标签——标题本身始终按原样显示",
     openCommand: "看板甘特图：打开时间线视图",
     refresh: "刷新",
     refreshWhy: "此网关或客户端的实时更新已关闭，页面改用 60 秒轮询——可立即刷新，无需等待。",
@@ -1165,6 +1178,15 @@ function isMissingBoardError(error) {
 }
 function shortId(id) {
   return (id || "").replace(/^t_/, "").slice(0, 6);
+}
+function splitTitlePrefix(title) {
+  const text = typeof title === "string" ? title.trim() : "";
+  if (!text.startsWith("[")) return { prefix: null, rest: text };
+  const end = text.indexOf("]");
+  if (end < 2) return { prefix: null, rest: text };
+  const prefix = text.slice(1, end).trim();
+  if (!prefix) return { prefix: null, rest: text };
+  return { prefix, rest: text.slice(end + 1).trim() };
 }
 function matchesSearch(task, query) {
   const q = (query || "").trim().toLowerCase();
@@ -2085,16 +2107,8 @@ function Bar({ task, bar, pxPerSec, min, onOpen }) {
   }
   return jsxs6("div", { className: "absolute rounded-sm kg-bar hover:brightness-110 transition-all", style, title, onClick, children });
 }
-function cleanTitle(title, label) {
-  if (!title) return "(sans titre)";
-  let t = title.trim();
-  if (t.startsWith("[")) {
-    const idx = t.indexOf("]");
-    if (idx > 0) {
-      t = t.slice(idx + 1).trim();
-    }
-  }
-  return t || title;
+function titleText(title) {
+  return typeof title === "string" ? title.trim() : "";
 }
 function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection = "right" }) {
   const drag = useRef2(null);
@@ -2155,7 +2169,9 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
   const labelW = useValue2($labelW);
   const bars = taskBars(task, now);
   const label = task.label ? `[${task.label}]` : "";
-  const name = cleanTitle(task.title, task.label);
+  const showPrefixTags = useValue2($titlePrefixTags);
+  const { prefix, rest: rest2 } = splitTitlePrefix(task.title);
+  const name = rest2 || titleText(task.title) || i18n.untitled;
   const marks = treeMarks(depth, continuation, lastSibling);
   const line = "var(--ui-stroke-secondary)";
   const connectors = marks.guides.map((x) => jsx6("span", {
@@ -2318,6 +2334,18 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             },
             children: [
               task.status === "running" ? jsx6("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }) : null,
+              showPrefixTags && prefix ? jsx6("span", {
+                className: "shrink-0 mr-1 rounded-sm font-semibold",
+                style: {
+                  padding: "0 3px",
+                  fontSize: "9px",
+                  lineHeight: "1.35",
+                  color: "var(--ui-text-secondary)",
+                  backgroundColor: "var(--ui-bg-tertiary)",
+                  border: "1px solid var(--ui-stroke-tertiary)"
+                },
+                children: prefix
+              }) : null,
               name
             ]
           }),
@@ -3015,6 +3043,9 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const matrix = ACTION_MATRIX[st] || { primary: [], more: [] };
   const more = matrix.more || [];
   const actionLabel = (a) => i18n.actions?.[a] || a;
+  const drawerTitle = splitTitlePrefix(data?.task?.title);
+  const drawerName = drawerTitle.rest || titleText(data?.task?.title) || i18n.untitled;
+  const showPrefixTags = useValue2($titlePrefixTags);
   const inner = [
     jsx6(ResizeHandle, {
       get: () => $drawerW.get(),
@@ -3169,8 +3200,26 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
             children: actionLabel(a)
           }))
         ] }) : null,
-        // Title kept always visible
-        jsx6("div", { className: "text-base font-semibold leading-snug", children: cleanTitle(data?.task?.title, data?.task?.label) })
+        // Title kept always visible — verbatim, with the prefix as a tag only when
+        // the reader asked for tags.
+        jsxs6("div", {
+          className: "flex flex-wrap items-start gap-1.5 text-base font-semibold leading-snug",
+          children: [
+            showPrefixTags && drawerTitle.prefix ? jsx6("span", {
+              className: "shrink-0 rounded-sm font-semibold",
+              style: {
+                padding: "0 4px",
+                fontSize: "10px",
+                lineHeight: "1.5",
+                color: "var(--ui-text-secondary)",
+                backgroundColor: "var(--ui-bg-tertiary)",
+                border: "1px solid var(--ui-stroke-tertiary)"
+              },
+              children: drawerTitle.prefix
+            }) : null,
+            jsx6("span", { className: "min-w-0", children: drawerName })
+          ]
+        })
       ]
     }),
     // Scrollable content underneath the pinned header + title
@@ -3828,6 +3877,17 @@ function KanbanGanttPage() {
     setZoom(val);
     if (getStorage()) getStorage().set("zoom", val);
   };
+  const titlePrefixTags = useValue2($titlePrefixTags);
+  const handleTitlePrefixTags = (next) => {
+    $titlePrefixTags.set(next);
+    if (getStorage()) getStorage().set("titlePrefixTags", next);
+  };
+  useEffect3(() => {
+    const s = getStorage();
+    if (!s) return;
+    const saved = s.get("titlePrefixTags", null);
+    if (saved != null) $titlePrefixTags.set(saved === true || saved === "1");
+  }, []);
   const setBoard = (slug) => {
     $boardSlug.set(slug);
     if (getStorage()) getStorage().set(boardStorageKey(), slug);
@@ -4051,6 +4111,44 @@ function KanbanGanttPage() {
                 className: "inline-flex items-center gap-3",
                 children: [
                   jsx6(ViewToggle, { value: viewMode, onChange: handleViewMode }),
+                  // The view's own menu: a display preference belongs here, next to the
+                  // other view controls — not in a task's action menu.
+                  jsxs6(DropdownMenu3, { children: [
+                    jsx6(DropdownMenuTrigger3, {
+                      asChild: true,
+                      children: jsx6("button", {
+                        type: "button",
+                        className: "inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent",
+                        "aria-label": i18n.viewOptions,
+                        title: i18n.viewOptions,
+                        children: jsx6(Codicon5, { name: "kebab-vertical", size: "0.9rem" })
+                      })
+                    }),
+                    jsxs6(DropdownMenuContent3, {
+                      align: "end",
+                      className: "min-w-[17rem] p-1 text-xs",
+                      children: [
+                        jsxs6(DropdownMenuItem3, {
+                          className: "flex items-start gap-2 px-3 py-1.5",
+                          onClick: () => handleTitlePrefixTags(!titlePrefixTags),
+                          children: [
+                            jsx6(Codicon5, {
+                              name: titlePrefixTags ? "check" : "blank",
+                              size: "0.85rem",
+                              className: "mt-0.5 shrink-0"
+                            }),
+                            jsxs6("span", { className: "flex flex-col gap-0.5 min-w-0", children: [
+                              jsx6("span", { children: i18n.titlePrefixTags }),
+                              jsx6("span", {
+                                className: "text-[10px] text-(--ui-text-tertiary)",
+                                children: i18n.titlePrefixTagsHint
+                              })
+                            ] })
+                          ]
+                        })
+                      ]
+                    })
+                  ] }),
                   listMode ? null : jsxs6("span", { className: "inline-flex items-center gap-1.5", children: [
                     jsx6("input", {
                       type: "range",

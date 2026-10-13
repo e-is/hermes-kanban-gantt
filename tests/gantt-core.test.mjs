@@ -737,3 +737,37 @@ test('the now line sits where now is, and is absent when now is out of range', (
   assert.equal(nowOffset(NOW, NOW + 10, NOW + 100, 2), null, 'before the window: no line')
   assert.equal(nowOffset(NOW, NOW - 100, NOW - 10, 2), null, 'after the window: no line')
 })
+
+/* ── a title is the user's text ─────────────────────────────────────────────── */
+
+test('a bracketed prefix is split out, never dropped', () => {
+  const { splitTitlePrefix } = core
+  assert.deepEqual(splitTitlePrefix('[EPIC] Ship the thing'),
+    { prefix: 'EPIC', rest: 'Ship the thing' })
+  // no space after the bracket, and lower case: still a prefix
+  assert.deepEqual(splitTitlePrefix('[wip]Fix it'), { prefix: 'wip', rest: 'Fix it' })
+  // an inner space is part of the tag
+  assert.deepEqual(splitTitlePrefix('[P0 urgent] Do it'), { prefix: 'P0 urgent', rest: 'Do it' })
+  // only the FIRST group is a prefix; the rest is the title
+  assert.deepEqual(splitTitlePrefix('[A] [B] rest'), { prefix: 'A', rest: '[B] rest' })
+})
+
+test('a title with no prefix comes back whole — this is the regression that mattered', () => {
+  const { splitTitlePrefix } = core
+  // The timeline used to strip the leading group whatever it was, so a title that
+  // merely STARTED with a bracket lost its first word.
+  assert.deepEqual(splitTitlePrefix('[WIP] not closed'), { prefix: 'WIP', rest: 'not closed' })
+  assert.deepEqual(splitTitlePrefix('Ship [EPIC] the thing'),
+    { prefix: null, rest: 'Ship [EPIC] the thing' }, 'a prefix is only a prefix at the start')
+  assert.deepEqual(splitTitlePrefix('no brackets at all'),
+    { prefix: null, rest: 'no brackets at all' })
+  // degenerate brackets are text, not tags
+  assert.deepEqual(splitTitlePrefix('[unclosed'), { prefix: null, rest: '[unclosed' })
+  assert.deepEqual(splitTitlePrefix('[]'), { prefix: null, rest: '[]' })
+  assert.deepEqual(splitTitlePrefix('[   ]'), { prefix: null, rest: '[   ]' })
+  assert.deepEqual(splitTitlePrefix(''), { prefix: null, rest: '' })
+  assert.deepEqual(splitTitlePrefix(null), { prefix: null, rest: '' })
+  // surrounding whitespace is trimmed, but nothing else is touched
+  assert.deepEqual(splitTitlePrefix('  [EPIC]  padded  '), { prefix: 'EPIC', rest: 'padded' })
+  assert.deepEqual(splitTitlePrefix('[EPIC]'), { prefix: 'EPIC', rest: '' })
+})

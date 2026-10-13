@@ -289,6 +289,25 @@ export function shortId(id) {
   return (id || '').replace(/^t_/, '').slice(0, 6)
 }
 
+/**
+ * A board title may open with a bracketed prefix — `[EPIC] Ship the thing`. It is
+ * part of the title, and the timeline used to silently strip it, so the same task
+ * read differently here and on the board. Splitting it lets a caller *present* it
+ * as a tag instead of dropping it.
+ *
+ * Only the first bracket group counts, and only when it closes around something:
+ * `[WIP` (never closed) and `[]` are text, not prefixes.
+ */
+export function splitTitlePrefix(title) {
+  const text = typeof title === 'string' ? title.trim() : ''
+  if (!text.startsWith('[')) return { prefix: null, rest: text }
+  const end = text.indexOf(']')
+  if (end < 2) return { prefix: null, rest: text }
+  const prefix = text.slice(1, end).trim()
+  if (!prefix) return { prefix: null, rest: text }
+  return { prefix, rest: text.slice(end + 1).trim() }
+}
+
 export function matchesSearch(task, query) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return true;

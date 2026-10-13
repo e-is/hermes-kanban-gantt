@@ -32,6 +32,10 @@ export const $drawerDocked = atom(false)
 
 /** Present the detail as a centred modal instead of a panel beside the gantt. */
 export const $detailModal = atom(false)
+
+/** Show a title's leading `[PREFIX]` as a tag instead of keeping it inline.
+ *  Off by default: the title is the user's, and the timeline shows it verbatim. */
+export const $titlePrefixTags = atom(false)
 export const LABEL_W_MIN = 160
 export const LABEL_W_MAX = 640
 export const DRAWER_W_MIN = 320

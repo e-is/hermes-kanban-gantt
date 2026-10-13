@@ -61,7 +61,7 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 import {
   setPluginDoors,
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
-  $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $detailModal, $openTaskId,
+  $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $detailModal, $titlePrefixTags, $openTaskId,
   $newTask, $moveUnderId, $wsEnabled, $connectionScope,
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
   createTask, fetchProjects, fetchProfiles,
@@ -92,7 +92,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, maxZoom, clampZoom, runTone } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, maxZoom, clampZoom, runTone, splitTitlePrefix } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -329,17 +329,16 @@ function Bar({ task, bar, pxPerSec, min, onOpen }) {
   return jsxs('div', { className: 'absolute rounded-sm kg-bar hover:brightness-110 transition-all', style, title, onClick, children })
 }
 
-function cleanTitle(title, label) {
-  if (!title) return '(sans titre)'
-  // Strip leading [TAG] prefix if present (whether matching label or not)
-  let t = title.trim()
-  if (t.startsWith('[')) {
-    const idx = t.indexOf(']')
-    if (idx > 0) {
-      t = t.slice(idx + 1).trim()
-    }
-  }
-  return t || title
+/**
+ * The task's title, verbatim.
+ *
+ * A leading `[EPIC]` is part of what the user typed: stripping it here (which this
+ * function used to do) made the same task read differently in the timeline and on
+ * the board. The prefix is only *presented* separately when the reader asks for
+ * tags — see `$titlePrefixTags` and `splitTitlePrefix`.
+ */
+function titleText(title) {
+  return typeof title === 'string' ? title.trim() : ''
 }
 
 /**
@@ -409,7 +408,9 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
   const labelW = useValue($labelW)
   const bars = taskBars(task, now)
   const label = task.label ? `[${task.label}]` : ''
-  const name = cleanTitle(task.title, task.label)
+  const showPrefixTags = useValue($titlePrefixTags)
+  const { prefix, rest } = splitTitlePrefix(task.title)
+  const name = rest || titleText(task.title) || i18n.untitled
 
   // Explorer connectors, in front of the checkbox and left of the fold square.
   // All the geometry comes from the core (`treeMarks`) so it can be unit-tested:
@@ -605,6 +606,20 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             children: [
               task.status === 'running'
                 ? jsx('div', { className: 'kg-arc', style: { '--kanban-tone': dotColor } })
+                : null,
+              showPrefixTags && prefix
+                ? jsx('span', {
+                    className: 'shrink-0 mr-1 rounded-sm font-semibold',
+                    style: {
+                      padding: '0 3px',
+                      fontSize: '9px',
+                      lineHeight: '1.35',
+                      color: 'var(--ui-text-secondary)',
+                      backgroundColor: 'var(--ui-bg-tertiary)',
+                      border: '1px solid var(--ui-stroke-tertiary)'
+                    },
+                    children: prefix
+                  })
                 : null,
               name
             ]
@@ -1378,8 +1393,14 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const more = matrix.more || []
   const actionLabel = a => i18n.actions?.[a] || a
 
+  // The title is shown verbatim; its `[PREFIX]` becomes a tag only on request — the
+  // same rule the rows follow.
+  const drawerTitle = splitTitlePrefix(data?.task?.title)
+  const drawerName = drawerTitle.rest || titleText(data?.task?.title) || i18n.untitled
+  const showPrefixTags = useValue($titlePrefixTags)
+
   const inner = [
-      jsx(ResizeHandle, {
+    jsx(ResizeHandle, {
         get: () => $drawerW.get(),
         set: w => $drawerW.set(w),
         min: DRAWER_W_MIN,
@@ -1542,8 +1563,26 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
               ] })
             : null,
 
-          // Title kept always visible
-          jsx('div', { className: 'text-base font-semibold leading-snug', children: cleanTitle(data?.task?.title, data?.task?.label) })
+          // Title kept always visible — verbatim, with the prefix as a tag only when
+          // the reader asked for tags.
+          jsxs('div', {
+            className: 'flex flex-wrap items-start gap-1.5 text-base font-semibold leading-snug',
+            children: [
+              showPrefixTags && drawerTitle.prefix
+                ? jsx('span', {
+                    className: 'shrink-0 rounded-sm font-semibold',
+                    style: {
+                      padding: '0 4px', fontSize: '10px', lineHeight: '1.5',
+                      color: 'var(--ui-text-secondary)',
+                      backgroundColor: 'var(--ui-bg-tertiary)',
+                      border: '1px solid var(--ui-stroke-tertiary)'
+                    },
+                    children: drawerTitle.prefix
+                  })
+                : null,
+              jsx('span', { className: 'min-w-0', children: drawerName })
+            ]
+          })
         ]
       }),
 
@@ -2322,6 +2361,21 @@ export function KanbanGanttPage() {
     if (getStorage()) getStorage().set('zoom', val)
   }
 
+  // View options live in one atom so the rows and the drawer read the same value.
+  // The doors are wired at register time, so the atom cannot seed itself at module
+  // load — the page hydrates it on mount instead.
+  const titlePrefixTags = useValue($titlePrefixTags)
+  const handleTitlePrefixTags = next => {
+    $titlePrefixTags.set(next)
+    if (getStorage()) getStorage().set('titlePrefixTags', next)
+  }
+  useEffect(() => {
+    const s = getStorage()
+    if (!s) return
+    const saved = s.get('titlePrefixTags', null)
+    if (saved != null) $titlePrefixTags.set(saved === true || saved === '1')
+  }, [])
+
   const setBoard = slug => {
     $boardSlug.set(slug)
     if (getStorage()) getStorage().set(boardStorageKey(), slug)
@@ -2596,6 +2650,44 @@ export function KanbanGanttPage() {
             className: 'inline-flex items-center gap-3',
             children: [
               jsx(ViewToggle, { value: viewMode, onChange: handleViewMode }),
+              // The view's own menu: a display preference belongs here, next to the
+              // other view controls — not in a task's action menu.
+              jsxs(DropdownMenu, { children: [
+                jsx(DropdownMenuTrigger, {
+                  asChild: true,
+                  children: jsx('button', {
+                    type: 'button',
+                    className: 'inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent',
+                    'aria-label': i18n.viewOptions,
+                    title: i18n.viewOptions,
+                    children: jsx(Codicon, { name: 'kebab-vertical', size: '0.9rem' })
+                  })
+                }),
+                jsxs(DropdownMenuContent, {
+                  align: 'end',
+                  className: 'min-w-[17rem] p-1 text-xs',
+                  children: [
+                    jsxs(DropdownMenuItem, {
+                      className: 'flex items-start gap-2 px-3 py-1.5',
+                      onClick: () => handleTitlePrefixTags(!titlePrefixTags),
+                      children: [
+                        jsx(Codicon, {
+                          name: titlePrefixTags ? 'check' : 'blank',
+                          size: '0.85rem',
+                          className: 'mt-0.5 shrink-0'
+                        }),
+                        jsxs('span', { className: 'flex flex-col gap-0.5 min-w-0', children: [
+                          jsx('span', { children: i18n.titlePrefixTags }),
+                          jsx('span', {
+                            className: 'text-[10px] text-(--ui-text-tertiary)',
+                            children: i18n.titlePrefixTagsHint
+                          })
+                        ] })
+                      ]
+                    })
+                  ]
+                })
+              ] }),
               listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {
                   type: 'range',
