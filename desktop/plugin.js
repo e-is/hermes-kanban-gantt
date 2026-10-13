@@ -137,6 +137,8 @@ var GANTT_LOCALES = {
     closeWindow: "Close",
     filterCards: "Filter cards…",
     zoomTimeline: "Zoom timeline",
+    zoomWheelHint: "Wheel over the timeline: zoom · Shift+Wheel: pan · Double-click the ruler: reset",
+    nowMarker: "Now",
     nothingToDisplay: "Nothing to display",
     noTasksMatch: "No tasks match the search or filter criteria.",
     emptyBoard: "No data",
@@ -341,6 +343,8 @@ var GANTT_LOCALES = {
     closeWindow: "Fermer",
     filterCards: "Filtrer les tâches…",
     zoomTimeline: "Zoom timeline",
+    zoomWheelHint: "Molette sur la chronologie : zoom · Maj+molette : défilement · Double-clic sur la règle : réinitialiser",
+    nowMarker: "Maintenant",
     nothingToDisplay: "Rien à afficher",
     noTasksMatch: "Aucune tâche ne correspond aux critères de recherche ou de filtre.",
     emptyBoard: "Aucune donnée",
@@ -514,6 +518,211 @@ var GANTT_LOCALES = {
       triage: "Renvoyer en triage",
       delete: "Supprimer",
       restore: "Restaurer"
+    }
+  },
+  zh: {
+    title: "看板甘特图",
+    nav: "看板甘特图",
+    openCommand: "看板甘特图：打开时间线视图",
+    refresh: "刷新",
+    refreshWhy: "此网关或客户端的实时更新已关闭，页面改用 60 秒轮询——可立即刷新，无需等待。",
+    backend: "后端：",
+    allBoards: "全部看板",
+    board: "看板：",
+    noBoard: "无看板",
+    dockDrawer: "将详情面板固定在甘特图旁",
+    undockDrawer: "取消固定详情面板",
+    openInModal: "在模态窗口中打开详情",
+    dockDetail: "将详情固定在甘特图旁",
+    detailMeta: "信息",
+    metaStatus: "状态：",
+    metaAssignee: "负责人",
+    metaWorkspace: "工作区",
+    metaCreated: "创建时间",
+    metaLastActivity: "最近活动",
+    attachments: (n) => `附件（${n}）`,
+    noAttachments: "无附件",
+    downloadAttachment: (name) => `下载 ${name}`,
+    previewMarkdown: (name) => `预览 ${name}`,
+    previewTitle: (name) => `预览 — ${name}`,
+    previewFailed: "无法读取该附件。",
+    closeWindow: "关闭",
+    filterCards: "筛选任务…",
+    zoomTimeline: "时间线缩放",
+    zoomWheelHint: "滚轮：缩放 · Shift+滚轮：平移 · 双击标尺：重置",
+    nowMarker: "现在",
+    nothingToDisplay: "暂无可显示内容",
+    noTasksMatch: "没有任务符合搜索或筛选条件。",
+    emptyBoard: "无数据",
+    emptyBoardDesc: (board) => `看板 ${board} 没有任务。`,
+    cannotLoadBoard: "无法加载看板",
+    cannotLoadBoardDesc: (base) => `后端 kanban-gantt 无法访问${base ? `（${base}）` : ""} —— 插件已启用？网关已重启？`,
+    boardGoneTitle: (slug) => `看板 ${slug} 不在此网关上`,
+    boardGoneDesc: (next) => next ? `改为显示 ${next} —— 该看板是另一个网关记住的。` : `改为显示此网关的当前看板。`,
+    boardMissingTitle: "该看板不在此网关上",
+    boardMissingDesc: (slug, next) => next ? `看板 ${slug} 在此不存在。此网关的当前看板是 ${next}。` : `看板 ${slug} 不在此网关上。`,
+    taskUnreadable: "任务信息不可读",
+    taskUnreadableDesc: "后端没有响应。",
+    nTasksTotal: (n, status) => `共 ${n} 个任务（主要状态：${status}）`,
+    nBlockedWarning: (n) => `${n} 个任务被阻塞（需要处理）`,
+    nSelected: (n) => `已选 ${n} 项`,
+    statusLabel: "状态：",
+    assignLabel: "指派：",
+    assignPlaceholder: "执行者…",
+    clearSelection: "清除选择（Esc）",
+    filters: "筛选",
+    profiles: "执行者",
+    allProfiles: "全部执行者",
+    statuses: "状态",
+    showArchived: "显示已归档",
+    unassigned: "未指派",
+    unassignedEmpty: "未指派（空）",
+    reassigned: "（已改派）",
+    dependencies: "依赖：",
+    description: "描述",
+    editDescription: "编辑描述",
+    cancelEdit: "取消编辑",
+    save: "保存",
+    noDescription: "无描述",
+    unsavedDescTitle: "描述未保存",
+    unsavedDescBody: "你修改了此描述但尚未保存。是否先保存再打开另一个任务？",
+    saveAndOpen: "保存并打开",
+    keepEditing: "继续编辑",
+    discardChanges: "放弃修改",
+    result: "结果",
+    latestSummary: "最新摘要",
+    runs: (n) => `运行记录（${n}）`,
+    show: "展开",
+    hide: "收起",
+    comments: (n) => `评论（${n}）`,
+    showPreviousComments: (n) => `显示前 ${n} 条评论`,
+    addCommentPlaceholder: "添加评论…",
+    send: "发送",
+    activity: (n) => `活动（${n}）`,
+    action: "操作：",
+    copyTaskId: "复制任务 ID",
+    copyTitle: "复制标题",
+    moveToShort: "移动到",
+    unassignAction: "取消指派",
+    bulkFailed: (n, why) => `${n} 个任务未更新：${why}`,
+    delete: "删除",
+    confirmDelete: (id) => `永久删除任务 ${id}？`,
+    taskDetail: "任务详情",
+    actionsMenu: "操作菜单",
+    close: "关闭",
+    selectAll: "全选",
+    selectTask: (name) => `选择 ${name}`,
+    tasksColumn: "任务",
+    assigneeColumn: "负责人",
+    statusColumn: "状态：",
+    lastActivityColumn: "已更新",
+    viewList: "列表",
+    viewTimeline: "时间线",
+    relativeUnits: { now: "刚刚", m: "分", h: "小时", d: "天", w: "周", mo: "个月", y: "年" },
+    clickForDetail: "点击查看详情",
+    legendShow: (label) => `点击显示 ${label}`,
+    legendHide: (label) => `点击隐藏 ${label}`,
+    barDoneReal: (name) => `${name} · 已完成（实际时长）`,
+    barDoneUnknown: (name) => `${name} · 已完成（时长未知）`,
+    barRunning: (name) => `${name} · 运行中`,
+    barBlockedWaiting: (name) => `${name} · 已阻塞 —— 等待处理`,
+    barNotStarted: (name) => `${name} · 未开始`,
+    copyHint: (id) => `${id} —— 点击 [...] 复制`,
+    parents: "父任务",
+    children: "子任务",
+    noParents: "无父任务",
+    noChildren: "无子任务",
+    removeParentLink: (title) => `移除与 ${title} 的关联`,
+    openTask: (title) => `打开 ${title}`,
+    reparentTitle: (n) => `此任务已有 ${n} 个父任务。你想怎么做？`,
+    reparentCurrent: "当前父任务",
+    reparentTarget: (title) => `新父任务：${title}`,
+    moveUnderTitle: (title) => `将 ${title} 移动到…之下`,
+    reasonLinked: "已是父任务",
+    reparentAdd: "新增一个父任务",
+    reparentReplace: "替换为这一个父任务",
+    removeParentConfirmTitle: (title) => `移除与 ${title} 的关联？`,
+    removeParentConfirmDesc: "只移除这一条父子关系，任务的其他关联保持不变。",
+    cancel: "取消",
+    moveUnder: "移动到…之下",
+    moveUnderSearch: "搜索任务…",
+    moveUnderEmpty: "没有匹配的任务",
+    movedUnder: (child, parent) => `${child} 已移动到 ${parent} 之下`,
+    gatedNotice: (child) => `${child} 已退回待办：它的新父任务尚未完成。`,
+    errSelf: "任务不能移动到自身之下。",
+    errCycle: "该移动会造成循环。",
+    errRunning: "正在运行的任务不能移动到其他任务之下。",
+    errOtherBoard: "两个任务必须属于同一个看板。",
+    errReparent: "看板拒绝了该移动。",
+    expandTask: (name) => `展开 ${name}`,
+    collapseTask: (name) => `折叠 ${name}`,
+    expandTaskHidden: (name, n) => `展开 ${name}（隐藏 ${n} 项）`,
+    collapseAll: "全部折叠",
+    expandAll: "全部展开",
+    newTask: "新建任务",
+    newTaskTitle: "标题",
+    newTaskTitlePlaceholder: "需要完成什么？",
+    newTaskPriority: "优先级",
+    newTaskParent: "父任务",
+    newTaskNoParent: "无父任务",
+    newTaskTriage: "退回分诊",
+    newTaskDescriptionPlaceholder: "描述（可选）…",
+    newTaskProject: "项目",
+    newTaskNoProject: "无项目",
+    newTaskWorkspace: "工作区",
+    newTaskWorkspacePath: "工作区路径",
+    newTaskWorkspaceInherit: "继承看板/项目目录",
+    newTaskWorkspaceInheritHint: "留空则继承看板或项目目录。",
+    newTaskSkills: "技能（逗号分隔）",
+    newTaskSkillsPlaceholder: "skill-a, skill-b",
+    newTaskModel: "模型",
+    newTaskModelInherit: "配置默认",
+    newTaskModelHint: "指定运行该任务的模型；留空则使用负责人配置的模型。",
+    newTaskGoalMode: "目标模式",
+    newTaskProjectSearch: "搜索项目…",
+    newTaskParentSearch: "搜索任务…",
+    newTaskNoMatch: "无匹配",
+    create: "创建",
+    creating: "创建中…",
+    createSubtask: "创建子任务",
+    moveToBoard: "移动到其他看板",
+    movePickBoard: "选择目标看板…",
+    moveNoOtherBoards: "没有其他可用看板——请先创建一个。",
+    moving: "移动中…",
+    moveConfirm: "移动",
+    moveWithChildren: (n) => `此任务有 ${n} 个子任务 —— 它们会一起移动。`,
+    moveNoChildren: "无子任务——任务将单独移动。",
+    confirmMove: (title, board) => `将「${title}」移动到看板「${board}」？`,
+    confirmMoveChildren: (n) => `是否也移动 ${n} 个子任务？它们必须随父任务一起移动。`,
+    moveChildrenBlock: "无法在不移动子任务的情况下移动任务——请先把子任务改挂到其他父任务（或删除），然后再移动。",
+    confirmMoveParentLoss: (n) => `此任务在当前看板上有 ${n} 个父任务。移动后它将没有父任务。确定吗？`,
+    movedTo: (board) => `已移动到看板「${board}」✔`,
+    created: (title) => `任务「${title}」已创建`,
+    errTitleRequired: "标题为必填项。",
+    errCreate: "任务创建失败。",
+    col: {
+      triage: "待分类",
+      todo: "待办",
+      scheduled: "已排期",
+      ready: "就绪",
+      running: "运行中",
+      blocked: "已阻塞",
+      review: "待评审",
+      done: "已完成",
+      archived: "已归档"
+    },
+    actions: {
+      done: "完成",
+      blocked: "阻塞",
+      unblock: "解除阻塞",
+      review: "请求评审",
+      reopen: "重新打开",
+      archive: "归档",
+      ready: "标记为就绪",
+      todo: "标记为待办",
+      triage: "送入待分类",
+      delete: "删除",
+      restore: "恢复"
     }
   }
 };
@@ -779,13 +988,42 @@ var STATUS_TONE = {
   scheduled: "#a78bfa",
   ready: "#60a5fa",
   running: "#34d399",
-  blocked: "#f87171",
-  review: "#fbbf24",
+  blocked: "#e0a13a",
+  review: "#f472b6",
   done: "var(--ui-text-tertiary)",
   archived: "var(--ui-text-quaternary)"
 };
 function statusTone(status) {
   return STATUS_TONE[status] || "var(--ui-text-secondary)";
+}
+var HARD_FAILURES = ["crashed", "failed", "spawn_failed", "gave_up"];
+var FAIL_TONE = "#ef5350";
+var RUN_TONE = "#5b8def";
+function runTone(outcome, ongoing) {
+  if (ongoing) return statusTone("running");
+  const o = String(outcome || "").toLowerCase();
+  if (HARD_FAILURES.includes(o)) return FAIL_TONE;
+  if (o === "blocked") return statusTone("blocked");
+  if (o === "completed" || o === "done") return statusTone("done");
+  return RUN_TONE;
+}
+function hourTickPlan(pxPerHour, minLabelPx = 56) {
+  if (!(pxPerHour >= 24)) return null;
+  const step = [1, 2, 3, 6, 12].find((s) => s * pxPerHour >= minLabelPx) || 12;
+  return { step };
+}
+function maxZoom(basePerSec, maxPxPerHour = 240) {
+  const perHour = basePerSec * 3600;
+  if (!(perHour > 0)) return 1;
+  return Math.max(1, maxPxPerHour / perHour);
+}
+function clampZoom(zoom, basePerSec, maxPxPerHour = 240) {
+  if (!Number.isFinite(zoom)) return 1;
+  return Math.min(maxZoom(basePerSec, maxPxPerHour), Math.max(0.2, zoom));
+}
+function nowOffset(now, min, max, pxPerSec) {
+  if (!(now >= min && now <= max)) return null;
+  return Math.round((now - min) * pxPerSec);
 }
 var STATUS_ICON = {
   triage: "question",
@@ -871,7 +1109,7 @@ function taskBars(task, now, minBarSec) {
         t0: s,
         t1: Math.max(s + min, e),
         kind: "done",
-        tone: statusTone("blocked"),
+        tone: runTone(r.outcome || r.status),
         runId: r.id,
         profile: r.profile,
         outcome: r.outcome || r.status
@@ -893,8 +1131,7 @@ function taskBars(task, now, minBarSec) {
       const e = r.ended_at;
       const isOngoing = (e == null || r.status === "running") && (task.status === "running" || task.status === "review");
       const t1 = isOngoing ? Math.max(s + min, now) : e != null ? Math.max(s + min, e) : s + min;
-      const isFailed = ["crashed", "failed", "timed_out", "gave_up", "blocked"].includes(r.outcome || r.status);
-      const tone = isOngoing ? statusTone("running") : isFailed ? statusTone("blocked") : statusTone(r.outcome === "completed" || r.status === "completed" || r.status === "done" ? "done" : "review");
+      const tone = runTone(r.outcome || r.status, isOngoing);
       bars.push({
         t0: s,
         t1,
@@ -1677,7 +1914,6 @@ var ROW_H = 28;
 var BAR_H = 14;
 var MIN_BAR_SEC = 2 * 3600;
 var ZOOM_MIN = 0.2;
-var ZOOM_MAX = 1.8;
 var ZOOM_STEP = 0.05;
 function humanReparentError(error, i18n) {
   const message = String(error && error.message || error || "");
@@ -1715,7 +1951,59 @@ function readStoredBoard(storage2) {
   if (scoped) return scoped;
   return storage2.get(BOARD_KEY, "") || "";
 }
-function Ruler({ min, max, pxPerSec }) {
+function HourLines({ min, max, pxPerSec }) {
+  const plan = hourTickPlan(pxPerSec * 3600);
+  if (!plan) return null;
+  const lines = [];
+  const first = Math.ceil(min / 3600) * 3600;
+  for (let t = first; t <= max; t += 3600) {
+    const hour = new Date(t * 1e3).getHours();
+    const major = hour % plan.step === 0;
+    lines.push(jsxs6("div", {
+      className: "absolute top-0 bottom-0 border-l",
+      style: {
+        left: `${Math.round((t - min) * pxPerSec)}px`,
+        borderColor: major ? "var(--ui-stroke-tertiary)" : "var(--ui-stroke-quaternary)"
+      },
+      children: major ? jsx6("span", {
+        className: "absolute top-0.5 left-0.5 text-[9px] tabular-nums text-(--ui-text-tertiary)",
+        children: `${String(hour).padStart(2, "0")}:00`
+      }) : null
+    }, "h" + t));
+  }
+  return jsx6("div", { className: "absolute inset-0 pointer-events-none z-0", children: lines });
+}
+function NowLine({ now, min, max, pxPerSec }) {
+  const i18n = useGanttI18n();
+  const left = nowOffset(now, min, max, pxPerSec);
+  if (left == null) return null;
+  const label = new Date(Math.round(now) * 1e3).toLocaleTimeString(void 0, { hour: "2-digit", minute: "2-digit" });
+  return jsxs6("div", {
+    className: "absolute top-0 bottom-0 z-10 pointer-events-none",
+    style: { left: `${left}px` },
+    children: [
+      jsx6("div", {
+        style: {
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          width: "1px",
+          backgroundColor: "var(--ui-accent, #d946ef)"
+        }
+      }),
+      jsx6("span", {
+        title: `${i18n.nowMarker} — ${label}`,
+        className: "absolute top-0.5 left-1 whitespace-nowrap rounded px-1 text-[9px] font-semibold tabular-nums",
+        style: {
+          backgroundColor: "var(--ui-bg-chrome)",
+          color: "var(--ui-accent, #d946ef)"
+        },
+        children: label
+      })
+    ]
+  });
+}
+function Ruler({ min, max, pxPerSec, onReset }) {
   const unit = tickUnit(max - min);
   const tickValues = ticks(min, max, unit);
   const dayWidth = pxPerSec * DAY;
@@ -1723,6 +2011,7 @@ function Ruler({ min, max, pxPerSec }) {
   return jsxs6("div", {
     className: "relative border-b border-(--ui-stroke-secondary) select-none text-[10px]",
     style: { height: showWeekday ? "32px" : "24px" },
+    onDoubleClick: onReset ? () => onReset() : void 0,
     children: tickValues.map((t) => {
       const left = Math.round((t - min) * pxPerSec);
       const d = new Date(t * 1e3);
@@ -2270,8 +2559,8 @@ var STATUS_META = {
   scheduled: { tone: "#a78bfa", label: "Scheduled" },
   ready: { tone: "#60a5fa", label: "Ready" },
   running: { tone: "#34d399", label: "Running" },
-  blocked: { tone: "#f87171", label: "Blocked" },
-  review: { tone: "#fbbf24", label: "Review" },
+  blocked: { tone: statusTone("blocked"), label: "Blocked" },
+  review: { tone: statusTone("review"), label: "Review" },
   done: { tone: "var(--ui-text-tertiary)", label: "Done" },
   archived: { tone: "var(--ui-text-quaternary)", label: "Archived" }
 };
@@ -3615,6 +3904,37 @@ function KanbanGanttPage() {
   const basePerSec = baseDayWidth / DAY;
   const pxPerSec = basePerSec * zoom;
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec));
+  const zoomMax = maxZoom(basePerSec);
+  const zoomAnchor = useRef2(null);
+  const handleWheel = (event) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    if (event.shiftKey) {
+      el.scrollLeft += event.deltaY;
+      event.preventDefault();
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || !event.deltaY) return;
+    const rect = el.getBoundingClientRect();
+    const cursorPx = event.clientX - rect.left - labelW;
+    const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec;
+    const next = clampZoom(zoom * (event.deltaY < 0 ? 1.25 : 0.8), basePerSec);
+    if (next === zoom) return;
+    event.preventDefault();
+    zoomAnchor.current = { at, cursorPx };
+    handleZoomChange(next);
+  };
+  const resetView = () => {
+    handleZoomChange(1);
+    if (scrollerRef.current) scrollerRef.current.scrollLeft = 0;
+  };
+  useEffect3(() => {
+    const el = scrollerRef.current;
+    const anchor = zoomAnchor.current;
+    if (!el || !anchor) return;
+    zoomAnchor.current = null;
+    el.scrollLeft = Math.max(0, (anchor.at - domain.min) * pxPerSec - anchor.cursorPx);
+  }, [zoom, pxPerSec, domain.min]);
   const grid = rows.map((row, idx) => jsx6(TaskRow, {
     ...row,
     now,
@@ -3735,11 +4055,12 @@ function KanbanGanttPage() {
                     jsx6("input", {
                       type: "range",
                       min: String(ZOOM_MIN),
-                      max: String(ZOOM_MAX),
+                      max: String(zoomMax),
                       step: String(ZOOM_STEP),
                       value: String(zoom),
                       onInput: (event) => handleZoomChange(Number(event.target.value)),
                       className: "w-24",
+                      title: i18n.zoomWheelHint,
                       "aria-label": i18n.zoomTimeline
                     }),
                     jsx6("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${Math.round(zoom * 100)}%` })
@@ -3798,6 +4119,7 @@ function KanbanGanttPage() {
               jsxs6("div", {
                 ref: scrollerRef,
                 className: "overflow-auto flex-1 min-h-0 relative",
+                onWheel: handleWheel,
                 children: [
                   jsxs6("div", {
                     className: cn3("grid sticky top-0 z-20 bg-(--ui-bg-chrome)", listMode ? "w-full" : "w-max"),
@@ -3868,7 +4190,7 @@ function KanbanGanttPage() {
                         className: cn3("flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", i === 2 && "justify-end"),
                         style: { height: "24px" },
                         children: h
-                      })) : [jsx6(Ruler, { key: "ruler", min: domain.min, max: domain.max, pxPerSec })]
+                      })) : [jsx6(Ruler, { key: "ruler", min: domain.min, max: domain.max, pxPerSec, onReset: resetView })]
                     ]
                   }),
                   jsxs6("div", {
@@ -3877,7 +4199,16 @@ function KanbanGanttPage() {
                       listMode ? null : jsx6("div", {
                         className: "absolute top-0 bottom-0 pointer-events-none z-0",
                         style: { left: `${labelW}px`, width: `${timelineW}px` },
-                        children: jsx6(WeekendBands, { min: domain.min, max: domain.max, pxPerSec })
+                        children: [
+                          jsx6(WeekendBands, { min: domain.min, max: domain.max, pxPerSec }),
+                          jsx6(HourLines, { min: domain.min, max: domain.max, pxPerSec })
+                        ]
+                      }),
+                      listMode ? null : jsx6(NowLine, {
+                        now,
+                        min: domain.min,
+                        max: domain.max,
+                        pxPerSec
                       }),
                       grid
                     ]

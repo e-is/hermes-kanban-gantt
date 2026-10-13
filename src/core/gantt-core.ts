@@ -5,20 +5,71 @@
 
 export const DAY = 86_400;
 export const MIN_BAR = 2 * 3600;
-// Official Kanban plugin status tones (COLUMN_META, types.ts) — unified style
+// Status tones — DELIBERATELY no longer the kanban column tones. On an agent
+// board the question the reader asks is "what needs me?", so the colours are
+// disambiguated: amber means BLOCKED (waiting on a human), red is reserved for a
+// run that FAILED, green means live right now, blue is ordinary progress. That
+// is why `review` moved to pink — amber cannot mean "blocked" and "in review" at
+// the same time.
 const STATUS_TONE = {
   triage:   'var(--ui-text-tertiary)',
   todo:     'var(--ui-text-secondary)',
   scheduled:'#a78bfa',
   ready:    '#60a5fa',
   running:  '#34d399',
-  blocked:  '#f87171',
-  review:   '#fbbf24',
+  blocked:  '#e0a13a',
+  review:   '#f472b6',
   done:     'var(--ui-text-tertiary)',
   archived: 'var(--ui-text-quaternary)'
 };
 export function statusTone(status) {
   return STATUS_TONE[status] || 'var(--ui-text-secondary)';
+}
+/** Run outcomes that mean the run itself broke. `timed_out` and `rate_limited`
+ *  are ordinary events on a busy gateway, so they are NOT failures. */
+export const HARD_FAILURES = ['crashed', 'failed', 'spawn_failed', 'gave_up'];
+export const FAIL_TONE = '#ef5350';
+export const RUN_TONE = '#5b8def';
+/**
+ * The tone of ONE run, from that run's own outcome.
+ *
+ * The task's status cannot express this: a task that went back to `running` (or
+ * to `blocked`) still owns the run that crashed, and the bar has to keep saying
+ * so. Only a hard failure is red; a run that ended blocked is amber; a completed
+ * one is neutral; anything else is the ordinary blue.
+ */
+export function runTone(outcome, ongoing) {
+  if (ongoing) return statusTone('running');
+  const o = String(outcome || '').toLowerCase();
+  if (HARD_FAILURES.includes(o)) return FAIL_TONE;
+  if (o === 'blocked') return statusTone('blocked');
+  if (o === 'completed' || o === 'done') return statusTone('done');
+  return RUN_TONE;
+}
+/** Hour ticks appear only once an hour is wide enough to read — that is the
+ *  whole point of the wheel zoom. Below 24 px/h the day ruler stays; above it
+ *  `step` is the smallest of 1/2/3/6/12 h that keeps labels at least 56 px
+ *  apart, so the ruler never turns into a smear. */
+export function hourTickPlan(pxPerHour, minLabelPx = 56) {
+  if (!(pxPerHour >= 24)) return null;
+  const step = [1, 2, 3, 6, 12].find(s => s * pxPerHour >= minLabelPx) || 12;
+  return { step };
+}
+/** Largest zoom that still respects the detail ceiling (240 px/h ≈ 15 min of
+ *  detail per pixel budget). Pure, so the clamp can be asserted, not trusted. */
+export function maxZoom(basePerSec, maxPxPerHour = 240) {
+  const perHour = basePerSec * 3600;
+  if (!(perHour > 0)) return 1;
+  return Math.max(1, maxPxPerHour / perHour);
+}
+export function clampZoom(zoom, basePerSec, maxPxPerHour = 240) {
+  if (!Number.isFinite(zoom)) return 1;
+  return Math.min(maxZoom(basePerSec, maxPxPerHour), Math.max(0.2, zoom));
+}
+/** Where the "now" line sits in px, or null when now is outside the window. */
+export function nowOffset(now, min, max, pxPerSec) {
+  if (!(now >= min && now <= max)) return null;
+  return Math.round((now - min) * pxPerSec);
 }
 // Representative Codicon per status, tinted with the status tone — this is what
 // replaces the tiny colour dot next to a task name (and is reused by every list
@@ -143,7 +194,7 @@ export function taskBars(task, now, minBarSec) {
         t0: s,
         t1: Math.max(s + min, e),
         kind: 'done',
-        tone: statusTone('blocked'),
+        tone: runTone(r.outcome || r.status),
         runId: r.id,
         profile: r.profile,
         outcome: r.outcome || r.status
@@ -166,12 +217,9 @@ export function taskBars(task, now, minBarSec) {
       const e = r.ended_at;
       const isOngoing = (e == null || r.status === 'running') && (task.status === 'running' || task.status === 'review');
       const t1 = isOngoing ? Math.max(s + min, now) : (e != null ? Math.max(s + min, e) : s + min);
-      const isFailed = ['crashed', 'failed', 'timed_out', 'gave_up', 'blocked'].includes(r.outcome || r.status);
-      const tone = isOngoing
-        ? statusTone('running')
-        : isFailed
-          ? statusTone('blocked')
-          : statusTone(r.outcome === 'completed' || r.status === 'completed' || r.status === 'done' ? 'done' : 'review');
+      // The bar's colour comes from THIS run's outcome, never from the task's
+      // current status: a task back in the queue still owns the run that failed.
+      const tone = runTone(r.outcome || r.status, isOngoing);
       bars.push({
         t0: s,
         t1,

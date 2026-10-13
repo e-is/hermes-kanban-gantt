@@ -132,10 +132,15 @@ test('blocked with failed runs: solid run bars then dashed wait to now', () => {
     ]
   }
   const bars = taskBars(t, NOW)
+  const { FAIL_TONE, RUN_TONE } = core
   assert.equal(bars.length, 3)
   assert.equal(bars[0].kind, 'done')
-  assert.equal(bars[0].tone, statusTone('blocked'))
+  // The run that FAILED keeps the failure tone even though the task is blocked:
+  // the bar reports what happened in that window, not the task's current status.
+  assert.equal(bars[0].tone, FAIL_TONE)
   assert.equal(bars[1].kind, 'done')
+  // ...and one that merely timed out is ordinary progress, not a failure.
+  assert.equal(bars[1].tone, RUN_TONE)
   // run ended after 1h but the min-bar floor (2h) extends it
   assert.equal(bars[1].t1, NOW - 2 * DAY + 2 * H)
   // waiting bar starts at the LAST run bar end and extends to now
@@ -635,4 +640,100 @@ test('relativeAge speaks the locale it is given', () => {
   assert.equal(relativeAge(NOW - 2 * DAY, NOW, { d: ' j' }), '2 j')
   // a partial map keeps the English default for whatever it omits
   assert.equal(relativeAge(NOW - 5 * 60, NOW, { h: ' h' }), '5m')
+})
+
+/* ── the palette says what needs a human, and nothing else ──────────────────── */
+
+test('a run is red only when it really failed', () => {
+  const { runTone, FAIL_TONE, HARD_FAILURES } = core
+  for (const outcome of HARD_FAILURES) {
+    assert.equal(runTone(outcome), FAIL_TONE, `${outcome} must be a hard failure`)
+  }
+  // timed_out and rate_limited are ordinary events on a busy gateway: they end a
+  // run, they are not a defect, and colouring them red is what made a healthy
+  // board look broken.
+  for (const outcome of ['timed_out', 'rate_limited', 'completed', 'done', '']) {
+    assert.notEqual(runTone(outcome), FAIL_TONE, `${outcome} must not read as a failure`)
+  }
+  assert.equal(runTone('unknown-outcome'), core.RUN_TONE)
+})
+
+test('a run still in flight is green, whichever way the task went afterwards', () => {
+  const { runTone, statusTone } = core
+  assert.equal(runTone('crashed', true), statusTone('running'))
+  assert.equal(runTone(null, true), statusTone('running'))
+})
+
+test('blocked and failure do not share a colour, and neither does review', () => {
+  const { statusTone, FAIL_TONE } = core
+  // Amber means "waiting on a human", red means "something broke": on an agent
+  // board these are the two questions a reader asks, so they cannot be one colour.
+  assert.notEqual(statusTone('blocked'), FAIL_TONE)
+  assert.notEqual(statusTone('blocked'), statusTone('review'))
+  assert.notEqual(statusTone('review'), statusTone('running'))
+  assert.equal(statusTone('running'), '#34d399')
+})
+
+test('one bar per run, each keeping its own outcome', () => {
+  const { taskBars, FAIL_TONE, statusTone, RUN_TONE } = core
+  const bars = taskBars({
+    id: 't_1', status: 'running', created_at: NOW - 4 * H,
+    runs: [
+      { id: 'r1', started_at: NOW - 3 * H, ended_at: NOW - 2 * H, outcome: 'crashed' },
+      { id: 'r2', started_at: NOW - H, ended_at: null, status: 'running' }
+    ]
+  }, NOW, 60)
+  assert.equal(bars.length, 2)
+  // The task is back to `running`, but the run that crashed must still say so.
+  assert.equal(bars[0].tone, FAIL_TONE)
+  assert.equal(bars[0].outcome, 'crashed')
+  assert.equal(bars[1].tone, statusTone('running'))
+  assert.equal(bars[1].isOngoing, true)
+  // and a run that merely timed out keeps the ordinary tone
+  const calm = taskBars({
+    id: 't_2', status: 'running', created_at: NOW - 4 * H,
+    runs: [
+      { id: 'r1', started_at: NOW - 3 * H, ended_at: NOW - 2 * H, outcome: 'timed_out' },
+      { id: 'r2', started_at: NOW - H, ended_at: null, status: 'running' }
+    ]
+  }, NOW, 60)
+  assert.equal(calm[0].tone, RUN_TONE)
+})
+
+/* ── the zoom ladder and the "now" line ─────────────────────────────────────── */
+
+test('hour ticks appear only once an hour is readable, spaced so labels never touch', () => {
+  const { hourTickPlan } = core
+  assert.equal(hourTickPlan(23), null, 'the day ruler stays below 24 px/h')
+  assert.equal(hourTickPlan(24).step, 3, '24 px/h: labels every 3 h (72 px apart)')
+  assert.equal(hourTickPlan(30).step, 2)
+  assert.equal(hourTickPlan(60).step, 1, 'every hour is labelled once it fits')
+  assert.equal(hourTickPlan(240).step, 1)
+  // the invariant behind those numbers: labels stay at least 56 px apart
+  for (const pxPerHour of [24, 30, 40, 60, 120, 240]) {
+    const plan = hourTickPlan(pxPerHour)
+    assert.ok(plan.step * pxPerHour >= 56, `${pxPerHour} px/h: ${plan.step} h apart is too tight`)
+  }
+})
+
+test('the zoom is clamped to the detail ceiling, and cannot go negative', () => {
+  const { maxZoom, clampZoom } = core
+  const basePerSec = (1000 / 7) / DAY          // 1 week filling a 1000 px pane
+  const hi = maxZoom(basePerSec)
+  assert.ok(Math.abs(hi - 240 / (basePerSec * 3600)) < 1e-9)
+  assert.equal(clampZoom(1e6, basePerSec), hi)
+  assert.equal(clampZoom(0, basePerSec), 0.2)
+  assert.equal(clampZoom(-3, basePerSec), 0.2)
+  assert.equal(clampZoom(2, basePerSec), 2)
+  assert.equal(clampZoom(NaN, basePerSec), 1)
+  // a pane so narrow that an hour is already wider than the ceiling keeps zoom 1
+  assert.equal(maxZoom(1), 1)
+})
+
+test('the now line sits where now is, and is absent when now is out of range', () => {
+  const { nowOffset } = core
+  assert.equal(nowOffset(NOW, NOW - 100, NOW + 100, 2), 200)
+  assert.equal(nowOffset(NOW - 100, NOW - 100, NOW + 100, 2), 0)
+  assert.equal(nowOffset(NOW, NOW + 10, NOW + 100, 2), null, 'before the window: no line')
+  assert.equal(nowOffset(NOW, NOW - 100, NOW - 10, 2), null, 'after the window: no line')
 })

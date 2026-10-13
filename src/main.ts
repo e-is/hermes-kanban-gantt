@@ -92,7 +92,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, maxZoom, clampZoom, runTone } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -163,7 +163,71 @@ const applyBase = value => {
 
 /* ──────────────────────────────── rendering bits ──────────────────────────── */
 
-function Ruler({ min, max, pxPerSec }) {
+/**
+ * Hour gridlines, drawn only once the wheel zoom has made an hour wide enough to
+ * read (`hourTickPlan` decides, in the pure core). Every hour gets a line; a
+ * labelled one every `step` hours, so the labels never sit closer than ~56 px.
+ */
+function HourLines({ min, max, pxPerSec }) {
+  const plan = hourTickPlan(pxPerSec * 3600)
+  if (!plan) return null
+  const lines = []
+  const first = Math.ceil(min / 3600) * 3600
+  for (let t = first; t <= max; t += 3600) {
+    const hour = new Date(t * 1000).getHours()
+    const major = hour % plan.step === 0
+    lines.push(jsxs('div', {
+      className: 'absolute top-0 bottom-0 border-l',
+      style: {
+        left: `${Math.round((t - min) * pxPerSec)}px`,
+        borderColor: major ? 'var(--ui-stroke-tertiary)' : 'var(--ui-stroke-quaternary)'
+      },
+      children: major
+        ? jsx('span', {
+            className: 'absolute top-0.5 left-0.5 text-[9px] tabular-nums text-(--ui-text-tertiary)',
+            children: `${String(hour).padStart(2, '0')}:00`
+          })
+        : null
+    }, 'h' + t))
+  }
+  return jsx('div', { className: 'absolute inset-0 pointer-events-none z-0', children: lines })
+}
+
+/**
+ * The "now" line — the one landmark this timeline was missing: the bars were all
+ * clipped at `now`, but nothing drew where that was. Hidden (not clamped) when
+ * now sits outside the domain, so it never lies about the extent.
+ */
+function NowLine({ now, min, max, pxPerSec }) {
+  const i18n = useGanttI18n()
+  const left = nowOffset(now, min, max, pxPerSec)
+  if (left == null) return null
+  const label = new Date(Math.round(now) * 1000)
+    .toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  return jsxs('div', {
+    className: 'absolute top-0 bottom-0 z-10 pointer-events-none',
+    style: { left: `${left}px` },
+    children: [
+      jsx('div', {
+        style: {
+          position: 'absolute', top: 0, bottom: 0, width: '1px',
+          backgroundColor: 'var(--ui-accent, #d946ef)'
+        }
+      }),
+      jsx('span', {
+        title: `${i18n.nowMarker} — ${label}`,
+        className: 'absolute top-0.5 left-1 whitespace-nowrap rounded px-1 text-[9px] font-semibold tabular-nums',
+        style: {
+          backgroundColor: 'var(--ui-bg-chrome)',
+          color: 'var(--ui-accent, #d946ef)'
+        },
+        children: label
+      })
+    ]
+  })
+}
+
+function Ruler({ min, max, pxPerSec, onReset }) {
   const unit = tickUnit(max - min)
   const tickValues = ticks(min, max, unit)
   const dayWidth = pxPerSec * DAY
@@ -172,6 +236,7 @@ function Ruler({ min, max, pxPerSec }) {
   return jsxs('div', {
     className: 'relative border-b border-(--ui-stroke-secondary) select-none text-[10px]',
     style: { height: showWeekday ? '32px' : '24px' },
+    onDoubleClick: onReset ? () => onReset() : undefined,
     children: tickValues.map(t => {
       const left = Math.round((t - min) * pxPerSec)
       const d = new Date(t * 1000)
@@ -802,8 +867,8 @@ const STATUS_META = {
   scheduled: { tone: '#a78bfa', label: 'Scheduled' },
   ready:     { tone: '#60a5fa', label: 'Ready' },
   running:   { tone: '#34d399', label: 'Running' },
-  blocked:   { tone: '#f87171', label: 'Blocked' },
-  review:    { tone: '#fbbf24', label: 'Review' },
+  blocked:   { tone: statusTone('blocked'), label: 'Blocked' },
+  review:    { tone: statusTone('review'), label: 'Review' },
   done:      { tone: 'var(--ui-text-tertiary)', label: 'Done' },
   archived:  { tone: 'var(--ui-text-quaternary)', label: 'Archived' }
 }
@@ -2360,6 +2425,47 @@ export function KanbanGanttPage() {
   const basePerSec = baseDayWidth / DAY
   const pxPerSec = basePerSec * zoom
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec))
+  // The wheel zoom's ceiling: 240 px/h of detail, expressed as a zoom factor for
+  // THIS window width (a wider pane reaches the ceiling sooner).
+  const zoomMax = maxZoom(basePerSec)
+
+  // Wheel over the timeline = zoom anchored at the cursor; Shift+wheel = pan.
+  // The anchor is remembered and re-applied after the re-render, so the instant
+  // under the pointer stays under the pointer — otherwise zooming feels like the
+  // timeline is running away.
+  const zoomAnchor = useRef(null)
+  const handleWheel = event => {
+    const el = scrollerRef.current
+    if (!el) return
+    if (event.shiftKey) {
+      el.scrollLeft += event.deltaY
+      event.preventDefault()
+      return
+    }
+    // Leave the app's own zoom alone (Ctrl/Cmd+wheel).
+    if (event.ctrlKey || event.metaKey || !event.deltaY) return
+    const rect = el.getBoundingClientRect()
+    const cursorPx = event.clientX - rect.left - labelW
+    const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec
+    const next = clampZoom(zoom * (event.deltaY < 0 ? 1.25 : 0.8), basePerSec)
+    if (next === zoom) return
+    event.preventDefault()
+    zoomAnchor.current = { at, cursorPx }
+    handleZoomChange(next)
+  }
+  const resetView = () => {
+    handleZoomChange(1)
+    if (scrollerRef.current) scrollerRef.current.scrollLeft = 0
+  }
+  // Re-apply the wheel anchor once the new scale is on screen: the instant that
+  // was under the pointer must stay under it.
+  useEffect(() => {
+    const el = scrollerRef.current
+    const anchor = zoomAnchor.current
+    if (!el || !anchor) return
+    zoomAnchor.current = null
+    el.scrollLeft = Math.max(0, (anchor.at - domain.min) * pxPerSec - anchor.cursorPx)
+  }, [zoom, pxPerSec, domain.min])
 
   const grid = rows.map((row, idx) => jsx(TaskRow, {
     ...row,
@@ -2494,11 +2600,12 @@ export function KanbanGanttPage() {
                 jsx('input', {
                   type: 'range',
                   min: String(ZOOM_MIN),
-                  max: String(ZOOM_MAX),
+                  max: String(zoomMax),
                   step: String(ZOOM_STEP),
                   value: String(zoom),
                   onInput: event => handleZoomChange(Number(event.target.value)),
                   className: 'w-24',
+                  title: i18n.zoomWheelHint,
                   'aria-label': i18n.zoomTimeline
                 }),
                 jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${Math.round(zoom * 100)}%` })
@@ -2562,6 +2669,7 @@ export function KanbanGanttPage() {
               jsxs('div', {
                 ref: scrollerRef,
                 className: 'overflow-auto flex-1 min-h-0 relative',
+                onWheel: handleWheel,
                 children: [
                   jsxs('div', {
                     className: cn('grid sticky top-0 z-20 bg-(--ui-bg-chrome)', listMode ? 'w-full' : 'w-max'),
@@ -2631,7 +2739,7 @@ export function KanbanGanttPage() {
                             style: { height: '24px' },
                             children: h
                           }))
-                        : [jsx(Ruler, { key: 'ruler', min: domain.min, max: domain.max, pxPerSec })])
+                        : [jsx(Ruler, { key: 'ruler', min: domain.min, max: domain.max, pxPerSec, onReset: resetView })])
                     ]
                   }),
                   jsxs('div', {
@@ -2640,7 +2748,13 @@ export function KanbanGanttPage() {
                       listMode ? null : jsx('div', {
                         className: 'absolute top-0 bottom-0 pointer-events-none z-0',
                         style: { left: `${labelW}px`, width: `${timelineW}px` },
-                        children: jsx(WeekendBands, { min: domain.min, max: domain.max, pxPerSec })
+                        children: [
+                          jsx(WeekendBands, { min: domain.min, max: domain.max, pxPerSec }),
+                          jsx(HourLines, { min: domain.min, max: domain.max, pxPerSec })
+                        ]
+                      }),
+                      listMode ? null : jsx(NowLine, {
+                        now, min: domain.min, max: domain.max, pxPerSec
                       }),
                       grid
                     ]

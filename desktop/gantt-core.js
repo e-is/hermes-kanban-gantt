@@ -7,13 +7,42 @@ var STATUS_TONE = {
   scheduled: "#a78bfa",
   ready: "#60a5fa",
   running: "#34d399",
-  blocked: "#f87171",
-  review: "#fbbf24",
+  blocked: "#e0a13a",
+  review: "#f472b6",
   done: "var(--ui-text-tertiary)",
   archived: "var(--ui-text-quaternary)"
 };
 function statusTone(status) {
   return STATUS_TONE[status] || "var(--ui-text-secondary)";
+}
+var HARD_FAILURES = ["crashed", "failed", "spawn_failed", "gave_up"];
+var FAIL_TONE = "#ef5350";
+var RUN_TONE = "#5b8def";
+function runTone(outcome, ongoing) {
+  if (ongoing) return statusTone("running");
+  const o = String(outcome || "").toLowerCase();
+  if (HARD_FAILURES.includes(o)) return FAIL_TONE;
+  if (o === "blocked") return statusTone("blocked");
+  if (o === "completed" || o === "done") return statusTone("done");
+  return RUN_TONE;
+}
+function hourTickPlan(pxPerHour, minLabelPx = 56) {
+  if (!(pxPerHour >= 24)) return null;
+  const step = [1, 2, 3, 6, 12].find((s) => s * pxPerHour >= minLabelPx) || 12;
+  return { step };
+}
+function maxZoom(basePerSec, maxPxPerHour = 240) {
+  const perHour = basePerSec * 3600;
+  if (!(perHour > 0)) return 1;
+  return Math.max(1, maxPxPerHour / perHour);
+}
+function clampZoom(zoom, basePerSec, maxPxPerHour = 240) {
+  if (!Number.isFinite(zoom)) return 1;
+  return Math.min(maxZoom(basePerSec, maxPxPerHour), Math.max(0.2, zoom));
+}
+function nowOffset(now, min, max, pxPerSec) {
+  if (!(now >= min && now <= max)) return null;
+  return Math.round((now - min) * pxPerSec);
 }
 var STATUS_ICON = {
   triage: "question",
@@ -106,7 +135,7 @@ function taskBars(task, now, minBarSec) {
         t0: s,
         t1: Math.max(s + min, e),
         kind: "done",
-        tone: statusTone("blocked"),
+        tone: runTone(r.outcome || r.status),
         runId: r.id,
         profile: r.profile,
         outcome: r.outcome || r.status
@@ -128,8 +157,7 @@ function taskBars(task, now, minBarSec) {
       const e = r.ended_at;
       const isOngoing = (e == null || r.status === "running") && (task.status === "running" || task.status === "review");
       const t1 = isOngoing ? Math.max(s + min, now) : e != null ? Math.max(s + min, e) : s + min;
-      const isFailed = ["crashed", "failed", "timed_out", "gave_up", "blocked"].includes(r.outcome || r.status);
-      const tone = isOngoing ? statusTone("running") : isFailed ? statusTone("blocked") : statusTone(r.outcome === "completed" || r.status === "completed" || r.status === "done" ? "done" : "review");
+      const tone = runTone(r.outcome || r.status, isOngoing);
       bars.push({
         t0: s,
         t1,
@@ -368,7 +396,10 @@ function ticks(min, max, unit) {
 }
 export {
   DAY,
+  FAIL_TONE,
+  HARD_FAILURES,
   MIN_BAR,
+  RUN_TONE,
   TERMINAL_STATUSES,
   TREE_AXIS,
   TREE_INSET,
@@ -376,17 +407,22 @@ export {
   TREE_SQUARE,
   barRange,
   buildRows,
+  clampZoom,
   computeDomain,
   descendantsOf,
   dropCandidates,
+  hourTickPlan,
   isDescendant,
   isMissingBoardError,
   isTerminal,
   lastActivity,
   matchesSearch,
+  maxZoom,
+  nowOffset,
   relationsOf,
   relativeAge,
   resolveBoardSlug,
+  runTone,
   shortId,
   statusIcon,
   statusTone,
