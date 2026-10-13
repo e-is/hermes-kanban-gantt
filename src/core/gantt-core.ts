@@ -68,8 +68,40 @@ export function clampZoom(zoom, basePerSec, maxPxPerHour = 240) {
 }
 /** Where the "now" line sits in px, or null when now is outside the window. */
 export function nowOffset(now, min, max, pxPerSec) {
-  if (!(now >= min && now <= max)) return null;
-  return Math.round((now - min) * pxPerSec);
+  if (!(now >= min && now <= max)) return null
+  return Math.round((now - min) * pxPerSec)
+}
+/**
+ * How far ONE wheel event should scale the timeline.
+ *
+ * A mouse wheel reports a notch at a time (~±100 px, or ±3 with the legacy
+ * `deltaMode = LINES`), while a trackpad reports a stream of tiny pixel deltas, and
+ * macOS reports a pinch as a ctrl+wheel burst. A fixed step per event therefore
+ * crawls under a mouse and runs away under a trackpad — the factor has to follow the
+ * delta, so N small events compound to the same zoom as one event of the same total.
+ *
+ * `deltaMode` is normalized to pixels (0 = pixel, 1 = line, 2 = page), the scale is
+ * exponential so it is symmetric, and one event is capped at ±40 % so no single
+ * gesture can jump the view.
+ */
+export function wheelZoomFactor(deltaY, deltaMode = 0) {
+  if (!Number.isFinite(deltaY) || deltaY === 0) return 1
+  const unit = deltaMode === 1 ? 16 : deltaMode === 2 ? 100 : 1
+  const factor = Math.exp(-(deltaY * unit) / 400)
+  return Math.min(1.4, Math.max(1 / 1.4, factor))
+}
+/**
+ * Where the now line sits, measured from the SCROLL CONTENT's left edge — which is
+ * what `position: absolute; left` means here.
+ *
+ * The timeline itself starts after the sticky task-name column, so a line drawn at
+ * `nowOffset` alone lands one column-width too far left: on a week-long window that
+ * is days early, not pixels. `originX` is that column's width, and every other
+ * timeline overlay already includes it.
+ */
+export function nowLineX(now, min, max, pxPerSec, originX = 0) {
+  const offset = nowOffset(now, min, max, pxPerSec)
+  return offset == null ? null : originX + offset
 }
 // Representative Codicon per status, tinted with the status tone — this is what
 // replaces the tiny colour dot next to a task name (and is reused by every list

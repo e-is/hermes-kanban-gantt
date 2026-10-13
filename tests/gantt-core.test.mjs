@@ -702,6 +702,26 @@ test('one bar per run, each keeping its own outcome', () => {
 
 /* ── the zoom ladder and the "now" line ─────────────────────────────────────── */
 
+test('one wheel event scales by its delta, so a trackpad and a mouse agree', () => {
+  const { wheelZoomFactor } = core
+  // A mouse notch is a real step...
+  const notch = wheelZoomFactor(-100)
+  assert.ok(notch > 1.25 && notch < 1.3, `a notch should be ~1.28, got ${notch}`)
+  assert.ok(wheelZoomFactor(100) < 1, 'scrolling the other way zooms out')
+  // ...while one trackpad sample is barely anything on its own...
+  const sample = wheelZoomFactor(-4)
+  assert.ok(sample > 1 && sample < 1.02, `one sample must not jump the view, got ${sample}`)
+  // ...and 25 of them compound to the same place as one notch of the same total.
+  // This is the whole bug: a fixed step per EVENT ran away on a trackpad.
+  assert.ok(Math.abs(sample ** 25 - notch) < 1e-9, 'same total delta, same zoom')
+  // legacy deltaMode: 3 LINES is one notch, 1 PAGE is a big step but capped
+  assert.ok(Math.abs(wheelZoomFactor(-3, 1) - wheelZoomFactor(-48)) < 1e-9)
+  assert.equal(wheelZoomFactor(-1000), 1.4)
+  assert.equal(wheelZoomFactor(1000), 1 / 1.4)
+  assert.equal(wheelZoomFactor(0), 1)
+  assert.equal(wheelZoomFactor(NaN), 1)
+})
+
 test('hour ticks appear only once an hour is readable, spaced so labels never touch', () => {
   const { hourTickPlan } = core
   assert.equal(hourTickPlan(23), null, 'the day ruler stays below 24 px/h')
@@ -736,6 +756,28 @@ test('the now line sits where now is, and is absent when now is out of range', (
   assert.equal(nowOffset(NOW - 100, NOW - 100, NOW + 100, 2), 0)
   assert.equal(nowOffset(NOW, NOW + 10, NOW + 100, 2), null, 'before the window: no line')
   assert.equal(nowOffset(NOW, NOW - 100, NOW - 10, 2), null, 'after the window: no line')
+})
+
+test('the now line is measured from the timeline origin, not the container edge', () => {
+  const { nowLineX, nowOffset } = core
+  const pxPerSec = (1000 / 7) / DAY          // one week across 1000 px
+  const min = NOW - 3 * DAY
+  const max = NOW + 4 * DAY
+  const labelW = 300                          // the sticky task-name column
+  // The regression: drawn from the container edge, the line sat one column-width to
+  // the left — on this window that is ~2 days, which is why it named the wrong day.
+  assert.notEqual(nowLineX(NOW, min, max, pxPerSec, labelW), nowOffset(NOW, min, max, pxPerSec))
+  assert.equal(nowLineX(NOW, min, max, pxPerSec, labelW),
+    labelW + nowOffset(NOW, min, max, pxPerSec))
+  // It must agree with where a bar for that same instant starts: the bars live in the
+  // grid's second column, so their x is the origin plus the offset.
+  assert.equal(nowLineX(NOW, min, max, pxPerSec, labelW),
+    labelW + Math.round((NOW - min) * pxPerSec))
+  // No origin = the old, wrong arithmetic — kept only so the default is explicit.
+  assert.equal(nowLineX(NOW, min, max, pxPerSec), nowOffset(NOW, min, max, pxPerSec))
+  // Still absent when now is outside the window, whatever the origin.
+  assert.equal(nowLineX(NOW, NOW + 1, max, pxPerSec, labelW), null)
+  assert.equal(nowLineX(NOW, min, NOW - 1, pxPerSec, labelW), null)
 })
 
 /* ── a title is the user's text ─────────────────────────────────────────────── */

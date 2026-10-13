@@ -44,6 +44,16 @@ function nowOffset(now, min, max, pxPerSec) {
   if (!(now >= min && now <= max)) return null;
   return Math.round((now - min) * pxPerSec);
 }
+function wheelZoomFactor(deltaY, deltaMode = 0) {
+  if (!Number.isFinite(deltaY) || deltaY === 0) return 1;
+  const unit = deltaMode === 1 ? 16 : deltaMode === 2 ? 100 : 1;
+  const factor = Math.exp(-(deltaY * unit) / 400);
+  return Math.min(1.4, Math.max(1 / 1.4, factor));
+}
+function nowLineX(now, min, max, pxPerSec, originX = 0) {
+  const offset = nowOffset(now, min, max, pxPerSec);
+  return offset == null ? null : originX + offset;
+}
 var STATUS_ICON = {
   triage: "question",
   todo: "circle-large-outline",
@@ -427,6 +437,7 @@ export {
   lastActivity,
   matchesSearch,
   maxZoom,
+  nowLineX,
   nowOffset,
   relationsOf,
   relativeAge,
@@ -440,5 +451,6 @@ export {
   tickUnit,
   ticks,
   treeMarks,
-  treeRows
+  treeRows,
+  wheelZoomFactor
 };

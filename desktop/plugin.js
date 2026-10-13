@@ -138,7 +138,7 @@ var GANTT_LOCALES = {
     closeWindow: "Close",
     filterCards: "Filter cards…",
     zoomTimeline: "Zoom timeline",
-    zoomWheelHint: "Wheel over the timeline: zoom · Shift+Wheel: pan · Double-click the ruler: reset",
+    zoomWheelHint: "Wheel or pinch over the timeline: zoom · Shift+Wheel: pan · Double-click the ruler: reset",
     nowMarker: "Now",
     untitled: "Untitled",
     viewOptions: "View options",
@@ -348,7 +348,7 @@ var GANTT_LOCALES = {
     closeWindow: "Fermer",
     filterCards: "Filtrer les tâches…",
     zoomTimeline: "Zoom timeline",
-    zoomWheelHint: "Molette sur la chronologie : zoom · Maj+molette : défilement · Double-clic sur la règle : réinitialiser",
+    zoomWheelHint: "Molette ou pincement sur la chronologie : zoom · Maj+molette : défilement · Double-clic sur la règle : réinitialiser",
     nowMarker: "Maintenant",
     untitled: "Sans titre",
     viewOptions: "Options d'affichage",
@@ -562,7 +562,7 @@ var GANTT_LOCALES = {
     closeWindow: "关闭",
     filterCards: "筛选任务…",
     zoomTimeline: "时间线缩放",
-    zoomWheelHint: "滚轮：缩放 · Shift+滚轮：平移 · 双击标尺：重置",
+    zoomWheelHint: "在时间线上滚动或捏合：缩放 · Shift+滚轮：平移 · 双击标尺：重置",
     nowMarker: "现在",
     nothingToDisplay: "暂无可显示内容",
     noTasksMatch: "没有任务符合搜索或筛选条件。",
@@ -1037,6 +1037,16 @@ function clampZoom(zoom, basePerSec, maxPxPerHour = 240) {
 function nowOffset(now, min, max, pxPerSec) {
   if (!(now >= min && now <= max)) return null;
   return Math.round((now - min) * pxPerSec);
+}
+function wheelZoomFactor(deltaY, deltaMode = 0) {
+  if (!Number.isFinite(deltaY) || deltaY === 0) return 1;
+  const unit = deltaMode === 1 ? 16 : deltaMode === 2 ? 100 : 1;
+  const factor = Math.exp(-(deltaY * unit) / 400);
+  return Math.min(1.4, Math.max(1 / 1.4, factor));
+}
+function nowLineX(now, min, max, pxPerSec, originX = 0) {
+  const offset = nowOffset(now, min, max, pxPerSec);
+  return offset == null ? null : originX + offset;
 }
 var STATUS_ICON = {
   triage: "question",
@@ -1995,9 +2005,9 @@ function HourLines({ min, max, pxPerSec }) {
   }
   return jsx6("div", { className: "absolute inset-0 pointer-events-none z-0", children: lines });
 }
-function NowLine({ now, min, max, pxPerSec }) {
+function NowLine({ now, min, max, pxPerSec, originX = 0 }) {
   const i18n = useGanttI18n();
-  const left = nowOffset(now, min, max, pxPerSec);
+  const left = nowLineX(now, min, max, pxPerSec, originX);
   if (left == null) return null;
   const label = new Date(Math.round(now) * 1e3).toLocaleTimeString(void 0, { hour: "2-digit", minute: "2-digit" });
   return jsxs6("div", {
@@ -3969,16 +3979,18 @@ function KanbanGanttPage() {
   const handleWheel = (event) => {
     const el = scrollerRef.current;
     if (!el) return;
+    const pan = event.deltaY !== 0 ? event.deltaY : event.deltaX;
+    if (!pan) return;
     if (event.shiftKey) {
-      el.scrollLeft += event.deltaY;
+      el.scrollLeft += pan;
       event.preventDefault();
       return;
     }
-    if (event.ctrlKey || event.metaKey || !event.deltaY) return;
+    const factor = wheelZoomFactor(event.deltaY, event.deltaMode);
     const rect = el.getBoundingClientRect();
     const cursorPx = event.clientX - rect.left - labelW;
     const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec;
-    const next = clampZoom(zoom * (event.deltaY < 0 ? 1.25 : 0.8), basePerSec);
+    const next = clampZoom(zoom * factor, basePerSec);
     if (next === zoom) return;
     event.preventDefault();
     zoomAnchor.current = { at, cursorPx };
@@ -4306,7 +4318,8 @@ function KanbanGanttPage() {
                         now,
                         min: domain.min,
                         max: domain.max,
-                        pxPerSec
+                        pxPerSec,
+                        originX: labelW
                       }),
                       grid
                     ]

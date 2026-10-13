@@ -92,7 +92,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, maxZoom, clampZoom, runTone, splitTitlePrefix } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -197,10 +197,13 @@ function HourLines({ min, max, pxPerSec }) {
  * The "now" line — the one landmark this timeline was missing: the bars were all
  * clipped at `now`, but nothing drew where that was. Hidden (not clamped) when
  * now sits outside the domain, so it never lies about the extent.
+ *
+ * `originX` is the task-name column's width: the timeline starts after it, and
+ * forgetting it is what drew the line days early.
  */
-function NowLine({ now, min, max, pxPerSec }) {
+function NowLine({ now, min, max, pxPerSec, originX = 0 }) {
   const i18n = useGanttI18n()
-  const left = nowOffset(now, min, max, pxPerSec)
+  const left = nowLineX(now, min, max, pxPerSec, originX)
   if (left == null) return null
   const label = new Date(Math.round(now) * 1000)
     .toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
@@ -2484,24 +2487,27 @@ export function KanbanGanttPage() {
   const zoomMax = maxZoom(basePerSec)
 
   // Wheel over the timeline = zoom anchored at the cursor; Shift+wheel = pan.
-  // The anchor is remembered and re-applied after the re-render, so the instant
-  // under the pointer stays under the pointer — otherwise zooming feels like the
-  // timeline is running away.
+  // The step follows the DELTA, not the event count: a mouse notch and a trackpad
+  // stream then feel the same (see `wheelZoomFactor`). A macOS pinch arrives as
+  // ctrl+wheel, so ctrl/meta is a zoom here too — over the timeline, that gesture is
+  // ours, and letting it through would zoom the whole app instead.
   const zoomAnchor = useRef(null)
   const handleWheel = event => {
     const el = scrollerRef.current
     if (!el) return
+    // A trackpad's horizontal swipe carries deltaX and no deltaY.
+    const pan = event.deltaY !== 0 ? event.deltaY : event.deltaX
+    if (!pan) return
     if (event.shiftKey) {
-      el.scrollLeft += event.deltaY
+      el.scrollLeft += pan
       event.preventDefault()
       return
     }
-    // Leave the app's own zoom alone (Ctrl/Cmd+wheel).
-    if (event.ctrlKey || event.metaKey || !event.deltaY) return
+    const factor = wheelZoomFactor(event.deltaY, event.deltaMode)
     const rect = el.getBoundingClientRect()
     const cursorPx = event.clientX - rect.left - labelW
     const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec
-    const next = clampZoom(zoom * (event.deltaY < 0 ? 1.25 : 0.8), basePerSec)
+    const next = clampZoom(zoom * factor, basePerSec)
     if (next === zoom) return
     event.preventDefault()
     zoomAnchor.current = { at, cursorPx }
@@ -2846,7 +2852,7 @@ export function KanbanGanttPage() {
                         ]
                       }),
                       listMode ? null : jsx(NowLine, {
-                        now, min: domain.min, max: domain.max, pxPerSec
+                        now, min: domain.min, max: domain.max, pxPerSec, originX: labelW
                       }),
                       grid
                     ]
