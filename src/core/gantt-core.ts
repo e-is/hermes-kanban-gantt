@@ -63,8 +63,38 @@ export function maxZoom(basePerSec, maxPxPerHour = 240) {
   return Math.max(1, maxPxPerHour / perHour);
 }
 export function clampZoom(zoom, basePerSec, maxPxPerHour = 240) {
-  if (!Number.isFinite(zoom)) return 1;
-  return Math.min(maxZoom(basePerSec, maxPxPerHour), Math.max(0.2, zoom));
+  if (!Number.isFinite(zoom)) return 1
+  return Math.min(maxZoom(basePerSec, maxPxPerHour), Math.max(0.2, zoom))
+}
+// ── the zoom the reader sees ─────────────────────────────────────────────────
+// The zoom is stated as a percentage from 1 to 100: 1 is the widest scale the timeline
+// offers, 100 the closest (six hours across the pane). That percentage is what STATE,
+// STORAGE and the screen all carry — one representation, so the two can never drift —
+// and the internal factor is derived from it.
+export const ZOOM_PCT_MIN = 1
+export const ZOOM_PCT_MAX = 100
+export function clampZoomPct(pct) {
+  const p = Number(pct)
+  if (!Number.isFinite(p)) return ZOOM_PCT_MIN
+  return Math.min(ZOOM_PCT_MAX, Math.max(ZOOM_PCT_MIN, Math.round(p)))
+}
+/** The zoom factor behind a percentage. Exponential, so one point is one PROPORTIONAL
+ *  step — which is what a zoom wheel or slider should feel like. */
+export function zoomFactorFromPct(pct, minFactor, maxFactor) {
+  const lo = Math.max(1e-9, minFactor)
+  const hi = Math.max(lo, maxFactor)
+  const span = ZOOM_PCT_MAX - ZOOM_PCT_MIN
+  return lo * Math.pow(hi / lo, (clampZoomPct(pct) - ZOOM_PCT_MIN) / span)
+}
+/** The percentage a zoom factor reads as — the inverse, and what converts the factors
+ *  stored before the scale was a percentage. */
+export function zoomPctFromFactor(factor, minFactor, maxFactor) {
+  const lo = Math.max(1e-9, minFactor)
+  const hi = Math.max(lo, maxFactor)
+  const step = Math.log(hi / lo)
+  if (!(step > 0)) return ZOOM_PCT_MIN
+  const read = Math.log(Math.max(1e-9, factor) / lo) / step
+  return clampZoomPct(ZOOM_PCT_MIN + read * (ZOOM_PCT_MAX - ZOOM_PCT_MIN))
 }
 /** Where the "now" line sits in px, or null when now is outside the window. */
 export function nowOffset(now, min, max, pxPerSec) {

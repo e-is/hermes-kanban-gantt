@@ -40,6 +40,27 @@ function clampZoom(zoom, basePerSec, maxPxPerHour = 240) {
   if (!Number.isFinite(zoom)) return 1;
   return Math.min(maxZoom(basePerSec, maxPxPerHour), Math.max(0.2, zoom));
 }
+var ZOOM_PCT_MIN = 1;
+var ZOOM_PCT_MAX = 100;
+function clampZoomPct(pct) {
+  const p = Number(pct);
+  if (!Number.isFinite(p)) return ZOOM_PCT_MIN;
+  return Math.min(ZOOM_PCT_MAX, Math.max(ZOOM_PCT_MIN, Math.round(p)));
+}
+function zoomFactorFromPct(pct, minFactor, maxFactor) {
+  const lo = Math.max(1e-9, minFactor);
+  const hi = Math.max(lo, maxFactor);
+  const span = ZOOM_PCT_MAX - ZOOM_PCT_MIN;
+  return lo * Math.pow(hi / lo, (clampZoomPct(pct) - ZOOM_PCT_MIN) / span);
+}
+function zoomPctFromFactor(factor, minFactor, maxFactor) {
+  const lo = Math.max(1e-9, minFactor);
+  const hi = Math.max(lo, maxFactor);
+  const step = Math.log(hi / lo);
+  if (!(step > 0)) return ZOOM_PCT_MIN;
+  const read = Math.log(Math.max(1e-9, factor) / lo) / step;
+  return clampZoomPct(ZOOM_PCT_MIN + read * (ZOOM_PCT_MAX - ZOOM_PCT_MIN));
+}
 function nowOffset(now, min, max, pxPerSec) {
   if (!(now >= min && now <= max)) return null;
   return Math.round((now - min) * pxPerSec);
@@ -460,9 +481,12 @@ export {
   TREE_INSET,
   TREE_SLOT,
   TREE_SQUARE,
+  ZOOM_PCT_MAX,
+  ZOOM_PCT_MIN,
   barRange,
   buildRows,
   clampZoom,
+  clampZoomPct,
   computeDomain,
   descendantsOf,
   dropCandidates,
@@ -492,5 +516,7 @@ export {
   treeMarks,
   treeRows,
   visibleWindow,
-  wheelZoomFactor
+  wheelZoomFactor,
+  zoomFactorFromPct,
+  zoomPctFromFactor
 };

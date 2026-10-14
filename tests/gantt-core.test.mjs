@@ -848,6 +848,35 @@ test('the closest shortcut wins when several fit inside the tolerance', () => {
   assert.equal(matchPeriod(windowOf(40), NOW), null)
 })
 
+test('the zoom is a 1..100 percentage, and the factor behind it is derived', () => {
+  const { zoomFactorFromPct, zoomPctFromFactor, clampZoomPct, ZOOM_PCT_MIN, ZOOM_PCT_MAX } = core
+  const lo = 0.2
+  const hi = 28
+  // the two ends of the visible scale
+  assert.equal(zoomFactorFromPct(ZOOM_PCT_MIN, lo, hi), lo, '1 is the widest scale')
+  assert.ok(Math.abs(zoomFactorFromPct(ZOOM_PCT_MAX, lo, hi) - hi) < 1e-9, '100 is the closest')
+  // every point survives being derived and read back — one representation, no drift
+  for (const pct of [1, 7, 25, 50, 73, 99, 100]) {
+    assert.equal(zoomPctFromFactor(zoomFactorFromPct(pct, lo, hi), lo, hi), pct)
+  }
+  // exponential: one point is one PROPORTIONAL step, not a fixed offset
+  const r1 = zoomFactorFromPct(51, lo, hi) / zoomFactorFromPct(50, lo, hi)
+  const r2 = zoomFactorFromPct(61, lo, hi) / zoomFactorFromPct(60, lo, hi)
+  assert.ok(Math.abs(r1 - r2) < 1e-9, 'a point is the same ratio everywhere on the scale')
+  // clamping, and the legacy factors converted through this same pair
+  assert.equal(clampZoomPct(0), 1)
+  assert.equal(clampZoomPct(101), 100)
+  assert.equal(clampZoomPct(NaN), 1)
+  assert.equal(clampZoomPct(-5), 1)
+  assert.equal(clampZoomPct(42.6), 43)
+  assert.equal(zoomPctFromFactor(500, lo, hi), 100, 'an old zoom past the ceiling reads as 100')
+  assert.equal(zoomPctFromFactor(0.01, lo, hi), 1, 'and one below the floor reads as 1')
+  const legacy = zoomPctFromFactor(7, lo, hi)
+  assert.ok(legacy > 1 && legacy < 100, `a stored factor lands inside the scale, got ${legacy}`)
+  // a degenerate range cannot divide by zero
+  assert.equal(clampZoomPct(zoomFactorFromPct(50, 1, 1)), 1)
+})
+
 test('the default ceiling is exactly "6 h fills the pane"', () => {
   const { maxZoom, periodPxPerSec } = core
   const labelW = 300

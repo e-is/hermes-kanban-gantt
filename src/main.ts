@@ -82,9 +82,9 @@ const ID = 'kanban-gantt'
 const ROW_H = 28                 // px — row height
 const BAR_H = 14                 // px — bar height inside a row
 const MIN_BAR_SEC = 2 * 3600     // 2h — minimum visible bar length
-const ZOOM_MIN = 0.2
-const ZOOM_MAX = 1.8
-const ZOOM_STEP = 0.05
+// The zoom the reader sees and sets: a percentage, 1 = the widest scale, 100 = the closest
+// (six hours across the pane). The factor behind it is derived — see the core.
+const ZOOM_MIN_FACTOR = 0.2
 
 /* ────────────────────── GANTT-CORE (pure logic, Node-tested) ────────────────
    Evaluated here via new Function(); tests/gantt-core.test.mjs extracts this
@@ -92,7 +92,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -2161,8 +2161,8 @@ export function KanbanGanttPage() {
     if (!s) return null
     const span = Number(s.get('period', null))
     if (!(span > 0)) return null
-    const zoom = Number(s.get('zoom', null))
-    const calibrated = Number(s.get('periodZoom', null))
+    const zoom = Number(s.get('zoomPct', null))
+    const calibrated = Number(s.get('periodZoomPct', null))
     if (!(zoom > 0) || !(calibrated > 0)) return null
     return Math.abs(zoom - calibrated) / calibrated <= 0.25 ? span : null
   })
@@ -2171,9 +2171,19 @@ export function KanbanGanttPage() {
     setViewMode(mode)
     if (getStorage()) getStorage().set('viewMode', mode)
   }
-  const [zoom, setZoom] = useState(() => {
-    const saved = getStorage() ? getStorage().get('zoom', null) : null
-    return saved != null && Number.isFinite(Number(saved)) ? Number(saved) : 1
+  const [zoomPct, setZoomPct] = useState(() => {
+    const s = getStorage()
+    if (!s) return ZOOM_PCT_MIN
+    const pct = s.get('zoomPct', null)
+    if (pct != null) return clampZoomPct(pct)
+    // Values stored before the scale was a percentage were FACTORS, and a factor and a
+    // percentage are indistinguishable over 1..100 (a factor 7 looks like 7 %), so the old
+    // key is CONVERTED rather than clamped — through the same pair of functions the display
+    // uses. The ceiling here is nominal: the live one depends on the pane width, which is not
+    // measured yet, and this only has to be roughly right for a one-off conversion.
+    const legacy = Number(s.get('zoom', null))
+    if (!Number.isFinite(legacy) || legacy <= 0) return ZOOM_PCT_MIN
+    return zoomPctFromFactor(legacy, ZOOM_MIN_FACTOR, 28)
   })
   const containerRef = useRef(null)
   const scrollerRef = useRef(null)
@@ -2413,13 +2423,14 @@ export function KanbanGanttPage() {
     return Array.from(new Set([...fromProfiles, ...fromBoard])).sort()
   }, [derived, profilesData])
 
-  const handleZoomChange = val => {
-    setZoom(val)
-    if (getStorage()) getStorage().set('zoom', val)
+  const handleZoomPct = val => {
+    const next = clampZoomPct(val)
+    setZoomPct(next)
+    if (getStorage()) getStorage().set('zoomPct', next)
     // A zoom is the other way the view stops being the selected period, so the match is
     // re-evaluated at once — nothing fires a scroll when only the scale changes. Our own
     // calibration zooms too, and it must not clear what it is placing.
-    if (zoomWatch.current && !calibrating.current) zoomWatch.current(val)
+    if (zoomWatch.current && !calibrating.current) zoomWatch.current(next)
   }
 
   // View options live in one atom so the rows and the drawer read the same value.
@@ -2524,16 +2535,17 @@ export function KanbanGanttPage() {
         : i18n.cannotLoadBoardDesc(base)
     }) })
   }
-  if (!derived || !derived.domain) {
-    return jsx('div', { className: 'p-6', children: jsx(EmptyState, { title: i18n.emptyBoard, description: i18n.emptyBoardDesc(boardLabel(board)) }) })
-  }
-
-  // R6: with pushes driving the data there is no poll left to re-render the
-  // timeline, so `nowTick` (30 s while the socket is live) is read here — that
-  // read is the whole point, it keeps the "now" cursor and open run arcs moving.
+  // The board's data is not always there yet: on a first open, with no board remembered,
+  // the list resolves before the gantt does. This used to `return` early, which put every
+  // hook BELOW it — the wheel anchor, the period refs and effects, all added since — after
+  // a conditional exit. The first render then ran fewer hooks than the second, and React's
+  // #310 (\"more hooks than during the previous render\") replaced the page with its error
+  // boundary. Nothing below may exit early now: the reads are tolerant and the empty state
+  // is rendered in the JSX, next to the rows.
   void nowTick
   const now = Date.now() / 1000
-  const { rows, domain } = derived
+  const rows = derived?.rows || []
+  const domain = derived?.domain || { min: now - 7 * DAY, max: now }
   const visibleWidth = Math.max(trackW - labelW - 24, 300)
   // At zoom = 1 (100%), exactly 1 week (7 days) fills the visible timeline width
   const baseDayWidth = visibleWidth / 7
@@ -2543,10 +2555,9 @@ export function KanbanGanttPage() {
   // derived from the live width, so a wide window cannot zoom further than a narrow one.
   const zoomCeiling = visibleWidth / 6          // px per hour that "6 h fits" implies
   const zoomMax = maxZoom(basePerSec, zoomCeiling)
-  // A zoom remembered from a build without a ceiling (or from a much wider pane) is
-  // truncated here, at render time — a derived value, so nothing sets state on mount and
-  // the slider, the wheel and the period shortcut all read the same number.
-  const zoomUsed = Math.min(zoom, zoomMax)
+  // The factor behind the percentage: 100 always means "6 h fits the pane", whatever the
+  // pane's width, because the ceiling is what the top of the scale maps to.
+  const zoomUsed = zoomFactorFromPct(zoomPct, ZOOM_MIN_FACTOR, zoomMax)
   const pxPerSec = basePerSec * zoomUsed
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec))
 
@@ -2571,14 +2582,14 @@ export function KanbanGanttPage() {
     const rect = el.getBoundingClientRect()
     const cursorPx = event.clientX - rect.left - labelW
     const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec
-    const next = clampZoom(zoom * factor, basePerSec, zoomCeiling)
-    if (next === zoom) return
+    const next = clampZoomPct(zoomPctFromFactor(zoomUsed * factor, ZOOM_MIN_FACTOR, zoomMax))
+    if (next === zoomPct) return
     event.preventDefault()
     zoomAnchor.current = { at, cursorPx }
-    handleZoomChange(next)
+    handleZoomPct(next)
   }
   const resetView = () => {
-    handleZoomChange(1)
+    handleZoomPct(ZOOM_PCT_MIN)
     if (scrollerRef.current) scrollerRef.current.scrollLeft = 0
   }
   // Re-apply the wheel anchor once the new scale is on screen: the instant that
@@ -2589,7 +2600,7 @@ export function KanbanGanttPage() {
     if (!el || !anchor) return
     zoomAnchor.current = null
     el.scrollLeft = Math.max(0, (anchor.at - domain.min) * pxPerSec - anchor.cursorPx)
-  }, [zoom, pxPerSec, domain.min])
+  }, [zoomPct, pxPerSec, domain.min])
 
   const periodRef = useRef(null)
   periodRef.current = period
@@ -2621,25 +2632,27 @@ export function KanbanGanttPage() {
     if (!el) return
     const target = periodPxPerSec(period, el.clientWidth, labelW)
     if (target == null) return
-    const next = clampZoom(target / basePerSec, basePerSec, zoomCeiling)
+    const next = clampZoomPct(zoomPctFromFactor(
+      clampZoom(target / basePerSec, basePerSec, zoomCeiling), ZOOM_MIN_FACTOR, zoomMax))
     placingUntil.current = performance.now() + 300
-    if (next !== zoomUsed) {
+    if (next !== zoomPct) {
       calibrating.current = true
-      handleZoomChange(next)
+      handleZoomPct(next)
       calibrating.current = false
     }
     // Remember the zoom this period calibrates to: that is the mark the next open
     // compares the reader's zoom against.
     const s = getStorage()
-    if (s) s.set('periodZoom', next)
-  }, [period, labelW, trackW, basePerSec, zoomUsed, zoomCeiling])
+    if (s) s.set('periodZoomPct', next)
+  }, [period, labelW, trackW, basePerSec, zoomPct, zoomMax, zoomCeiling])
 
   // What the view would be at a new scale, with the scroll it has now.
-  const evaluateZoom = nextZoom => {
+  const evaluateZoom = nextPct => {
     const el = scrollerRef.current
     if (!el || periodRef.current == null) return
     const visible = visibleWindow({
-      min: domain.min, pxPerSec: basePerSec * nextZoom, scrollLeft: el.scrollLeft,
+      min: domain.min, pxPerSec: basePerSec * zoomFactorFromPct(nextPct, ZOOM_MIN_FACTOR, zoomMax),
+      scrollLeft: el.scrollLeft,
       clientWidth: el.clientWidth, labelW
     })
     const matched = matchPeriod(visible, Date.now() / 1000, PERIOD_TOLERANCE)
@@ -2716,9 +2729,9 @@ export function KanbanGanttPage() {
   // Determine dominant status priority for the top task count badge:
   // blocked > running > review > ready > scheduled > todo > triage > done > archived
   const STATUS_PRIORITY = ['blocked', 'running', 'review', 'ready', 'scheduled', 'todo', 'triage', 'done', 'archived']
-  const blockedCount = derived.tasks.filter(t => t.status === 'blocked').length
+  const blockedCount = (derived?.tasks || []).filter(t => t.status === 'blocked').length
   const dominantStatus = (() => {
-    const present = new Set(derived.tasks.map(t => t.status))
+    const present = new Set((derived?.tasks || []).map(t => t.status))
     for (const s of STATUS_PRIORITY) {
       if (present.has(s)) return s
     }
@@ -2759,14 +2772,14 @@ export function KanbanGanttPage() {
               jsx('span', { className: 'font-semibold', children: i18n.title }),
               jsx('span', {
                 className: 'inline-flex items-center justify-center rounded-full px-2 py-0.2 text-[10.5px] font-semibold tracking-tight shadow-xs cursor-help',
-                title: i18n.nTasksTotal(derived.total, dominantStatus),
+                title: i18n.nTasksTotal(derived?.total || 0, dominantStatus),
                 style: {
                   backgroundColor: `color-mix(in srgb, ${dominantTone} 18%, transparent)`,
                   borderColor: `color-mix(in srgb, ${dominantTone} 40%, transparent)`,
                   borderWidth: '1px',
                   color: dominantTone
                 },
-                children: `${derived.total}`
+                children: `${derived?.total || 0}`
               }),
               blockedCount > 0
                 ? jsxs('span', {
@@ -2779,7 +2792,7 @@ export function KanbanGanttPage() {
                   })
                 : null,
               jsx(FilterDropdown, {
-                assignees: derived.allAssignees || [],
+                assignees: derived?.allAssignees || [],
                 selectedAssignees,
                 onToggleAssignee: handleToggleAssignee,
                 onClearAssignees: handleClearAssignees,
@@ -2820,16 +2833,16 @@ export function KanbanGanttPage() {
               listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {
                   type: 'range',
-                  min: String(ZOOM_MIN),
-                  max: String(zoomMax),
-                  step: String(ZOOM_STEP),
-                  value: String(zoomUsed),
-                  onInput: event => handleZoomChange(Number(event.target.value)),
+                  min: String(ZOOM_PCT_MIN),
+                  max: String(ZOOM_PCT_MAX),
+                  step: '1',
+                  value: String(zoomPct),
+                  onInput: event => handleZoomPct(Number(event.target.value)),
                   className: 'w-24',
                   title: i18n.zoomWheelHint,
                   'aria-label': i18n.zoomTimeline
                 }),
-                jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${Math.round(zoomUsed * 100)}%` })
+                jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${zoomPct}%` })
               ] }),
               // The Refresh button is back, but only when the page is KNOWINGLY on
               // the 60 s poll: the push is off (KANBAN_GANTT_WS=0 on the gateway, or
@@ -2902,7 +2915,9 @@ export function KanbanGanttPage() {
         ]
       }),
 
-      rows.length === 0
+      !derived
+        ? jsx('div', { className: 'py-10 grid place-items-center', children: jsx(Loader, {}) })
+        : rows.length === 0
         ? jsx('div', {
             className: 'py-10',
             children: jsx(EmptyState, { title: i18n.nothingToDisplay, description: i18n.noTasksMatch })
@@ -2966,13 +2981,13 @@ export function KanbanGanttPage() {
                           }),
                           jsx('input', {
                             type: 'checkbox',
-                            checked: Boolean(derived.rows.length > 0 && selectedIds.size === derived.rows.length),
+                            checked: Boolean((derived?.rows?.length || 0) > 0 && selectedIds.size === derived.rows.length),
                             ref: el => {
-                              if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < derived.rows.length
+                              if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < (derived?.rows?.length || 0)
                             },
                             onChange: e => {
                               if (e.target.checked) {
-                                setSelectedIds(new Set(derived.rows.map(r => r.task.id)))
+                                setSelectedIds(new Set((derived?.rows || []).map(r => r.task.id)))
                               } else {
                                 setSelectedIds(new Set())
                               }

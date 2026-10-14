@@ -1055,6 +1055,27 @@ function clampZoom(zoom, basePerSec, maxPxPerHour = 240) {
   if (!Number.isFinite(zoom)) return 1;
   return Math.min(maxZoom(basePerSec, maxPxPerHour), Math.max(0.2, zoom));
 }
+var ZOOM_PCT_MIN = 1;
+var ZOOM_PCT_MAX = 100;
+function clampZoomPct(pct) {
+  const p = Number(pct);
+  if (!Number.isFinite(p)) return ZOOM_PCT_MIN;
+  return Math.min(ZOOM_PCT_MAX, Math.max(ZOOM_PCT_MIN, Math.round(p)));
+}
+function zoomFactorFromPct(pct, minFactor, maxFactor) {
+  const lo = Math.max(1e-9, minFactor);
+  const hi = Math.max(lo, maxFactor);
+  const span = ZOOM_PCT_MAX - ZOOM_PCT_MIN;
+  return lo * Math.pow(hi / lo, (clampZoomPct(pct) - ZOOM_PCT_MIN) / span);
+}
+function zoomPctFromFactor(factor, minFactor, maxFactor) {
+  const lo = Math.max(1e-9, minFactor);
+  const hi = Math.max(lo, maxFactor);
+  const step = Math.log(hi / lo);
+  if (!(step > 0)) return ZOOM_PCT_MIN;
+  const read = Math.log(Math.max(1e-9, factor) / lo) / step;
+  return clampZoomPct(ZOOM_PCT_MIN + read * (ZOOM_PCT_MAX - ZOOM_PCT_MIN));
+}
 function nowOffset(now, min, max, pxPerSec) {
   if (!(now >= min && now <= max)) return null;
   return Math.round((now - min) * pxPerSec);
@@ -2000,8 +2021,7 @@ var ID2 = "kanban-gantt";
 var ROW_H = 28;
 var BAR_H = 14;
 var MIN_BAR_SEC = 2 * 3600;
-var ZOOM_MIN = 0.2;
-var ZOOM_STEP = 0.05;
+var ZOOM_MIN_FACTOR = 0.2;
 function humanReparentError(error, i18n) {
   const message = String(error && error.message || error || "");
   if (/cycle/i.test(message)) return i18n.errCycle;
@@ -3779,19 +3799,24 @@ function KanbanGanttPage() {
     if (!s) return null;
     const span = Number(s.get("period", null));
     if (!(span > 0)) return null;
-    const zoom2 = Number(s.get("zoom", null));
-    const calibrated = Number(s.get("periodZoom", null));
-    if (!(zoom2 > 0) || !(calibrated > 0)) return null;
-    return Math.abs(zoom2 - calibrated) / calibrated <= 0.25 ? span : null;
+    const zoom = Number(s.get("zoomPct", null));
+    const calibrated = Number(s.get("periodZoomPct", null));
+    if (!(zoom > 0) || !(calibrated > 0)) return null;
+    return Math.abs(zoom - calibrated) / calibrated <= 0.25 ? span : null;
   });
   const listMode = viewMode === "list";
   const handleViewMode = (mode) => {
     setViewMode(mode);
     if (getStorage()) getStorage().set("viewMode", mode);
   };
-  const [zoom, setZoom] = useState4(() => {
-    const saved = getStorage() ? getStorage().get("zoom", null) : null;
-    return saved != null && Number.isFinite(Number(saved)) ? Number(saved) : 1;
+  const [zoomPct, setZoomPct] = useState4(() => {
+    const s = getStorage();
+    if (!s) return ZOOM_PCT_MIN;
+    const pct = s.get("zoomPct", null);
+    if (pct != null) return clampZoomPct(pct);
+    const legacy = Number(s.get("zoom", null));
+    if (!Number.isFinite(legacy) || legacy <= 0) return ZOOM_PCT_MIN;
+    return zoomPctFromFactor(legacy, ZOOM_MIN_FACTOR, 28);
   });
   const containerRef = useRef2(null);
   const scrollerRef = useRef2(null);
@@ -3984,10 +4009,11 @@ function KanbanGanttPage() {
     const fromProfiles = profilesData && profilesData.profiles || [];
     return Array.from(/* @__PURE__ */ new Set([...fromProfiles, ...fromBoard])).sort();
   }, [derived, profilesData]);
-  const handleZoomChange = (val) => {
-    setZoom(val);
-    if (getStorage()) getStorage().set("zoom", val);
-    if (zoomWatch.current && !calibrating.current) zoomWatch.current(val);
+  const handleZoomPct = (val) => {
+    const next = clampZoomPct(val);
+    setZoomPct(next);
+    if (getStorage()) getStorage().set("zoomPct", next);
+    if (zoomWatch.current && !calibrating.current) zoomWatch.current(next);
   };
   const titlePrefixTags = useValue2($titlePrefixTags);
   const handleTitlePrefixTags = (next) => {
@@ -4065,18 +4091,16 @@ function KanbanGanttPage() {
       description: gone ? i18n.boardMissingDesc(board || boardLabel(board), boardsData?.current || "") : i18n.cannotLoadBoardDesc(base)
     }) });
   }
-  if (!derived || !derived.domain) {
-    return jsx6("div", { className: "p-6", children: jsx6(EmptyState, { title: i18n.emptyBoard, description: i18n.emptyBoardDesc(boardLabel(board)) }) });
-  }
   void nowTick;
   const now = Date.now() / 1e3;
-  const { rows, domain } = derived;
+  const rows = derived?.rows || [];
+  const domain = derived?.domain || { min: now - 7 * DAY, max: now };
   const visibleWidth = Math.max(trackW - labelW - 24, 300);
   const baseDayWidth = visibleWidth / 7;
   const basePerSec = baseDayWidth / DAY;
   const zoomCeiling = visibleWidth / 6;
   const zoomMax = maxZoom(basePerSec, zoomCeiling);
-  const zoomUsed = Math.min(zoom, zoomMax);
+  const zoomUsed = zoomFactorFromPct(zoomPct, ZOOM_MIN_FACTOR, zoomMax);
   const pxPerSec = basePerSec * zoomUsed;
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec));
   const zoomAnchor = useRef2(null);
@@ -4094,14 +4118,14 @@ function KanbanGanttPage() {
     const rect = el.getBoundingClientRect();
     const cursorPx = event.clientX - rect.left - labelW;
     const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec;
-    const next = clampZoom(zoom * factor, basePerSec, zoomCeiling);
-    if (next === zoom) return;
+    const next = clampZoomPct(zoomPctFromFactor(zoomUsed * factor, ZOOM_MIN_FACTOR, zoomMax));
+    if (next === zoomPct) return;
     event.preventDefault();
     zoomAnchor.current = { at, cursorPx };
-    handleZoomChange(next);
+    handleZoomPct(next);
   };
   const resetView = () => {
-    handleZoomChange(1);
+    handleZoomPct(ZOOM_PCT_MIN);
     if (scrollerRef.current) scrollerRef.current.scrollLeft = 0;
   };
   useEffect3(() => {
@@ -4110,7 +4134,7 @@ function KanbanGanttPage() {
     if (!el || !anchor) return;
     zoomAnchor.current = null;
     el.scrollLeft = Math.max(0, (anchor.at - domain.min) * pxPerSec - anchor.cursorPx);
-  }, [zoom, pxPerSec, domain.min]);
+  }, [zoomPct, pxPerSec, domain.min]);
   const periodRef = useRef2(null);
   periodRef.current = period;
   const lastScrollSave = useRef2(0);
@@ -4137,22 +4161,26 @@ function KanbanGanttPage() {
     if (!el) return;
     const target = periodPxPerSec(period, el.clientWidth, labelW);
     if (target == null) return;
-    const next = clampZoom(target / basePerSec, basePerSec, zoomCeiling);
+    const next = clampZoomPct(zoomPctFromFactor(
+      clampZoom(target / basePerSec, basePerSec, zoomCeiling),
+      ZOOM_MIN_FACTOR,
+      zoomMax
+    ));
     placingUntil.current = performance.now() + 300;
-    if (next !== zoomUsed) {
+    if (next !== zoomPct) {
       calibrating.current = true;
-      handleZoomChange(next);
+      handleZoomPct(next);
       calibrating.current = false;
     }
     const s = getStorage();
-    if (s) s.set("periodZoom", next);
-  }, [period, labelW, trackW, basePerSec, zoomUsed, zoomCeiling]);
-  const evaluateZoom = (nextZoom) => {
+    if (s) s.set("periodZoomPct", next);
+  }, [period, labelW, trackW, basePerSec, zoomPct, zoomMax, zoomCeiling]);
+  const evaluateZoom = (nextPct) => {
     const el = scrollerRef.current;
     if (!el || periodRef.current == null) return;
     const visible = visibleWindow({
       min: domain.min,
-      pxPerSec: basePerSec * nextZoom,
+      pxPerSec: basePerSec * zoomFactorFromPct(nextPct, ZOOM_MIN_FACTOR, zoomMax),
       scrollLeft: el.scrollLeft,
       clientWidth: el.clientWidth,
       labelW
@@ -4221,9 +4249,9 @@ function KanbanGanttPage() {
     // it hangs under, which is what makes that row unique.
   }, row.secondary ? `${row.task.id}@${row.parentId}` : row.task.id));
   const STATUS_PRIORITY = ["blocked", "running", "review", "ready", "scheduled", "todo", "triage", "done", "archived"];
-  const blockedCount = derived.tasks.filter((t) => t.status === "blocked").length;
+  const blockedCount = (derived?.tasks || []).filter((t) => t.status === "blocked").length;
   const dominantStatus = (() => {
-    const present = new Set(derived.tasks.map((t) => t.status));
+    const present = new Set((derived?.tasks || []).map((t) => t.status));
     for (const s of STATUS_PRIORITY) {
       if (present.has(s)) return s;
     }
@@ -4260,14 +4288,14 @@ function KanbanGanttPage() {
                   jsx6("span", { className: "font-semibold", children: i18n.title }),
                   jsx6("span", {
                     className: "inline-flex items-center justify-center rounded-full px-2 py-0.2 text-[10.5px] font-semibold tracking-tight shadow-xs cursor-help",
-                    title: i18n.nTasksTotal(derived.total, dominantStatus),
+                    title: i18n.nTasksTotal(derived?.total || 0, dominantStatus),
                     style: {
                       backgroundColor: `color-mix(in srgb, ${dominantTone} 18%, transparent)`,
                       borderColor: `color-mix(in srgb, ${dominantTone} 40%, transparent)`,
                       borderWidth: "1px",
                       color: dominantTone
                     },
-                    children: `${derived.total}`
+                    children: `${derived?.total || 0}`
                   }),
                   blockedCount > 0 ? jsxs6("span", {
                     className: "inline-flex items-center gap-1 rounded-full px-2 py-0.2 text-[10.5px] font-semibold tracking-tight shadow-xs text-[#f87171] border border-[#f87171]/40 bg-[#f87171]/18 cursor-help",
@@ -4278,7 +4306,7 @@ function KanbanGanttPage() {
                     ]
                   }) : null,
                   jsx6(FilterDropdown, {
-                    assignees: derived.allAssignees || [],
+                    assignees: derived?.allAssignees || [],
                     selectedAssignees,
                     onToggleAssignee: handleToggleAssignee,
                     onClearAssignees: handleClearAssignees,
@@ -4317,16 +4345,16 @@ function KanbanGanttPage() {
                   listMode ? null : jsxs6("span", { className: "inline-flex items-center gap-1.5", children: [
                     jsx6("input", {
                       type: "range",
-                      min: String(ZOOM_MIN),
-                      max: String(zoomMax),
-                      step: String(ZOOM_STEP),
-                      value: String(zoomUsed),
-                      onInput: (event) => handleZoomChange(Number(event.target.value)),
+                      min: String(ZOOM_PCT_MIN),
+                      max: String(ZOOM_PCT_MAX),
+                      step: "1",
+                      value: String(zoomPct),
+                      onInput: (event) => handleZoomPct(Number(event.target.value)),
                       className: "w-24",
                       title: i18n.zoomWheelHint,
                       "aria-label": i18n.zoomTimeline
                     }),
-                    jsx6("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${Math.round(zoomUsed * 100)}%` })
+                    jsx6("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${zoomPct}%` })
                   ] }),
                   // The Refresh button is back, but only when the page is KNOWINGLY on
                   // the 60 s poll: the push is off (KANBAN_GANTT_WS=0 on the gateway, or
@@ -4396,7 +4424,7 @@ function KanbanGanttPage() {
               })
             ]
           }),
-          rows.length === 0 ? jsx6("div", {
+          !derived ? jsx6("div", { className: "py-10 grid place-items-center", children: jsx6(Loader, {}) }) : rows.length === 0 ? jsx6("div", {
             className: "py-10",
             children: jsx6(EmptyState, { title: i18n.nothingToDisplay, description: i18n.noTasksMatch })
           }) : jsxs6("div", {
@@ -4461,13 +4489,13 @@ function KanbanGanttPage() {
                           }),
                           jsx6("input", {
                             type: "checkbox",
-                            checked: Boolean(derived.rows.length > 0 && selectedIds.size === derived.rows.length),
+                            checked: Boolean((derived?.rows?.length || 0) > 0 && selectedIds.size === derived.rows.length),
                             ref: (el) => {
-                              if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < derived.rows.length;
+                              if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < (derived?.rows?.length || 0);
                             },
                             onChange: (e) => {
                               if (e.target.checked) {
-                                setSelectedIds(new Set(derived.rows.map((r) => r.task.id)));
+                                setSelectedIds(new Set((derived?.rows || []).map((r) => r.task.id)));
                               } else {
                                 setSelectedIds(/* @__PURE__ */ new Set());
                               }
