@@ -4337,10 +4337,10 @@ function KanbanGanttPage() {
                 className: "inline-flex items-center gap-3",
                 children: [
                   jsx6(ViewToggle, { value: viewMode, onChange: handleViewMode }),
-                  jsx6(PeriodSelector, {
+                  listMode ? null : jsx6(PeriodSelector, {
                     value: period,
                     onChange: handlePeriod,
-                    disabled: listMode
+                    disabled: false
                   }),
                   listMode ? null : jsxs6("span", { className: "inline-flex items-center gap-1.5", children: [
                     jsx6("input", {
@@ -4424,9 +4424,22 @@ function KanbanGanttPage() {
               })
             ]
           }),
-          !derived ? jsx6("div", { className: "py-10 grid place-items-center", children: jsx6(Loader, {}) }) : rows.length === 0 ? jsx6("div", {
-            className: "py-10",
-            children: jsx6(EmptyState, { title: i18n.nothingToDisplay, description: i18n.noTasksMatch })
+          !derived ? jsx6("div", { className: "py-10 grid place-items-center", children: jsx6(Loader, {}) }) : rows.length === 0 ? jsxs6("div", {
+            className: "py-10 flex flex-col items-center gap-3",
+            children: [
+              jsx6(EmptyState, { title: i18n.nothingToDisplay, description: i18n.noTasksMatch }),
+              // Onboarding: the first creation is the hardest step, so offer it right here
+              // rather than leaving the reader to find the header button.
+              jsx6(Button5, {
+                size: "sm",
+                variant: "default",
+                onClick: () => $newTask.set({ parentId: "" }),
+                children: jsxs6("span", { className: "flex items-center gap-1", children: [
+                  jsx6(Codicon5, { name: "add", size: "0.85rem" }),
+                  i18n.newTask
+                ] })
+              })
+            ]
           }) : jsxs6("div", {
             className: "mt-2 border border-(--ui-stroke-tertiary) rounded-md overflow-hidden flex-1 min-h-0 flex flex-col relative",
             children: [
@@ -4547,9 +4560,11 @@ function KanbanGanttPage() {
               })
             ]
           }),
-          jsx6("div", {
+          // The legend describes BAR TONES, so it has nothing to say about a board with no
+          // rows — and an empty state reads better with only its message and the creation verb.
+          derived && rows.length > 0 ? jsx6("div", {
             children: jsx6(Legend, { disabledStatuses, onToggleStatus: handleToggleStatus })
-          })
+          }) : null
         ]
       }),
       openTaskId ? jsx6(TaskDrawer, {

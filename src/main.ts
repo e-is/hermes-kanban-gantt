@@ -2825,10 +2825,10 @@ export function KanbanGanttPage() {
             className: 'inline-flex items-center gap-3',
             children: [
               jsx(ViewToggle, { value: viewMode, onChange: handleViewMode }),
-              jsx(PeriodSelector, {
+              listMode ? null : jsx(PeriodSelector, {
                 value: period,
                 onChange: handlePeriod,
-                disabled: listMode
+                disabled: false
               }),
               listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {
@@ -2918,9 +2918,22 @@ export function KanbanGanttPage() {
       !derived
         ? jsx('div', { className: 'py-10 grid place-items-center', children: jsx(Loader, {}) })
         : rows.length === 0
-        ? jsx('div', {
-            className: 'py-10',
-            children: jsx(EmptyState, { title: i18n.nothingToDisplay, description: i18n.noTasksMatch })
+        ? jsxs('div', {
+            className: 'py-10 flex flex-col items-center gap-3',
+            children: [
+              jsx(EmptyState, { title: i18n.nothingToDisplay, description: i18n.noTasksMatch }),
+              // Onboarding: the first creation is the hardest step, so offer it right here
+              // rather than leaving the reader to find the header button.
+              jsx(Button, {
+                size: 'sm',
+                variant: 'default',
+                onClick: () => $newTask.set({ parentId: '' }),
+                children: jsxs('span', { className: 'flex items-center gap-1', children: [
+                  jsx(Codicon, { name: 'add', size: '0.85rem' }),
+                  i18n.newTask
+                ] })
+              })
+            ]
           })
         : jsxs('div', {
             className: 'mt-2 border border-(--ui-stroke-tertiary) rounded-md overflow-hidden flex-1 min-h-0 flex flex-col relative',
@@ -3038,9 +3051,13 @@ export function KanbanGanttPage() {
             ]
           }),
 
-      jsx('div', {
-        children: jsx(Legend, { disabledStatuses, onToggleStatus: handleToggleStatus })
-      })
+      // The legend describes BAR TONES, so it has nothing to say about a board with no
+      // rows — and an empty state reads better with only its message and the creation verb.
+      derived && rows.length > 0
+        ? jsx('div', {
+            children: jsx(Legend, { disabledStatuses, onToggleStatus: handleToggleStatus })
+          })
+        : null
         ]
       }),
 
