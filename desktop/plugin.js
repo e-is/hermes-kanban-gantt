@@ -3774,7 +3774,16 @@ function KanbanGanttPage() {
     const saved = getStorage() ? getStorage().get("viewMode", null) : null;
     return saved === "list" ? "list" : "timeline";
   });
-  const [period, setPeriod] = useState4(null);
+  const [period, setPeriod] = useState4(() => {
+    const s = getStorage();
+    if (!s) return null;
+    const span = Number(s.get("period", null));
+    if (!(span > 0)) return null;
+    const zoom2 = Number(s.get("zoom", null));
+    const calibrated = Number(s.get("periodZoom", null));
+    if (!(zoom2 > 0) || !(calibrated > 0)) return null;
+    return Math.abs(zoom2 - calibrated) / calibrated <= 0.25 ? span : null;
+  });
   const listMode = viewMode === "list";
   const handleViewMode = (mode) => {
     setViewMode(mode);
@@ -3980,8 +3989,6 @@ function KanbanGanttPage() {
     if (getStorage()) getStorage().set("zoom", val);
     if (zoomWatch.current && !calibrating.current) zoomWatch.current(val);
   };
-  const zoomWatch = useRef2(null);
-  const calibrating = useRef2(false);
   const titlePrefixTags = useValue2($titlePrefixTags);
   const handleTitlePrefixTags = (next) => {
     $titlePrefixTags.set(next);
@@ -4104,7 +4111,24 @@ function KanbanGanttPage() {
   }, [zoom, pxPerSec, domain.min]);
   const periodRef = useRef2(null);
   periodRef.current = period;
+  const lastScrollSave = useRef2(0);
+  const handleScroll = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const visible = visibleWindow({
+      min: domain.min,
+      pxPerSec,
+      scrollLeft: el.scrollLeft,
+      clientWidth: el.clientWidth,
+      labelW
+    });
+    const matched = matchPeriod(visible, now, PERIOD_TOLERANCE);
+    if (matched !== periodRef.current) setPeriod(matched);
+  };
+  const zoomWatch = useRef2(null);
+  const calibrating = useRef2(false);
   const placingUntil = useRef2(0);
+  const restoreDone = useRef2(false);
   useEffect3(() => {
     if (period == null) return;
     const el = scrollerRef.current;
@@ -4118,6 +4142,8 @@ function KanbanGanttPage() {
       handleZoomChange(next);
       calibrating.current = false;
     }
+    const s = getStorage();
+    if (s) s.set("periodZoom", next);
   }, [period, labelW, trackW, basePerSec, zoom]);
   const evaluateZoom = (nextZoom) => {
     const el = scrollerRef.current;
@@ -4149,46 +4175,16 @@ function KanbanGanttPage() {
     placingUntil.current = performance.now() + 300;
     if (el.scrollLeft !== target) el.scrollLeft = target;
   }, [period, pxPerSec, labelW, trackW, nowTick, domain.min]);
-  const handleScroll = () => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    if (performance.now() < placingUntil.current) return;
-    const visible = visibleWindow({
-      min: domain.min,
-      pxPerSec,
-      scrollLeft: el.scrollLeft,
-      clientWidth: el.clientWidth,
-      labelW
-    });
-    const matched = matchPeriod(visible, now, PERIOD_TOLERANCE);
-    if (matched !== periodRef.current) setPeriod(matched);
-    const s = getStorage();
-    const stamp = performance.now();
-    if (s && stamp - lastScrollSave.current > 500) {
-      lastScrollSave.current = stamp;
-      s.set("scroll", Math.round(el.scrollLeft));
-    }
-  };
-  const restoreDone = useRef2(false);
-  const lastScrollSave = useRef2(0);
+  const scrollRestored = useRef2(false);
   useEffect3(() => {
-    if (restoreDone.current) return;
+    if (scrollRestored.current || period != null) return;
     const el = scrollerRef.current;
     if (!el || el.clientWidth <= 0) return;
+    scrollRestored.current = true;
     const s = getStorage();
-    restoreDone.current = true;
-    if (!s) return;
-    const saved = Number(s.get("period", null));
-    if (saved > 0) {
-      const implied = periodPxPerSec(saved, el.clientWidth, labelW) / basePerSec;
-      if (Number.isFinite(implied) && implied > 0 && Math.abs(zoom - implied) / implied <= 0.25) {
-        setPeriod(saved);
-        return;
-      }
-    }
-    const scroll = Number(s.get("scroll", null));
+    const scroll = s ? Number(s.get("scroll", null)) : null;
     if (Number.isFinite(scroll) && scroll > 0) el.scrollLeft = scroll;
-  }, [trackW, labelW, basePerSec, zoom]);
+  }, [trackW, labelW, period]);
   const handlePeriod = (span) => {
     const next = period === span ? null : span;
     setPeriod(next);
@@ -4357,8 +4353,7 @@ function KanbanGanttPage() {
                       i18n.newTask
                     ] })
                   }),
-                  // The view's own menu, rightmost next to the creation verb: a display
-                  // preference belongs with the view, not inside a task's action menu.
+                  // The view's own menu, rightmost next to the creation verb.
                   jsxs6(DropdownMenu3, { children: [
                     jsx6(DropdownMenuTrigger3, {
                       asChild: true,
