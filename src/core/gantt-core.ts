@@ -73,7 +73,6 @@ export function nowOffset(now, min, max, pxPerSec) {
 }
 /**
  * How far ONE wheel event should scale the timeline.
- *
  * A mouse wheel reports a notch at a time (~±100 px, or ±3 with the legacy
  * `deltaMode = LINES`), while a trackpad reports a stream of tiny pixel deltas, and
  * macOS reports a pinch as a ctrl+wheel burst. A fixed step per event therefore
@@ -90,6 +89,75 @@ export function wheelZoomFactor(deltaY, deltaMode = 0) {
   const factor = Math.exp(-(deltaY * unit) / 400)
   return Math.min(1.4, Math.max(1 / 1.4, factor))
 }
+// ── period shortcuts ─────────────────────────────────────────────────────────
+// The period selector is a shortcut, not a filter: it does not change what the
+// board holds, it just puts a slice of the timeline on screen and keeps it there.
+export const PERIODS = [6 * 3600, 12 * 3600, 24 * 3600, 3 * DAY, 7 * DAY]
+/** ±6 h of slack on the slice's length AND on its right edge: scrolling or zooming
+ *  past that means the view no longer IS the period, so nothing is selected. */
+export const PERIOD_TOLERANCE = 6 * 3600
+
+/**
+ * The px/sec that makes ``span`` seconds fill the visible timeline area exactly.
+ *
+ * `clientWidth` is the scroller's, so it already excludes the vertical scrollbar and
+ * the sticky task-name column (`labelW`). Returns null while the pane is unmeasured
+ * (the first render) rather than guessing a scale.
+ */
+export function periodPxPerSec(span, clientWidth, labelW) {
+  const width = clientWidth - labelW
+  if (!(span > 0) || !(width > 0)) return null
+  return width / span
+}
+
+/**
+ * Where to scroll so that [from, to] is entirely inside the visible timeline area.
+ *
+ * The window is RIGHT-ALIGNED: `to` (usually now) ends up at the right edge, which is
+ * what makes a period read as "the last 24 h". Content x of a time t is
+ * `labelW + (t - min) * pxPerSec`, and the sticky column occupies the first `labelW`
+ * px of the viewport — so the scroll offset is the content x of `to` minus the
+ * scroller's width. Clamped at 0 (the browser clamps the upper end).
+ */
+export function periodScrollLeft({ from, to, min, pxPerSec, clientWidth, labelW }) {
+  if (!(pxPerSec > 0) || !(clientWidth > 0)) return null
+  return Math.max(0, Math.round(labelW + (to - min) * pxPerSec - clientWidth))
+}
+
+/** The time range actually on screen, from the scroll offset and the scale. */
+export function visibleWindow({ min, pxPerSec, scrollLeft, clientWidth, labelW }) {
+  if (!(pxPerSec > 0)) return null
+  return {
+    from: min + scrollLeft / pxPerSec,
+    to: min + (scrollLeft + clientWidth - labelW) / pxPerSec
+  }
+}
+
+/**
+ * Which shortcut the current view corresponds to, or null.
+ *
+ * A period matches when BOTH the visible length and the distance from its right edge
+ * to now are within `tolerance` — a 12 h view scrolled a day back is not "12 h any
+ * more". When several values fit (12 h is within ±6 h of both 6 h and 12 h), the
+ * closest one wins, so the selector never lights up an arbitrary twin.
+ */
+export function matchPeriod(visible, now, tolerance = PERIOD_TOLERANCE, periods = PERIODS) {
+  if (!visible || !Number.isFinite(visible.from) || !Number.isFinite(visible.to)) return null
+  let best = null
+  let bestGap = Infinity
+  for (const span of periods) {
+    const sizeGap = Math.abs((visible.to - visible.from) - span)
+    const edgeGap = Math.abs(now - visible.to)
+    if (sizeGap > tolerance || edgeGap > tolerance) continue
+    const gap = sizeGap + edgeGap
+    if (gap < bestGap) {
+      bestGap = gap
+      best = span
+    }
+  }
+  return best
+}
+
 /**
  * Where the now line sits, measured from the SCROLL CONTENT's left edge — which is
  * what `position: absolute; left` means here.

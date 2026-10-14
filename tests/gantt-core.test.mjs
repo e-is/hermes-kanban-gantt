@@ -780,6 +780,84 @@ test('the now line is measured from the timeline origin, not the container edge'
   assert.equal(nowLineX(NOW, min, NOW - 1, pxPerSec, labelW), null)
 })
 
+/* ── the period shortcuts ───────────────────────────────────────────────────── */
+
+test('a period calibrates the scale, and the slice lands entirely on screen', () => {
+  const { periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod } = core
+  const labelW = 300
+  const clientWidth = 1000               // the scroller (scrollbar and column excluded)
+  const span = 24 * 3600
+  const pxPerSec = periodPxPerSec(span, clientWidth, labelW)
+  assert.equal(pxPerSec, (clientWidth - labelW) / span)
+  // nothing to calibrate against yet -> null, never a guessed scale
+  assert.equal(periodPxPerSec(span, labelW, labelW), null)
+  assert.equal(periodPxPerSec(0, clientWidth, labelW), null)
+
+  const min = NOW - 10 * DAY
+  const scrollLeft = periodScrollLeft({ from: NOW - span, to: NOW, min, pxPerSec, clientWidth, labelW })
+  const visible = visibleWindow({ min, pxPerSec, scrollLeft, clientWidth, labelW })
+  // right-aligned on now — that is what makes it read as "the last 24 h"
+  assert.ok(Math.abs(visible.to - NOW) < 0.5, `right edge on now, got ${visible.to - NOW}`)
+  // and the slice exactly fills the visible timeline area
+  assert.ok(Math.abs((visible.to - visible.from) - span) < 1, 'the slice fills the pane')
+  assert.ok(visible.from <= NOW - span + 1 && visible.to >= NOW - 0.5,
+    'the WHOLE period is visible, not just its end')
+  assert.equal(matchPeriod(visible, NOW), span, 'and it is recognised as the 24 h shortcut')
+  // clamped at the left edge of the domain rather than scrolling into nothing
+  assert.equal(periodScrollLeft({ from: NOW - span, to: NOW, min: NOW, pxPerSec, clientWidth, labelW }), 0)
+})
+
+test('the shortcut stops matching once the reader moves away from it (+/- 6 h)', () => {
+  const { periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, PERIOD_TOLERANCE } = core
+  const span = 24 * 3600
+  const labelW = 300, clientWidth = 1000
+  const pxPerSec = periodPxPerSec(span, clientWidth, labelW)
+  const min = NOW - 10 * DAY
+  const base = periodScrollLeft({ from: NOW - span, to: NOW, min, pxPerSec, clientWidth, labelW })
+  const at = shiftHours => visibleWindow({
+    min, pxPerSec, scrollLeft: base - shiftHours * 3600 * pxPerSec, clientWidth, labelW
+  })
+  assert.equal(PERIOD_TOLERANCE, 6 * 3600)
+  assert.equal(matchPeriod(at(0), NOW), span)
+  assert.equal(matchPeriod(at(5), NOW), span, 'a small nudge is still the same view')
+  assert.equal(matchPeriod(at(-5), NOW), span)
+  assert.equal(matchPeriod(at(8), NOW), null, 'scrolled a workday back, it is no longer "24 h"')
+  assert.equal(matchPeriod(at(-8), NOW), null)
+  assert.equal(matchPeriod(null, NOW), null)
+  assert.equal(matchPeriod({ from: NaN, to: NOW }, NOW), null)
+})
+
+test('the closest shortcut wins when several fit inside the tolerance', () => {
+  const { matchPeriod, visibleWindow, periodPxPerSec } = core
+  const labelW = 300, clientWidth = 1000
+  const min = NOW - 30 * DAY
+  const windowOf = hours => {
+    const span = hours * 3600
+    const pxPerSec = periodPxPerSec(span, clientWidth, labelW)
+    return visibleWindow({
+      min, pxPerSec, scrollLeft: (NOW - span - min) * pxPerSec, clientWidth, labelW
+    })
+  }
+  assert.equal(matchPeriod(windowOf(6), NOW), 6 * 3600)
+  assert.equal(matchPeriod(windowOf(7), NOW), 6 * 3600, '7 h is nearer 6 h than 12 h')
+  assert.equal(matchPeriod(windowOf(11), NOW), 12 * 3600, '11 h is nearer 12 h')
+  assert.equal(matchPeriod(windowOf(24), NOW), 24 * 3600)
+  assert.equal(matchPeriod(windowOf(72), NOW), 3 * DAY)
+  assert.equal(matchPeriod(windowOf(168), NOW), 7 * DAY)
+  // a length nobody offers lights nothing up
+  assert.equal(matchPeriod(windowOf(40), NOW), null)
+})
+
+test('a 6 h slice in a huge pane hits the detail ceiling instead of lying', () => {
+  const { periodPxPerSec, clampZoom, maxZoom } = core
+  const basePerSec = (1000 / 7) / DAY
+  const pxPerSec = periodPxPerSec(6 * 3600, 20000, 300)
+  const wanted = pxPerSec / basePerSec
+  assert.ok(pxPerSec * 3600 > 240, 'a 6 h slice across 20 000 px needs more than 240 px/h')
+  assert.equal(clampZoom(wanted, basePerSec), maxZoom(basePerSec))
+  assert.ok(clampZoom(wanted, basePerSec) < wanted, 'the clamp pulls the scale back')
+})
+
 /* ── a title is the user's text ─────────────────────────────────────────────── */
 
 test('a bracketed prefix is split out, never dropped', () => {

@@ -50,6 +50,40 @@ function wheelZoomFactor(deltaY, deltaMode = 0) {
   const factor = Math.exp(-(deltaY * unit) / 400);
   return Math.min(1.4, Math.max(1 / 1.4, factor));
 }
+var PERIODS = [6 * 3600, 12 * 3600, 24 * 3600, 3 * DAY, 7 * DAY];
+var PERIOD_TOLERANCE = 6 * 3600;
+function periodPxPerSec(span, clientWidth, labelW) {
+  const width = clientWidth - labelW;
+  if (!(span > 0) || !(width > 0)) return null;
+  return width / span;
+}
+function periodScrollLeft({ from, to, min, pxPerSec, clientWidth, labelW }) {
+  if (!(pxPerSec > 0) || !(clientWidth > 0)) return null;
+  return Math.max(0, Math.round(labelW + (to - min) * pxPerSec - clientWidth));
+}
+function visibleWindow({ min, pxPerSec, scrollLeft, clientWidth, labelW }) {
+  if (!(pxPerSec > 0)) return null;
+  return {
+    from: min + scrollLeft / pxPerSec,
+    to: min + (scrollLeft + clientWidth - labelW) / pxPerSec
+  };
+}
+function matchPeriod(visible, now, tolerance = PERIOD_TOLERANCE, periods = PERIODS) {
+  if (!visible || !Number.isFinite(visible.from) || !Number.isFinite(visible.to)) return null;
+  let best = null;
+  let bestGap = Infinity;
+  for (const span of periods) {
+    const sizeGap = Math.abs(visible.to - visible.from - span);
+    const edgeGap = Math.abs(now - visible.to);
+    if (sizeGap > tolerance || edgeGap > tolerance) continue;
+    const gap = sizeGap + edgeGap;
+    if (gap < bestGap) {
+      bestGap = gap;
+      best = span;
+    }
+  }
+  return best;
+}
 function nowLineX(now, min, max, pxPerSec, originX = 0) {
   const offset = nowOffset(now, min, max, pxPerSec);
   return offset == null ? null : originX + offset;
@@ -418,6 +452,8 @@ export {
   FAIL_TONE,
   HARD_FAILURES,
   MIN_BAR,
+  PERIODS,
+  PERIOD_TOLERANCE,
   RUN_TONE,
   TERMINAL_STATUSES,
   TREE_AXIS,
@@ -435,10 +471,13 @@ export {
   isMissingBoardError,
   isTerminal,
   lastActivity,
+  matchPeriod,
   matchesSearch,
   maxZoom,
   nowLineX,
   nowOffset,
+  periodPxPerSec,
+  periodScrollLeft,
   relationsOf,
   relativeAge,
   resolveBoardSlug,
@@ -452,5 +491,6 @@ export {
   ticks,
   treeMarks,
   treeRows,
+  visibleWindow,
   wheelZoomFactor
 };

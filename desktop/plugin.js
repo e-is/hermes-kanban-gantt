@@ -144,6 +144,13 @@ var GANTT_LOCALES = {
     viewOptions: "View options",
     titlePrefixTags: "Show title prefixes as tags",
     titlePrefixTagsHint: "A leading [EPIC] becomes a chip — the title itself is always shown as written",
+    periodLabel: "Period shown",
+    periodShow: "Keep the last",
+    period6h: "6 h",
+    period12h: "12 h",
+    period24h: "24 h",
+    period3d: "3 d",
+    period7d: "7 d",
     nothingToDisplay: "Nothing to display",
     noTasksMatch: "No tasks match the search or filter criteria.",
     emptyBoard: "No data",
@@ -354,6 +361,13 @@ var GANTT_LOCALES = {
     viewOptions: "Options d'affichage",
     titlePrefixTags: "Afficher les préfixes des titres sous forme de tag",
     titlePrefixTagsHint: "Un préfixe « [EPIC] » devient une pastille — le titre lui-même reste affiché tel quel",
+    periodLabel: "Période affichée",
+    periodShow: "Garder les dernières",
+    period6h: "6 h",
+    period12h: "12 h",
+    period24h: "24 h",
+    period3d: "3 j",
+    period7d: "7 j",
     nothingToDisplay: "Rien à afficher",
     noTasksMatch: "Aucune tâche ne correspond aux critères de recherche ou de filtre.",
     emptyBoard: "Aucune donnée",
@@ -536,6 +550,13 @@ var GANTT_LOCALES = {
     viewOptions: "视图选项",
     titlePrefixTags: "将标题前缀显示为标签",
     titlePrefixTagsHint: "开头的 [EPIC] 会显示为标签——标题本身始终按原样显示",
+    periodLabel: "显示时段",
+    periodShow: "保持最近",
+    period6h: "6 小时",
+    period12h: "12 小时",
+    period24h: "24 小时",
+    period3d: "3 天",
+    period7d: "7 天",
     openCommand: "看板甘特图：打开时间线视图",
     refresh: "刷新",
     refreshWhy: "此网关或客户端的实时更新已关闭，页面改用 60 秒轮询——可立即刷新，无需等待。",
@@ -1043,6 +1064,40 @@ function wheelZoomFactor(deltaY, deltaMode = 0) {
   const unit = deltaMode === 1 ? 16 : deltaMode === 2 ? 100 : 1;
   const factor = Math.exp(-(deltaY * unit) / 400);
   return Math.min(1.4, Math.max(1 / 1.4, factor));
+}
+var PERIODS = [6 * 3600, 12 * 3600, 24 * 3600, 3 * DAY, 7 * DAY];
+var PERIOD_TOLERANCE = 6 * 3600;
+function periodPxPerSec(span, clientWidth, labelW) {
+  const width = clientWidth - labelW;
+  if (!(span > 0) || !(width > 0)) return null;
+  return width / span;
+}
+function periodScrollLeft({ from, to, min, pxPerSec, clientWidth, labelW }) {
+  if (!(pxPerSec > 0) || !(clientWidth > 0)) return null;
+  return Math.max(0, Math.round(labelW + (to - min) * pxPerSec - clientWidth));
+}
+function visibleWindow({ min, pxPerSec, scrollLeft, clientWidth, labelW }) {
+  if (!(pxPerSec > 0)) return null;
+  return {
+    from: min + scrollLeft / pxPerSec,
+    to: min + (scrollLeft + clientWidth - labelW) / pxPerSec
+  };
+}
+function matchPeriod(visible, now, tolerance = PERIOD_TOLERANCE, periods = PERIODS) {
+  if (!visible || !Number.isFinite(visible.from) || !Number.isFinite(visible.to)) return null;
+  let best = null;
+  let bestGap = Infinity;
+  for (const span of periods) {
+    const sizeGap = Math.abs(visible.to - visible.from - span);
+    const edgeGap = Math.abs(now - visible.to);
+    if (sizeGap > tolerance || edgeGap > tolerance) continue;
+    const gap = sizeGap + edgeGap;
+    if (gap < bestGap) {
+      bestGap = gap;
+      best = span;
+    }
+  }
+  return best;
 }
 function nowLineX(now, min, max, pxPerSec, originX = 0) {
   const offset = nowOffset(now, min, max, pxPerSec);
@@ -1982,6 +2037,42 @@ function readStoredBoard(storage2) {
   const scoped = storage2.get(boardStorageKey(), "");
   if (scoped) return scoped;
   return storage2.get(BOARD_KEY, "") || "";
+}
+var PERIOD_CHOICES = [
+  { span: 6 * 3600, key: "period6h" },
+  { span: 12 * 3600, key: "period12h" },
+  { span: 24 * 3600, key: "period24h" },
+  { span: 3 * DAY, key: "period3d" },
+  { span: 7 * DAY, key: "period7d" }
+];
+function PeriodSelector({ value, onChange, disabled }) {
+  const i18n = useGanttI18n();
+  return jsx6("div", {
+    role: "group",
+    "aria-label": i18n.periodLabel,
+    className: "inline-flex items-stretch overflow-hidden rounded-md",
+    style: { border: "1px solid var(--ui-stroke-tertiary)", opacity: disabled ? 0.45 : 1 },
+    children: PERIOD_CHOICES.map(({ span, key }, index) => {
+      const active = value === span;
+      return jsx6("button", {
+        type: "button",
+        disabled: Boolean(disabled),
+        "aria-pressed": active,
+        title: `${i18n.periodShow} ${i18n[key]}`,
+        onClick: () => onChange(span),
+        className: cn3(
+          "h-5 px-1.5 text-[10px] leading-none tabular-nums border-0 cursor-pointer",
+          active ? "font-semibold" : "font-normal"
+        ),
+        style: {
+          backgroundColor: active ? "var(--ui-accent)" : "transparent",
+          color: active ? "var(--ui-bg-chrome)" : "var(--ui-text-secondary)",
+          borderLeft: index ? "1px solid var(--ui-stroke-tertiary)" : "none"
+        },
+        children: i18n[key]
+      }, span);
+    })
+  });
 }
 function HourLines({ min, max, pxPerSec }) {
   const plan = hourTickPlan(pxPerSec * 3600);
@@ -3683,6 +3774,7 @@ function KanbanGanttPage() {
     const saved = getStorage() ? getStorage().get("viewMode", null) : null;
     return saved === "list" ? "list" : "timeline";
   });
+  const [period, setPeriod] = useState4(null);
   const listMode = viewMode === "list";
   const handleViewMode = (mode) => {
     setViewMode(mode);
@@ -3886,7 +3978,10 @@ function KanbanGanttPage() {
   const handleZoomChange = (val) => {
     setZoom(val);
     if (getStorage()) getStorage().set("zoom", val);
+    if (zoomWatch.current && !calibrating.current) zoomWatch.current(val);
   };
+  const zoomWatch = useRef2(null);
+  const calibrating = useRef2(false);
   const titlePrefixTags = useValue2($titlePrefixTags);
   const handleTitlePrefixTags = (next) => {
     $titlePrefixTags.set(next);
@@ -4007,6 +4102,99 @@ function KanbanGanttPage() {
     zoomAnchor.current = null;
     el.scrollLeft = Math.max(0, (anchor.at - domain.min) * pxPerSec - anchor.cursorPx);
   }, [zoom, pxPerSec, domain.min]);
+  const periodRef = useRef2(null);
+  periodRef.current = period;
+  const placingUntil = useRef2(0);
+  useEffect3(() => {
+    if (period == null) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    const target = periodPxPerSec(period, el.clientWidth, labelW);
+    if (target == null) return;
+    const next = clampZoom(target / basePerSec, basePerSec);
+    placingUntil.current = performance.now() + 300;
+    if (next !== zoom) {
+      calibrating.current = true;
+      handleZoomChange(next);
+      calibrating.current = false;
+    }
+  }, [period, labelW, trackW, basePerSec, zoom]);
+  const evaluateZoom = (nextZoom) => {
+    const el = scrollerRef.current;
+    if (!el || periodRef.current == null) return;
+    const visible = visibleWindow({
+      min: domain.min,
+      pxPerSec: basePerSec * nextZoom,
+      scrollLeft: el.scrollLeft,
+      clientWidth: el.clientWidth,
+      labelW
+    });
+    const matched = matchPeriod(visible, Date.now() / 1e3, PERIOD_TOLERANCE);
+    if (matched !== periodRef.current) setPeriod(matched);
+  };
+  zoomWatch.current = evaluateZoom;
+  useEffect3(() => {
+    if (period == null) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    const target = periodScrollLeft({
+      from: now - period,
+      to: now,
+      min: domain.min,
+      pxPerSec,
+      clientWidth: el.clientWidth,
+      labelW
+    });
+    if (target == null) return;
+    placingUntil.current = performance.now() + 300;
+    if (el.scrollLeft !== target) el.scrollLeft = target;
+  }, [period, pxPerSec, labelW, trackW, nowTick, domain.min]);
+  const handleScroll = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    if (performance.now() < placingUntil.current) return;
+    const visible = visibleWindow({
+      min: domain.min,
+      pxPerSec,
+      scrollLeft: el.scrollLeft,
+      clientWidth: el.clientWidth,
+      labelW
+    });
+    const matched = matchPeriod(visible, now, PERIOD_TOLERANCE);
+    if (matched !== periodRef.current) setPeriod(matched);
+    const s = getStorage();
+    const stamp = performance.now();
+    if (s && stamp - lastScrollSave.current > 500) {
+      lastScrollSave.current = stamp;
+      s.set("scroll", Math.round(el.scrollLeft));
+    }
+  };
+  const restoreDone = useRef2(false);
+  const lastScrollSave = useRef2(0);
+  useEffect3(() => {
+    if (restoreDone.current) return;
+    const el = scrollerRef.current;
+    if (!el || el.clientWidth <= 0) return;
+    const s = getStorage();
+    restoreDone.current = true;
+    if (!s) return;
+    const saved = Number(s.get("period", null));
+    if (saved > 0) {
+      const implied = periodPxPerSec(saved, el.clientWidth, labelW) / basePerSec;
+      if (Number.isFinite(implied) && implied > 0 && Math.abs(zoom - implied) / implied <= 0.25) {
+        setPeriod(saved);
+        return;
+      }
+    }
+    const scroll = Number(s.get("scroll", null));
+    if (Number.isFinite(scroll) && scroll > 0) el.scrollLeft = scroll;
+  }, [trackW, labelW, basePerSec, zoom]);
+  const handlePeriod = (span) => {
+    const next = period === span ? null : span;
+    setPeriod(next);
+    const s = getStorage();
+    if (next != null && s) s.set("period", next);
+  };
   const grid = rows.map((row, idx) => jsx6(TaskRow, {
     ...row,
     now,
@@ -4123,44 +4311,11 @@ function KanbanGanttPage() {
                 className: "inline-flex items-center gap-3",
                 children: [
                   jsx6(ViewToggle, { value: viewMode, onChange: handleViewMode }),
-                  // The view's own menu: a display preference belongs here, next to the
-                  // other view controls — not in a task's action menu.
-                  jsxs6(DropdownMenu3, { children: [
-                    jsx6(DropdownMenuTrigger3, {
-                      asChild: true,
-                      children: jsx6("button", {
-                        type: "button",
-                        className: "inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent",
-                        "aria-label": i18n.viewOptions,
-                        title: i18n.viewOptions,
-                        children: jsx6(Codicon5, { name: "kebab-vertical", size: "0.9rem" })
-                      })
-                    }),
-                    jsxs6(DropdownMenuContent3, {
-                      align: "end",
-                      className: "min-w-[17rem] p-1 text-xs",
-                      children: [
-                        jsxs6(DropdownMenuItem3, {
-                          className: "flex items-start gap-2 px-3 py-1.5",
-                          onClick: () => handleTitlePrefixTags(!titlePrefixTags),
-                          children: [
-                            jsx6(Codicon5, {
-                              name: titlePrefixTags ? "check" : "blank",
-                              size: "0.85rem",
-                              className: "mt-0.5 shrink-0"
-                            }),
-                            jsxs6("span", { className: "flex flex-col gap-0.5 min-w-0", children: [
-                              jsx6("span", { children: i18n.titlePrefixTags }),
-                              jsx6("span", {
-                                className: "text-[10px] text-(--ui-text-tertiary)",
-                                children: i18n.titlePrefixTagsHint
-                              })
-                            ] })
-                          ]
-                        })
-                      ]
-                    })
-                  ] }),
+                  jsx6(PeriodSelector, {
+                    value: period,
+                    onChange: handlePeriod,
+                    disabled: listMode
+                  }),
                   listMode ? null : jsxs6("span", { className: "inline-flex items-center gap-1.5", children: [
                     jsx6("input", {
                       type: "range",
@@ -4201,7 +4356,45 @@ function KanbanGanttPage() {
                       jsx6(Codicon5, { name: "add", size: "0.85rem" }),
                       i18n.newTask
                     ] })
-                  })
+                  }),
+                  // The view's own menu, rightmost next to the creation verb: a display
+                  // preference belongs with the view, not inside a task's action menu.
+                  jsxs6(DropdownMenu3, { children: [
+                    jsx6(DropdownMenuTrigger3, {
+                      asChild: true,
+                      children: jsx6("button", {
+                        type: "button",
+                        className: "inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent",
+                        "aria-label": i18n.viewOptions,
+                        title: i18n.viewOptions,
+                        children: jsx6(Codicon5, { name: "kebab-vertical", size: "0.9rem" })
+                      })
+                    }),
+                    jsxs6(DropdownMenuContent3, {
+                      align: "end",
+                      className: "min-w-[17rem] p-1 text-xs",
+                      children: [
+                        jsxs6(DropdownMenuItem3, {
+                          className: "flex items-start gap-2 px-3 py-1.5",
+                          onClick: () => handleTitlePrefixTags(!titlePrefixTags),
+                          children: [
+                            jsx6(Codicon5, {
+                              name: titlePrefixTags ? "check" : "blank",
+                              size: "0.85rem",
+                              className: "mt-0.5 shrink-0"
+                            }),
+                            jsxs6("span", { className: "flex flex-col gap-0.5 min-w-0", children: [
+                              jsx6("span", { children: i18n.titlePrefixTags }),
+                              jsx6("span", {
+                                className: "text-[10px] text-(--ui-text-tertiary)",
+                                children: i18n.titlePrefixTagsHint
+                              })
+                            ] })
+                          ]
+                        })
+                      ]
+                    })
+                  ] })
                 ]
               })
             ]
@@ -4230,6 +4423,7 @@ function KanbanGanttPage() {
                 ref: scrollerRef,
                 className: "overflow-auto flex-1 min-h-0 relative",
                 onWheel: handleWheel,
+                onScroll: handleScroll,
                 children: [
                   jsxs6("div", {
                     className: cn3("grid sticky top-0 z-20 bg-(--ui-bg-chrome)", listMode ? "w-full" : "w-max"),

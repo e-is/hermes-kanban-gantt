@@ -92,7 +92,7 @@ const ZOOM_STEP = 0.05
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -162,6 +162,53 @@ const applyBase = value => {
 }
 
 /* ──────────────────────────────── rendering bits ──────────────────────────── */
+
+/** The five shortcuts, in order, with the label key each one reads. */
+const PERIOD_CHOICES = [
+  { span: 6 * 3600, key: 'period6h' },
+  { span: 12 * 3600, key: 'period12h' },
+  { span: 24 * 3600, key: 'period24h' },
+  { span: 3 * DAY, key: 'period3d' },
+  { span: 7 * DAY, key: 'period7d' }
+]
+
+/**
+ * The period shortcuts: keep one slice of the timeline on screen.
+ *
+ * Grouped so the five durations read as a single control, and exactly one is active —
+ * clicking the active one releases the view back to the reader, which is also what any
+ * scroll or zoom does (the selection states what is on screen, it is not a mode that
+ * survives moving away).
+ */
+function PeriodSelector({ value, onChange, disabled }) {
+  const i18n = useGanttI18n()
+  return jsx('div', {
+    role: 'group',
+    'aria-label': i18n.periodLabel,
+    className: 'inline-flex items-stretch overflow-hidden rounded-md',
+    style: { border: '1px solid var(--ui-stroke-tertiary)', opacity: disabled ? 0.45 : 1 },
+    children: PERIOD_CHOICES.map(({ span, key }, index) => {
+      const active = value === span
+      return jsx('button', {
+        type: 'button',
+        disabled: Boolean(disabled),
+        'aria-pressed': active,
+        title: `${i18n.periodShow} ${i18n[key]}`,
+        onClick: () => onChange(span),
+        className: cn(
+          'h-5 px-1.5 text-[10px] leading-none tabular-nums border-0 cursor-pointer',
+          active ? 'font-semibold' : 'font-normal'
+        ),
+        style: {
+          backgroundColor: active ? 'var(--ui-accent)' : 'transparent',
+          color: active ? 'var(--ui-bg-chrome)' : 'var(--ui-text-secondary)',
+          borderLeft: index ? '1px solid var(--ui-stroke-tertiary)' : 'none'
+        },
+        children: i18n[key]
+      }, span)
+    })
+  })
+}
 
 /**
  * Hour gridlines, drawn only once the wheel zoom has made an hour wide enough to
@@ -2112,6 +2159,8 @@ export function KanbanGanttPage() {
     const saved = getStorage() ? getStorage().get('viewMode', null) : null
     return saved === 'list' ? 'list' : 'timeline'
   })
+  // The selected period shortcut, in seconds (null = the view is the reader's).
+  const [period, setPeriod] = useState(null)
   const listMode = viewMode === 'list'
   const handleViewMode = mode => {
     setViewMode(mode)
@@ -2362,7 +2411,13 @@ export function KanbanGanttPage() {
   const handleZoomChange = val => {
     setZoom(val)
     if (getStorage()) getStorage().set('zoom', val)
+    // A zoom is the other way the view stops being the selected period, so the match
+    // is re-evaluated right away — no waiting for a scroll event that may never come.
+    // Our own calibration sets the zoom too, and it must not clear what it is placing.
+    if (zoomWatch.current && !calibrating.current) zoomWatch.current(val)
   }
+  const zoomWatch = useRef(null)
+  const calibrating = useRef(false)
 
   // View options live in one atom so the rows and the drawer read the same value.
   // The doors are wired at register time, so the atom cannot seed itself at module
@@ -2527,6 +2582,117 @@ export function KanbanGanttPage() {
     el.scrollLeft = Math.max(0, (anchor.at - domain.min) * pxPerSec - anchor.cursorPx)
   }, [zoom, pxPerSec, domain.min])
 
+  // ── the period shortcuts ────────────────────────────────────────────────────
+  // While a period is selected the view is OURS to place: it is re-calibrated whenever
+  // the clock, the pane or the label column changes, so the whole slice stays visible
+  // even after the column is resized. A gesture by the reader ends that — the scroll
+  // handler compares what is on screen with the period and drops it.
+  const periodRef = useRef(null)
+  periodRef.current = period
+  // Programmatic placements move the view too; for a moment after one, a scroll event
+  // is our own echo rather than a gesture, and must not clear the selection.
+  const placingUntil = useRef(0)
+
+  // 1. the scale: px/sec that makes the slice fill the visible timeline area.
+  useEffect(() => {
+    if (period == null) return
+    const el = scrollerRef.current
+    if (!el) return
+    const target = periodPxPerSec(period, el.clientWidth, labelW)
+    if (target == null) return
+    const next = clampZoom(target / basePerSec, basePerSec)
+    placingUntil.current = performance.now() + 300
+    if (next !== zoom) {
+      // Flagged: this zoom is ours, so `handleZoomChange` must not judge the view on
+      // the position it is about to fix.
+      calibrating.current = true
+      handleZoomChange(next)
+      calibrating.current = false
+    }
+  }, [period, labelW, trackW, basePerSec, zoom])
+
+  // What the view would be at a new scale, with the scroll it has now: enough to know
+  // whether a zoom kept the selected period or left it behind.
+  const evaluateZoom = nextZoom => {
+    const el = scrollerRef.current
+    if (!el || periodRef.current == null) return
+    const visible = visibleWindow({
+      min: domain.min, pxPerSec: basePerSec * nextZoom, scrollLeft: el.scrollLeft,
+      clientWidth: el.clientWidth, labelW
+    })
+    const matched = matchPeriod(visible, Date.now() / 1000, PERIOD_TOLERANCE)
+    if (matched !== periodRef.current) setPeriod(matched)
+  }
+  zoomWatch.current = evaluateZoom
+
+  // 2. the position — after the scale is in place, right-align the slice on now. Runs
+  //    on every clock tick, which is what makes the window follow.
+  useEffect(() => {
+    if (period == null) return
+    const el = scrollerRef.current
+    if (!el) return
+    const target = periodScrollLeft({
+      from: now - period, to: now, min: domain.min,
+      pxPerSec, clientWidth: el.clientWidth, labelW
+    })
+    if (target == null) return
+    placingUntil.current = performance.now() + 300
+    if (el.scrollLeft !== target) el.scrollLeft = target
+  }, [period, pxPerSec, labelW, trackW, nowTick, domain.min])
+
+  // A scroll that no longer corresponds to the selected period means the reader has
+  // taken over: the selector goes blank (or lights up whatever it does match now).
+  const handleScroll = () => {
+    const el = scrollerRef.current
+    if (!el) return
+    if (performance.now() < placingUntil.current) return
+    const visible = visibleWindow({
+      min: domain.min, pxPerSec, scrollLeft: el.scrollLeft,
+      clientWidth: el.clientWidth, labelW
+    })
+    const matched = matchPeriod(visible, now, PERIOD_TOLERANCE)
+    if (matched !== periodRef.current) setPeriod(matched)
+    // Remember where the reader left the view, for the next open.
+    const s = getStorage()
+    const stamp = performance.now()
+    if (s && stamp - lastScrollSave.current > 500) {
+      lastScrollSave.current = stamp
+      s.set('scroll', Math.round(el.scrollLeft))
+    }
+  }
+
+  // Restore the remembered period once, and only if the remembered zoom is still the
+  // one the period implies: a reader who zoomed far away gets their zoom and position
+  // back instead of being yanked to a slice they left.
+  const restoreDone = useRef(false)
+  const lastScrollSave = useRef(0)
+  useEffect(() => {
+    if (restoreDone.current) return
+    const el = scrollerRef.current
+    if (!el || el.clientWidth <= 0) return
+    const s = getStorage()
+    restoreDone.current = true
+    if (!s) return
+    const saved = Number(s.get('period', null))
+    if (saved > 0) {
+      const implied = periodPxPerSec(saved, el.clientWidth, labelW) / basePerSec
+      if (Number.isFinite(implied) && implied > 0 && Math.abs(zoom - implied) / implied <= 0.25) {
+        setPeriod(saved)
+        return
+      }
+    }
+    const scroll = Number(s.get('scroll', null))
+    if (Number.isFinite(scroll) && scroll > 0) el.scrollLeft = scroll
+  }, [trackW, labelW, basePerSec, zoom])
+
+  const handlePeriod = span => {
+    // Clicking the active value releases the view; the value stays remembered.
+    const next = period === span ? null : span
+    setPeriod(next)
+    const s = getStorage()
+    if (next != null && s) s.set('period', next)
+  }
+
   const grid = rows.map((row, idx) => jsx(TaskRow, {
     ...row,
     now,
@@ -2656,44 +2822,11 @@ export function KanbanGanttPage() {
             className: 'inline-flex items-center gap-3',
             children: [
               jsx(ViewToggle, { value: viewMode, onChange: handleViewMode }),
-              // The view's own menu: a display preference belongs here, next to the
-              // other view controls — not in a task's action menu.
-              jsxs(DropdownMenu, { children: [
-                jsx(DropdownMenuTrigger, {
-                  asChild: true,
-                  children: jsx('button', {
-                    type: 'button',
-                    className: 'inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent',
-                    'aria-label': i18n.viewOptions,
-                    title: i18n.viewOptions,
-                    children: jsx(Codicon, { name: 'kebab-vertical', size: '0.9rem' })
-                  })
-                }),
-                jsxs(DropdownMenuContent, {
-                  align: 'end',
-                  className: 'min-w-[17rem] p-1 text-xs',
-                  children: [
-                    jsxs(DropdownMenuItem, {
-                      className: 'flex items-start gap-2 px-3 py-1.5',
-                      onClick: () => handleTitlePrefixTags(!titlePrefixTags),
-                      children: [
-                        jsx(Codicon, {
-                          name: titlePrefixTags ? 'check' : 'blank',
-                          size: '0.85rem',
-                          className: 'mt-0.5 shrink-0'
-                        }),
-                        jsxs('span', { className: 'flex flex-col gap-0.5 min-w-0', children: [
-                          jsx('span', { children: i18n.titlePrefixTags }),
-                          jsx('span', {
-                            className: 'text-[10px] text-(--ui-text-tertiary)',
-                            children: i18n.titlePrefixTagsHint
-                          })
-                        ] })
-                      ]
-                    })
-                  ]
-                })
-              ] }),
+              jsx(PeriodSelector, {
+                value: period,
+                onChange: handlePeriod,
+                disabled: listMode
+              }),
               listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {
                   type: 'range',
@@ -2736,7 +2869,45 @@ export function KanbanGanttPage() {
                   jsx(Codicon, { name: 'add', size: '0.85rem' }),
                   i18n.newTask
                 ] })
-              })
+              }),
+              // The view's own menu, rightmost next to the creation verb: a display
+              // preference belongs with the view, not inside a task's action menu.
+              jsxs(DropdownMenu, { children: [
+                jsx(DropdownMenuTrigger, {
+                  asChild: true,
+                  children: jsx('button', {
+                    type: 'button',
+                    className: 'inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent',
+                    'aria-label': i18n.viewOptions,
+                    title: i18n.viewOptions,
+                    children: jsx(Codicon, { name: 'kebab-vertical', size: '0.9rem' })
+                  })
+                }),
+                jsxs(DropdownMenuContent, {
+                  align: 'end',
+                  className: 'min-w-[17rem] p-1 text-xs',
+                  children: [
+                    jsxs(DropdownMenuItem, {
+                      className: 'flex items-start gap-2 px-3 py-1.5',
+                      onClick: () => handleTitlePrefixTags(!titlePrefixTags),
+                      children: [
+                        jsx(Codicon, {
+                          name: titlePrefixTags ? 'check' : 'blank',
+                          size: '0.85rem',
+                          className: 'mt-0.5 shrink-0'
+                        }),
+                        jsxs('span', { className: 'flex flex-col gap-0.5 min-w-0', children: [
+                          jsx('span', { children: i18n.titlePrefixTags }),
+                          jsx('span', {
+                            className: 'text-[10px] text-(--ui-text-tertiary)',
+                            children: i18n.titlePrefixTagsHint
+                          })
+                        ] })
+                      ]
+                    })
+                  ]
+                })
+              ] })
             ]
           })
         ]
@@ -2768,6 +2939,7 @@ export function KanbanGanttPage() {
                 ref: scrollerRef,
                 className: 'overflow-auto flex-1 min-h-0 relative',
                 onWheel: handleWheel,
+                onScroll: handleScroll,
                 children: [
                   jsxs('div', {
                     className: cn('grid sticky top-0 z-20 bg-(--ui-bg-chrome)', listMode ? 'w-full' : 'w-max'),
