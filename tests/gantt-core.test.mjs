@@ -780,6 +780,49 @@ test('the now line is measured from the timeline origin, not the container edge'
   assert.equal(nowLineX(NOW, min, NOW - 1, pxPerSec, labelW), null)
 })
 
+/* ── attachments: the eye only appears where the browser can show something ──── */
+
+test('an attachment is previewable by its extension, and by its declared type', () => {
+  const { previewKind } = core
+  // what the reader can actually look at
+  assert.equal(previewKind('notes.md', ''), 'markdown')
+  assert.equal(previewKind('NOTES.MARKDOWN', ''), 'markdown')
+  assert.equal(previewKind('build.log', ''), 'text')
+  assert.equal(previewKind('data.json', ''), 'text')
+  assert.equal(previewKind('script.py', ''), 'text')
+  assert.equal(previewKind('shot.png', ''), 'image')
+  assert.equal(previewKind('logo.svg', ''), 'image')
+  assert.equal(previewKind('report.pdf', ''), 'pdf')
+  assert.equal(previewKind('page.html', ''), 'html')
+  // everything else offers a download and nothing more
+  assert.equal(previewKind('archive.zip', ''), null)
+  assert.equal(previewKind('firmware.bin', ''), null)
+  assert.equal(previewKind('no-extension', ''), null)
+  assert.equal(previewKind('', ''), null)
+  assert.equal(previewKind(null, null), null)
+  // a missing or misleading extension falls back to the declared MIME
+  assert.equal(previewKind('blob', 'image/png'), 'image')
+  assert.equal(previewKind('blob', 'application/pdf; charset=binary'), 'pdf')
+  assert.equal(previewKind('blob', 'text/html'), 'html')
+  assert.equal(previewKind('blob', 'text/plain'), 'text')
+  assert.equal(previewKind('blob', 'application/zip'), null)
+  // the extension wins over a wrong declaration: it is what the user sees
+  assert.equal(previewKind('notes.md', 'application/octet-stream'), 'markdown')
+})
+
+test('the MIME handed to the Blob is the declared one, else a guess', () => {
+  const { attachmentMime } = core
+  assert.equal(attachmentMime('a.pdf', 'application/pdf'), 'application/pdf')
+  assert.equal(attachmentMime('a.txt', 'text/plain; charset=utf-8'), 'text/plain',
+    'parameters are dropped: the Blob wants the bare type')
+  assert.equal(attachmentMime('a.png', ''), 'image/png')
+  assert.equal(attachmentMime('a.jpg', ''), 'image/jpeg')
+  assert.equal(attachmentMime('a.svg', ''), 'image/svg+xml')
+  assert.equal(attachmentMime('a.md', ''), 'text/markdown')
+  assert.equal(attachmentMime('a.html', ''), 'text/html')
+  assert.equal(attachmentMime('a.zip', ''), 'application/octet-stream')
+})
+
 /* ── the period shortcuts ───────────────────────────────────────────────────── */
 
 test('a period calibrates the scale, and the slice lands entirely on screen', () => {

@@ -96,6 +96,63 @@ export function zoomPctFromFactor(factor, minFactor, maxFactor) {
   const read = Math.log(Math.max(1e-9, factor) / lo) / step
   return clampZoomPct(ZOOM_PCT_MIN + read * (ZOOM_PCT_MAX - ZOOM_PCT_MIN))
 }
+// ── attachments: what the browser can show, and as what ──────────────────────
+// The bytes always travel through the plugin's own REST door on the gateway that owns the
+// board, so the desktop never touches a path — it rebuilds a Blob from what the route
+// returned and lets the webview render it. That is why the only question here is the TYPE.
+const PREVIEW_BY_EXTENSION = [
+  [['md', 'markdown'], 'markdown'],
+  [['txt', 'log', 'json', 'csv', 'tsv', 'yml', 'yaml', 'toml', 'ini', 'cfg', 'conf', 'env',
+    'sh', 'bash', 'zsh', 'py', 'js', 'mjs', 'ts', 'tsx', 'rs', 'go', 'java', 'sql', 'diff', 'patch'], 'text'],
+  [['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'avif'], 'image'],
+  [['svg'], 'image'],
+  [['pdf'], 'pdf'],
+  [['html', 'htm'], 'html']
+]
+/**
+ * How to show an attachment, or null when only a download makes sense.
+ *
+ * Extension first (it is what the user sees), then the declared MIME type as a fallback —
+ * a file with no extension but `image/png` is still an image. `html` is previewable but
+ * sandboxed by the caller: an attachment is user-supplied text, and it must not run.
+ */
+export function previewKind(filename, contentType) {
+  const name = String(filename || '').toLowerCase()
+  const dot = name.lastIndexOf('.')
+  const ext = dot > 0 ? name.slice(dot + 1) : ''
+  for (const [extensions, kind] of PREVIEW_BY_EXTENSION) {
+    if (extensions.includes(ext)) return kind
+  }
+  const mime = String(contentType || '').toLowerCase().split(';')[0].trim()
+  if (mime === 'application/pdf') return 'pdf'
+  if (mime === 'text/html') return 'html'
+  if (mime === 'text/markdown') return 'markdown'
+  if (mime.startsWith('image/')) return 'image'
+  if (mime.startsWith('text/')) return 'text'
+  return null
+}
+/** The MIME to hand the Blob: what the board declared, else a sensible guess from the
+ *  extension, so the webview picks the right renderer instead of downloading the lot. */
+export function attachmentMime(filename, contentType) {
+  const declared = String(contentType || '').split(';')[0].trim()
+  if (declared) return declared
+  switch (previewKind(filename, '')) {
+    case 'markdown': return 'text/markdown'
+    case 'text': return 'text/plain'
+    case 'pdf': return 'application/pdf'
+    case 'html': return 'text/html'
+    case 'image': {
+      const name = String(filename || '').toLowerCase()
+      if (name.endsWith('.svg')) return 'image/svg+xml'
+      if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg'
+      if (name.endsWith('.gif')) return 'image/gif'
+      if (name.endsWith('.webp')) return 'image/webp'
+      return 'image/png'
+    }
+    default: return 'application/octet-stream'
+  }
+}
+
 /** Where the "now" line sits in px, or null when now is outside the window. */
 export function nowOffset(now, min, max, pxPerSec) {
   if (!(now >= min && now <= max)) return null

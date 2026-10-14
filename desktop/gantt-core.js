@@ -61,6 +61,80 @@ function zoomPctFromFactor(factor, minFactor, maxFactor) {
   const read = Math.log(Math.max(1e-9, factor) / lo) / step;
   return clampZoomPct(ZOOM_PCT_MIN + read * (ZOOM_PCT_MAX - ZOOM_PCT_MIN));
 }
+var PREVIEW_BY_EXTENSION = [
+  [["md", "markdown"], "markdown"],
+  [[
+    "txt",
+    "log",
+    "json",
+    "csv",
+    "tsv",
+    "yml",
+    "yaml",
+    "toml",
+    "ini",
+    "cfg",
+    "conf",
+    "env",
+    "sh",
+    "bash",
+    "zsh",
+    "py",
+    "js",
+    "mjs",
+    "ts",
+    "tsx",
+    "rs",
+    "go",
+    "java",
+    "sql",
+    "diff",
+    "patch"
+  ], "text"],
+  [["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif"], "image"],
+  [["svg"], "image"],
+  [["pdf"], "pdf"],
+  [["html", "htm"], "html"]
+];
+function previewKind(filename, contentType) {
+  const name = String(filename || "").toLowerCase();
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot + 1) : "";
+  for (const [extensions, kind] of PREVIEW_BY_EXTENSION) {
+    if (extensions.includes(ext)) return kind;
+  }
+  const mime = String(contentType || "").toLowerCase().split(";")[0].trim();
+  if (mime === "application/pdf") return "pdf";
+  if (mime === "text/html") return "html";
+  if (mime === "text/markdown") return "markdown";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("text/")) return "text";
+  return null;
+}
+function attachmentMime(filename, contentType) {
+  const declared = String(contentType || "").split(";")[0].trim();
+  if (declared) return declared;
+  switch (previewKind(filename, "")) {
+    case "markdown":
+      return "text/markdown";
+    case "text":
+      return "text/plain";
+    case "pdf":
+      return "application/pdf";
+    case "html":
+      return "text/html";
+    case "image": {
+      const name = String(filename || "").toLowerCase();
+      if (name.endsWith(".svg")) return "image/svg+xml";
+      if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+      if (name.endsWith(".gif")) return "image/gif";
+      if (name.endsWith(".webp")) return "image/webp";
+      return "image/png";
+    }
+    default:
+      return "application/octet-stream";
+  }
+}
 function nowOffset(now, min, max, pxPerSec) {
   if (!(now >= min && now <= max)) return null;
   return Math.round((now - min) * pxPerSec);
@@ -483,6 +557,7 @@ export {
   TREE_SQUARE,
   ZOOM_PCT_MAX,
   ZOOM_PCT_MIN,
+  attachmentMime,
   barRange,
   buildRows,
   clampZoom,
@@ -502,6 +577,7 @@ export {
   nowOffset,
   periodPxPerSec,
   periodScrollLeft,
+  previewKind,
   relationsOf,
   relativeAge,
   resolveBoardSlug,
