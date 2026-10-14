@@ -4074,9 +4074,11 @@ function KanbanGanttPage() {
   const visibleWidth = Math.max(trackW - labelW - 24, 300);
   const baseDayWidth = visibleWidth / 7;
   const basePerSec = baseDayWidth / DAY;
-  const pxPerSec = basePerSec * zoom;
+  const zoomCeiling = visibleWidth / 6;
+  const zoomMax = maxZoom(basePerSec, zoomCeiling);
+  const zoomUsed = Math.min(zoom, zoomMax);
+  const pxPerSec = basePerSec * zoomUsed;
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec));
-  const zoomMax = maxZoom(basePerSec);
   const zoomAnchor = useRef2(null);
   const handleWheel = (event) => {
     const el = scrollerRef.current;
@@ -4092,7 +4094,7 @@ function KanbanGanttPage() {
     const rect = el.getBoundingClientRect();
     const cursorPx = event.clientX - rect.left - labelW;
     const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec;
-    const next = clampZoom(zoom * factor, basePerSec);
+    const next = clampZoom(zoom * factor, basePerSec, zoomCeiling);
     if (next === zoom) return;
     event.preventDefault();
     zoomAnchor.current = { at, cursorPx };
@@ -4135,16 +4137,16 @@ function KanbanGanttPage() {
     if (!el) return;
     const target = periodPxPerSec(period, el.clientWidth, labelW);
     if (target == null) return;
-    const next = clampZoom(target / basePerSec, basePerSec);
+    const next = clampZoom(target / basePerSec, basePerSec, zoomCeiling);
     placingUntil.current = performance.now() + 300;
-    if (next !== zoom) {
+    if (next !== zoomUsed) {
       calibrating.current = true;
       handleZoomChange(next);
       calibrating.current = false;
     }
     const s = getStorage();
     if (s) s.set("periodZoom", next);
-  }, [period, labelW, trackW, basePerSec, zoom]);
+  }, [period, labelW, trackW, basePerSec, zoomUsed, zoomCeiling]);
   const evaluateZoom = (nextZoom) => {
     const el = scrollerRef.current;
     if (!el || periodRef.current == null) return;
@@ -4318,13 +4320,13 @@ function KanbanGanttPage() {
                       min: String(ZOOM_MIN),
                       max: String(zoomMax),
                       step: String(ZOOM_STEP),
-                      value: String(zoom),
+                      value: String(zoomUsed),
                       onInput: (event) => handleZoomChange(Number(event.target.value)),
                       className: "w-24",
                       title: i18n.zoomWheelHint,
                       "aria-label": i18n.zoomTimeline
                     }),
-                    jsx6("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${Math.round(zoom * 100)}%` })
+                    jsx6("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${Math.round(zoomUsed * 100)}%` })
                   ] }),
                   // The Refresh button is back, but only when the page is KNOWINGLY on
                   // the 60 s poll: the push is off (KANBAN_GANTT_WS=0 on the gateway, or

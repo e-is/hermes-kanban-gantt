@@ -2538,11 +2538,17 @@ export function KanbanGanttPage() {
   // At zoom = 1 (100%), exactly 1 week (7 days) fills the visible timeline width
   const baseDayWidth = visibleWidth / 7
   const basePerSec = baseDayWidth / DAY
-  const pxPerSec = basePerSec * zoom
+  // The detail ceiling is a WINDOW, not a pixel ratio: zooming past the point where 6 h
+  // fills the pane buys nothing but a smeared ruler, so the scale stops there. It is
+  // derived from the live width, so a wide window cannot zoom further than a narrow one.
+  const zoomCeiling = visibleWidth / 6          // px per hour that "6 h fits" implies
+  const zoomMax = maxZoom(basePerSec, zoomCeiling)
+  // A zoom remembered from a build without a ceiling (or from a much wider pane) is
+  // truncated here, at render time — a derived value, so nothing sets state on mount and
+  // the slider, the wheel and the period shortcut all read the same number.
+  const zoomUsed = Math.min(zoom, zoomMax)
+  const pxPerSec = basePerSec * zoomUsed
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec))
-  // The wheel zoom's ceiling: 240 px/h of detail, expressed as a zoom factor for
-  // THIS window width (a wider pane reaches the ceiling sooner).
-  const zoomMax = maxZoom(basePerSec)
 
   // Wheel over the timeline = zoom anchored at the cursor; Shift+wheel = pan.
   // The step follows the DELTA, not the event count: a mouse notch and a trackpad
@@ -2565,7 +2571,7 @@ export function KanbanGanttPage() {
     const rect = el.getBoundingClientRect()
     const cursorPx = event.clientX - rect.left - labelW
     const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec
-    const next = clampZoom(zoom * factor, basePerSec)
+    const next = clampZoom(zoom * factor, basePerSec, zoomCeiling)
     if (next === zoom) return
     event.preventDefault()
     zoomAnchor.current = { at, cursorPx }
@@ -2615,9 +2621,9 @@ export function KanbanGanttPage() {
     if (!el) return
     const target = periodPxPerSec(period, el.clientWidth, labelW)
     if (target == null) return
-    const next = clampZoom(target / basePerSec, basePerSec)
+    const next = clampZoom(target / basePerSec, basePerSec, zoomCeiling)
     placingUntil.current = performance.now() + 300
-    if (next !== zoom) {
+    if (next !== zoomUsed) {
       calibrating.current = true
       handleZoomChange(next)
       calibrating.current = false
@@ -2626,7 +2632,7 @@ export function KanbanGanttPage() {
     // compares the reader's zoom against.
     const s = getStorage()
     if (s) s.set('periodZoom', next)
-  }, [period, labelW, trackW, basePerSec, zoom])
+  }, [period, labelW, trackW, basePerSec, zoomUsed, zoomCeiling])
 
   // What the view would be at a new scale, with the scroll it has now.
   const evaluateZoom = nextZoom => {
@@ -2817,13 +2823,13 @@ export function KanbanGanttPage() {
                   min: String(ZOOM_MIN),
                   max: String(zoomMax),
                   step: String(ZOOM_STEP),
-                  value: String(zoom),
+                  value: String(zoomUsed),
                   onInput: event => handleZoomChange(Number(event.target.value)),
                   className: 'w-24',
                   title: i18n.zoomWheelHint,
                   'aria-label': i18n.zoomTimeline
                 }),
-                jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${Math.round(zoom * 100)}%` })
+                jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${Math.round(zoomUsed * 100)}%` })
               ] }),
               // The Refresh button is back, but only when the page is KNOWINGLY on
               // the 60 s poll: the push is off (KANBAN_GANTT_WS=0 on the gateway, or

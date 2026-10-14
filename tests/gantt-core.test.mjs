@@ -848,6 +848,25 @@ test('the closest shortcut wins when several fit inside the tolerance', () => {
   assert.equal(matchPeriod(windowOf(40), NOW), null)
 })
 
+test('the default ceiling is exactly "6 h fills the pane"', () => {
+  const { maxZoom, periodPxPerSec } = core
+  const labelW = 300
+  const clientWidth = 1000
+  const basePerSec = (1000 / 7) / DAY
+  // the ceiling the renderer derives: visible px per hour that a 6 h span implies
+  const ceiling = maxZoom(basePerSec, (clientWidth - labelW) / 6)
+  // ...must be the very zoom a 6 h period calibrates to, so the wheel, the slider and the
+  // period shortcut stop at the same place
+  assert.ok(Math.abs(ceiling - periodPxPerSec(6 * 3600, clientWidth, labelW) / basePerSec) < 1e-9,
+    'the ceiling and the 6 h calibration are the same number')
+  // a wider pane does not zoom further in absolute terms: it is still "6 h fits"
+  const wide = maxZoom(basePerSec, (2000 - labelW) / 6)
+  assert.ok(Math.abs(wide * basePerSec * 3600 - (2000 - labelW) / 6) < 1e-9)
+  // and a value restored from a build without a ceiling is truncated to it
+  const { clampZoom } = core
+  assert.equal(clampZoom(50, basePerSec, (clientWidth - labelW) / 6), ceiling)
+})
+
 test('a 6 h slice in a huge pane hits the detail ceiling instead of lying', () => {
   const { periodPxPerSec, clampZoom, maxZoom } = core
   const basePerSec = (1000 / 7) / DAY
