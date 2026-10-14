@@ -668,10 +668,10 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               jsx(AttachmentMenu, {
                 taskId: task.id,
                 board: task.board,
-                attachments: task.attachments,
+                count: task.attachment_count,
                 i18n,
-                onPreview: att => $openAttachment.set(
-                  attachmentPreviewState(task.id, task.board, att, task.attachments)
+                onPreview: (att, siblings) => $openAttachment.set(
+                  attachmentPreviewState(task.id, task.board, att, siblings)
                 )
               })
             ]
@@ -1248,6 +1248,14 @@ function AttachmentBody({ att, data, i18n }) {
   return jsx('p', { className: 'text-[11px] text-(--ui-text-quaternary)', children: i18n.previewFailed })
 }
 
+/** The files of one task, read when a paperclip is opened — never with the board. */
+async function fetchAttachments(taskId, board) {
+  const payload = await apiFetch(
+    `/tasks/${taskId}/attachments?board=${encodeURIComponent(board || '')}`
+  )
+  return (payload && payload.attachments) || []
+}
+
 /** Save an attachment to disk.
  *
  * The plugin bridge only speaks JSON, so the route hands back text when the file is
@@ -1343,9 +1351,18 @@ function AttachmentLine({ taskId, board, att, i18n, onPreview, iconSize, hoverab
  * The eye only appears when the webview can actually show the type (`previewKind`), so the
  * affordance never promises something it cannot do; everything else stays downloadable.
  */
-function AttachmentMenu({ taskId, board, attachments, i18n, onPreview, className }) {
-  if (!attachments || !attachments.length) return null
-  const countLabel = i18n.attachments(attachments.length)
+function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
+  // Hover is the intent signal: the list is fetched then (and on click, for keyboards and
+  // touch), so a board's payload never carries a single file name.
+  const [wanted, setWanted] = useState(false)
+  const query = useQuery({
+    queryKey: ['kanban-gantt', 'attachments', taskId, board],
+    queryFn: () => fetchAttachments(taskId, board),
+    enabled: wanted
+  })
+  if (!count) return null
+  const attachments = query.data || []
+  const countLabel = i18n.attachments(count)
   return jsxs(DropdownMenu, { children: [
     jsx(DropdownMenuTrigger, {
       asChild: true,
@@ -1360,8 +1377,9 @@ function AttachmentMenu({ taskId, board, attachments, i18n, onPreview, className
         'aria-label': countLabel,
         // The name cell is a drag handle and opens the detail on click: the paperclip must
         // not do either.
-        onClick: event => event.stopPropagation(),
+        onClick: event => { event.stopPropagation(); setWanted(true) },
         onPointerDown: event => event.stopPropagation(),
+        onPointerEnter: () => setWanted(true),
         children: jsx(Codicon, { name: 'paperclip', size: '0.75rem' })
       })
     }),
@@ -1373,12 +1391,23 @@ function AttachmentMenu({ taskId, board, attachments, i18n, onPreview, className
           className: 'px-2 py-1 text-[10px] uppercase font-semibold text-(--ui-text-tertiary)',
           children: countLabel
         }),
-        jsx('ul', {
-          className: 'flex flex-col gap-0.5',
-          children: attachments.map(att =>
-            jsx(AttachmentLine, { taskId, board, att, i18n, onPreview, hoverable: true })
-          )
-        })
+        // The list arrives on demand: say so rather than showing an empty menu.
+        query.isLoading
+          ? jsx('div', { className: 'grid h-10 place-items-center', children: jsx(Loader, {}) })
+          : query.isError
+            ? jsx('p', {
+                className: 'px-2 py-1 text-[11px] text-(--ui-text-quaternary)',
+                children: i18n.previewFailed
+              })
+            : jsx('ul', {
+                className: 'flex flex-col gap-0.5',
+                children: attachments.map(att =>
+                  jsx(AttachmentLine, {
+                    taskId, board, att, i18n, hoverable: true,
+                    onPreview: item => onPreview(item, attachments)
+                  })
+                )
+              })
       ]
     })
   ] })

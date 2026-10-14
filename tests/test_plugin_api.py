@@ -134,17 +134,17 @@ def test_gantt_snapshot(client):
 
     assert {"label": "TEST", "count": 2} in data["labels"]
 
-    # A row must always carry the field, empty when the task has no attachment: the
-    # paperclip reads it on every row, so a missing key would break the whole table.
-    assert all("attachments" in t for t in data["tasks"])
-    assert all(isinstance(t["attachments"], list) for t in data["tasks"])
+    # A COUNT, not the files: a row only needs to know whether to draw a paperclip, and the
+    # names are fetched when that paperclip is opened. A missing key would break every row.
+    assert all("attachment_count" in t for t in data["tasks"])
+    assert all(isinstance(t["attachment_count"], int) for t in data["tasks"])
 
 
-def test_task_attachments_are_grouped_by_task(tmp_path):
-    """`_task_attachments` is one query for the whole board, grouped afterwards.
+def test_attachment_counts_group_by_task(tmp_path):
+    """`_attachment_counts` answers "does this row need a paperclip", for the whole board.
 
-    It is the only place the row's metadata comes from, so what it must get right is the
-    grouping and the shape — the size and type travel with each file, the bytes do not.
+    It is one aggregate query, so what it must get right is the grouping — and that it
+    returns a number, not the file list the row has no use for.
     """
     import sqlite3
 
@@ -163,24 +163,27 @@ def test_task_attachments_are_grouped_by_task(tmp_path):
     )
     conn.commit()
 
-    grouped = plugin_api._task_attachments(conn)
+    counts = plugin_api._attachment_counts(conn)
     conn.close()
 
-    assert set(grouped) == {"t_a", "t_b"}
-    assert [a["filename"] for a in grouped["t_a"]] == ["degrade.png", "notes.md"], "order kept"
-    assert grouped["t_a"][0]["content_type"] == "image/png"
-    assert grouped["t_a"][0]["size"] == 81416
-    assert "stored_path" not in grouped["t_a"][0], "the path is not the row's business"
-    assert [a["filename"] for a in grouped["t_b"]] == ["archive.zip"]
-    assert grouped["t_a"][0]["id"] != grouped["t_a"][1]["id"]
+    assert counts == {"t_a": 2, "t_b": 1}
+    assert isinstance(counts["t_a"], int)
+    assert "t_c" not in counts, "a task with no attachment is simply absent"
 
 
-def test_task_attachments_returns_empty_for_a_bare_board(client):
-    """No attachment table rows: every task gets an empty list, never a lookup failure."""
+def test_task_attachment_routes(client):
+    """An empty list still answers 200: the paperclip's menu must not need a special case."""
     http, board = client
+    r = http.get(f"/tasks/{board['solo']}/attachments?board={board['slug']}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["task_id"] == board["solo"]
+    assert data["board"] == board["slug"]
+    assert data["attachments"] == []
+
     conn = plugin_api._connect(board["slug"], ro=True)
     try:
-        assert plugin_api._task_attachments(conn) == {}
+        assert plugin_api._attachment_counts(conn) == {}
     finally:
         conn.close()
 

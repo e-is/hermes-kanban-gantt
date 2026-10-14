@@ -2555,10 +2555,10 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               jsx6(AttachmentMenu, {
                 taskId: task.id,
                 board: task.board,
-                attachments: task.attachments,
+                count: task.attachment_count,
                 i18n,
-                onPreview: (att) => $openAttachment.set(
-                  attachmentPreviewState(task.id, task.board, att, task.attachments)
+                onPreview: (att, siblings) => $openAttachment.set(
+                  attachmentPreviewState(task.id, task.board, att, siblings)
                 )
               })
             ]
@@ -3096,6 +3096,12 @@ function AttachmentBody({ att, data, i18n }) {
   }
   return jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.previewFailed });
 }
+async function fetchAttachments(taskId, board) {
+  const payload = await apiFetch(
+    `/tasks/${taskId}/attachments?board=${encodeURIComponent(board || "")}`
+  );
+  return payload && payload.attachments || [];
+}
 async function downloadAttachment(taskId, board, att, i18n) {
   try {
     const data = await fetchAttachment(taskId, board, att.id);
@@ -3160,9 +3166,16 @@ function AttachmentLine({ taskId, board, att, i18n, onPreview, iconSize, hoverab
     ]
   }, att.id);
 }
-function AttachmentMenu({ taskId, board, attachments, i18n, onPreview, className }) {
-  if (!attachments || !attachments.length) return null;
-  const countLabel = i18n.attachments(attachments.length);
+function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
+  const [wanted, setWanted] = useState4(false);
+  const query = useQuery2({
+    queryKey: ["kanban-gantt", "attachments", taskId, board],
+    queryFn: () => fetchAttachments(taskId, board),
+    enabled: wanted
+  });
+  if (!count) return null;
+  const attachments = query.data || [];
+  const countLabel = i18n.attachments(count);
   return jsxs6(DropdownMenu3, { children: [
     jsx6(DropdownMenuTrigger3, {
       asChild: true,
@@ -3177,8 +3190,12 @@ function AttachmentMenu({ taskId, board, attachments, i18n, onPreview, className
         "aria-label": countLabel,
         // The name cell is a drag handle and opens the detail on click: the paperclip must
         // not do either.
-        onClick: (event) => event.stopPropagation(),
+        onClick: (event) => {
+          event.stopPropagation();
+          setWanted(true);
+        },
         onPointerDown: (event) => event.stopPropagation(),
+        onPointerEnter: () => setWanted(true),
         children: jsx6(Codicon5, { name: "paperclip", size: "0.75rem" })
       })
     }),
@@ -3190,10 +3207,21 @@ function AttachmentMenu({ taskId, board, attachments, i18n, onPreview, className
           className: "px-2 py-1 text-[10px] uppercase font-semibold text-(--ui-text-tertiary)",
           children: countLabel
         }),
-        jsx6("ul", {
+        // The list arrives on demand: say so rather than showing an empty menu.
+        query.isLoading ? jsx6("div", { className: "grid h-10 place-items-center", children: jsx6(Loader, {}) }) : query.isError ? jsx6("p", {
+          className: "px-2 py-1 text-[11px] text-(--ui-text-quaternary)",
+          children: i18n.previewFailed
+        }) : jsx6("ul", {
           className: "flex flex-col gap-0.5",
           children: attachments.map(
-            (att) => jsx6(AttachmentLine, { taskId, board, att, i18n, onPreview, hoverable: true })
+            (att) => jsx6(AttachmentLine, {
+              taskId,
+              board,
+              att,
+              i18n,
+              hoverable: true,
+              onPreview: (item) => onPreview(item, attachments)
+            })
           )
         })
       ]

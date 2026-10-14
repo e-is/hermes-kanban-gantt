@@ -197,7 +197,8 @@ def _task_summary(row: sqlite3.Row, board_slug: Optional[str] = None) -> dict[st
         "run_started_at": row["run_started_at"],
         "run_ended_at": row["run_ended_at"],
         "runs": [],
-        "attachments": [],
+        # A count, not the files: the row only needs to know whether to draw a paperclip.
+        "attachment_count": 0,
     }
 
 
@@ -246,26 +247,19 @@ def _run_windows(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
     return out
 
 
-def _task_attachments(conn: sqlite3.Connection) -> dict[str, list[dict[str, Any]]]:
-    """Attachment metadata per task, from ``task_attachments`` — one query, not one per row.
+def _attachment_counts(conn: sqlite3.Connection) -> dict[str, int]:
+    """How many attachments each task has — a count, never the list.
 
-    Only what a row needs to decide and to list: the detail endpoint carries the rest. The
-    bytes never come from here: they go through the content route, which runs on the gateway
-    that owns the board.
+    A row only needs to know whether to draw a paperclip. The file names are fetched when
+    the reader actually opens that paperclip, from the per-task route. One aggregate query
+    for the whole board, so the cost does not follow the number of attachments.
     """
-    out: dict[str, list[dict[str, Any]]] = {}
-    for row in conn.execute(
-        "SELECT id, task_id, filename, content_type, size "
-        "FROM task_attachments ORDER BY created_at, id"
-    ):
-        tid = row[1] if isinstance(row, tuple) else row["task_id"]
-        out.setdefault(tid, []).append({
-            "id": row[0] if isinstance(row, tuple) else row["id"],
-            "filename": row[2] if isinstance(row, tuple) else row["filename"],
-            "content_type": row[3] if isinstance(row, tuple) else row["content_type"],
-            "size": row[4] if isinstance(row, tuple) else row["size"],
-        })
-    return out
+    return {
+        row[0]: row[1]
+        for row in conn.execute(
+            "SELECT task_id, count(*) FROM task_attachments GROUP BY task_id"
+        )
+    }
 
 
 def _task_detail(conn: sqlite3.Connection, task_id: str) -> dict[str, Any]:
@@ -321,7 +315,7 @@ def _read_gantt(slug: str) -> dict:
     conn.row_factory = sqlite3.Row  # _task_summary indexes by column name
     try:
         runs = _run_windows(conn)
-        attachments = _task_attachments(conn)
+        attachment_counts = _attachment_counts(conn)
         rows = conn.execute(
             "SELECT id, title, status, assignee, priority, created_at, started_at, completed_at, "
             "NULL AS run_started_at, NULL AS run_ended_at "
@@ -342,9 +336,9 @@ def _read_gantt(slug: str) -> dict:
             rec = _task_summary(row, board_slug=slug)
             rec["runs"] = []
             rec.update(runs.get(rec["id"], {}))  # real execution window & runs, if any
-            # Attachment METADATA only: the row needs to know whether to draw a paperclip,
-            # and what to list behind it. The bytes stay behind the content route.
-            rec["attachments"] = attachments.get(rec["id"], [])
+            # Whether to draw a paperclip — the files themselves are fetched on demand,
+            # from /tasks/<id>/attachments, when the reader opens it.
+            rec["attachment_count"] = attachment_counts.get(rec["id"], 0)
             rec["children"] = children.get(rec["id"], [])
             rec["parents"] = parents.get(rec["id"], [])
             tasks.append(rec)
@@ -396,12 +390,12 @@ def _read_gantt_all() -> dict:
                 parents.setdefault(child_id, []).append(parent_id)
 
             # One query per board, like the runs above.
-            attachments = _task_attachments(conn)
+            attachment_counts = _attachment_counts(conn)
             for row in rows:
                 rec = _task_summary(row, board_slug=bslug)
                 rec["runs"] = []
                 rec.update(runs.get(rec["id"], {}))
-                rec["attachments"] = attachments.get(rec["id"], [])
+                rec["attachment_count"] = attachment_counts.get(rec["id"], 0)
                 rec["children"] = children.get(rec["id"], [])
                 rec["parents"] = parents.get(rec["id"], [])
                 all_tasks.append(rec)
@@ -597,6 +591,31 @@ def get_task(task_id: str, board: Optional[str] = Query(None)):
 # still readable through the same route (base64), the client just cannot preview it.
 _TEXT_SUFFIXES = (".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".log",
                   ".py", ".ts", ".js", ".sh", ".html", ".css")
+
+
+@router.get("/tasks/{task_id}/attachments")
+def list_task_attachments(task_id: str, board: Optional[str] = Query(None)) -> dict[str, Any]:
+    """The files of one task — read when a paperclip is opened, never with the board.
+
+    The snapshot carries a count only, so listing a board costs the same whether its tasks
+    hold three attachments or three thousand. This is the one place the names are read.
+    """
+    slug = _resolve_board(board)
+    conn = _connect(slug, ro=True)
+    try:
+        rows = conn.execute(
+            "SELECT id, filename, content_type, size FROM task_attachments "
+            "WHERE task_id = ? ORDER BY created_at, id", (task_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+    return {
+        "task_id": task_id,
+        "board": slug,
+        "attachments": [
+            {"id": r[0], "filename": r[1], "content_type": r[2], "size": r[3]} for r in rows
+        ],
+    }
 
 
 @router.get("/tasks/{task_id}/attachments/{attachment_id}/content")
