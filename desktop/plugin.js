@@ -55,6 +55,7 @@ var $drawerW = atom(416);
 var $drawerDocked = atom(false);
 var $detailModal = atom(false);
 var $titlePrefixTags = atom(false);
+var $openAttachment = atom(null);
 var LABEL_W_MIN = 160;
 var LABEL_W_MAX = 640;
 var DRAWER_W_MIN = 320;
@@ -135,6 +136,9 @@ var GANTT_LOCALES = {
     previewMarkdown: (name) => `Preview ${name}`,
     previewTitle: (name) => `Preview — ${name}`,
     previewFailed: "Could not read this attachment.",
+    previousAttachment: "Previous attachment",
+    nextAttachment: "Next attachment",
+    attachmentPosition: (i, n) => `${i} of ${n}`,
     closeWindow: "Close",
     filterCards: "Filter cards…",
     zoomTimeline: "Zoom timeline",
@@ -352,6 +356,9 @@ var GANTT_LOCALES = {
     previewMarkdown: (name) => `Afficher ${name}`,
     previewTitle: (name) => `Aperçu — ${name}`,
     previewFailed: "Impossible de lire cette pièce jointe.",
+    previousAttachment: "Pièce jointe précédente",
+    nextAttachment: "Pièce jointe suivante",
+    attachmentPosition: (i, n) => `${i} sur ${n}`,
     closeWindow: "Fermer",
     filterCards: "Filtrer les tâches…",
     zoomTimeline: "Zoom timeline",
@@ -580,6 +587,9 @@ var GANTT_LOCALES = {
     previewMarkdown: (name) => `预览 ${name}`,
     previewTitle: (name) => `预览 — ${name}`,
     previewFailed: "无法读取该附件。",
+    previousAttachment: "上一个附件",
+    nextAttachment: "下一个附件",
+    attachmentPosition: (i, n) => `第 ${i} / ${n}`,
     closeWindow: "关闭",
     filterCards: "筛选任务…",
     zoomTimeline: "时间线缩放",
@@ -1075,6 +1085,80 @@ function zoomPctFromFactor(factor, minFactor, maxFactor) {
   if (!(step > 0)) return ZOOM_PCT_MIN;
   const read = Math.log(Math.max(1e-9, factor) / lo) / step;
   return clampZoomPct(ZOOM_PCT_MIN + read * (ZOOM_PCT_MAX - ZOOM_PCT_MIN));
+}
+var PREVIEW_BY_EXTENSION = [
+  [["md", "markdown"], "markdown"],
+  [[
+    "txt",
+    "log",
+    "json",
+    "csv",
+    "tsv",
+    "yml",
+    "yaml",
+    "toml",
+    "ini",
+    "cfg",
+    "conf",
+    "env",
+    "sh",
+    "bash",
+    "zsh",
+    "py",
+    "js",
+    "mjs",
+    "ts",
+    "tsx",
+    "rs",
+    "go",
+    "java",
+    "sql",
+    "diff",
+    "patch"
+  ], "text"],
+  [["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif"], "image"],
+  [["svg"], "image"],
+  [["pdf"], "pdf"],
+  [["html", "htm"], "html"]
+];
+function previewKind(filename, contentType) {
+  const name = String(filename || "").toLowerCase();
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot + 1) : "";
+  for (const [extensions, kind] of PREVIEW_BY_EXTENSION) {
+    if (extensions.includes(ext)) return kind;
+  }
+  const mime = String(contentType || "").toLowerCase().split(";")[0].trim();
+  if (mime === "application/pdf") return "pdf";
+  if (mime === "text/html") return "html";
+  if (mime === "text/markdown") return "markdown";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("text/")) return "text";
+  return null;
+}
+function attachmentMime(filename, contentType) {
+  const declared = String(contentType || "").split(";")[0].trim();
+  if (declared) return declared;
+  switch (previewKind(filename, "")) {
+    case "markdown":
+      return "text/markdown";
+    case "text":
+      return "text/plain";
+    case "pdf":
+      return "application/pdf";
+    case "html":
+      return "text/html";
+    case "image": {
+      const name = String(filename || "").toLowerCase();
+      if (name.endsWith(".svg")) return "image/svg+xml";
+      if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+      if (name.endsWith(".gif")) return "image/gif";
+      if (name.endsWith(".webp")) return "image/webp";
+      return "image/png";
+    }
+    default:
+      return "application/octet-stream";
+  }
 }
 function nowOffset(now, min, max, pxPerSec) {
   if (!(now >= min && now <= max)) return null;
@@ -2467,7 +2551,16 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
                 },
                 children: prefix
               }) : null,
-              name
+              name,
+              jsx6(AttachmentMenu, {
+                taskId: task.id,
+                board: task.board,
+                attachments: task.attachments,
+                i18n,
+                onPreview: (att) => $openAttachment.set(
+                  attachmentPreviewState(task.id, task.board, att, task.attachments)
+                )
+              })
             ]
           }),
           // Assignee at a glance: avatar when assigned, a faint dashed ring when not.
@@ -2976,6 +3069,33 @@ function StatusBadge({ status, onPick, disabled }) {
 async function fetchAttachment(taskId, board, attachmentId) {
   return apiFetch(`/tasks/${encodeURIComponent(taskId)}/attachments/${attachmentId}/content?board=${encodeURIComponent(board || "")}`);
 }
+function AttachmentBody({ att, data, i18n }) {
+  const kind = previewKind(att.filename, data?.content_type || att.content_type);
+  const url = useMemo2(() => {
+    if (!data || kind === "markdown" || kind === "text") return null;
+    const bytes = data.encoding === "base64" ? Uint8Array.from(atob(data.text || ""), (c) => c.charCodeAt(0)) : new TextEncoder().encode(data.text || "");
+    return URL.createObjectURL(new Blob([bytes], {
+      type: attachmentMime(att.filename, data.content_type || att.content_type)
+    }));
+  }, [data, att.filename, att.content_type, kind]);
+  useEffect3(() => () => {
+    if (url) URL.revokeObjectURL(url);
+  }, [url]);
+  if (kind === "markdown") return jsx6(MessageTextContent, { media: false, text: data?.text || "" });
+  if (kind === "text") {
+    return jsx6("pre", {
+      className: "m-0 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed",
+      children: data?.text || ""
+    });
+  }
+  if (!url) return jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.previewFailed });
+  if (kind === "image") return jsx6("img", { src: url, alt: att.filename, className: "max-w-full rounded" });
+  if (kind === "pdf") return jsx6("iframe", { src: url, title: att.filename, className: "h-[70vh] w-full border-0 rounded" });
+  if (kind === "html") {
+    return jsx6("iframe", { src: url, title: att.filename, sandbox: "", className: "h-[70vh] w-full border-0 rounded" });
+  }
+  return jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.previewFailed });
+}
 async function downloadAttachment(taskId, board, att, i18n) {
   try {
     const data = await fetchAttachment(taskId, board, att.id);
@@ -2994,29 +3114,162 @@ async function downloadAttachment(taskId, board, att, i18n) {
     host.notify({ kind: "error", message: `${i18n.previewFailed} — ${att.filename}` });
   }
 }
-function AttachmentPreview({ taskId, board, att, i18n, onClose }) {
+function attachmentIconName(kind) {
+  if (kind === "markdown") return "markdown";
+  if (kind === "image") return "file-media";
+  return "file";
+}
+function attachmentPreviewState(taskId, board, att, siblings) {
+  const list = siblings && siblings.length ? siblings : [att];
+  return { taskId, board, att, siblings: list };
+}
+function AttachmentActions({ taskId, board, att, i18n, onPreview, iconSize }) {
+  const size = iconSize || "0.7rem";
+  return jsxs6("div", { className: "flex shrink-0 items-center gap-0.5", children: [
+    previewKind(att.filename, att.content_type) ? jsx6(Button5, {
+      size: "icon-xs",
+      variant: "ghost",
+      "aria-label": i18n.previewMarkdown(att.filename),
+      title: i18n.previewMarkdown(att.filename),
+      onClick: () => onPreview(att),
+      children: jsx6(Codicon5, { name: "open-preview", size })
+    }) : null,
+    jsx6(Button5, {
+      size: "icon-xs",
+      variant: "ghost",
+      "aria-label": i18n.downloadAttachment(att.filename),
+      title: i18n.downloadAttachment(att.filename),
+      onClick: () => void downloadAttachment(taskId, board, att, i18n),
+      children: jsx6(Codicon5, { name: "cloud-download", size })
+    })
+  ] });
+}
+function AttachmentLine({ taskId, board, att, i18n, onPreview, iconSize, hoverable }) {
+  return jsxs6("li", {
+    className: cn3(
+      "flex min-w-0 items-center gap-1.5 text-[11px] text-(--ui-text-secondary)",
+      hoverable && "rounded px-2 py-1 hover:bg-(--chrome-action-hover)"
+    ),
+    children: [
+      jsx6("span", {
+        className: "min-w-0 flex-1 truncate",
+        title: att.filename,
+        children: att.filename
+      }),
+      jsx6(AttachmentActions, { taskId, board, att, i18n, onPreview, iconSize })
+    ]
+  }, att.id);
+}
+function AttachmentMenu({ taskId, board, attachments, i18n, onPreview, className }) {
+  if (!attachments || !attachments.length) return null;
+  const countLabel = i18n.attachments(attachments.length);
+  return jsxs6(DropdownMenu3, { children: [
+    jsx6(DropdownMenuTrigger3, {
+      asChild: true,
+      children: jsx6("button", {
+        type: "button",
+        className: cn3(
+          "shrink-0 inline-flex items-center justify-center rounded p-0.5 border-0 bg-transparent cursor-pointer",
+          "text-(--ui-text-tertiary) hover:text-(--ui-text-secondary) hover:bg-(--chrome-action-hover)",
+          className
+        ),
+        title: countLabel,
+        "aria-label": countLabel,
+        // The name cell is a drag handle and opens the detail on click: the paperclip must
+        // not do either.
+        onClick: (event) => event.stopPropagation(),
+        onPointerDown: (event) => event.stopPropagation(),
+        children: jsx6(Codicon5, { name: "paperclip", size: "0.75rem" })
+      })
+    }),
+    jsxs6(DropdownMenuContent3, {
+      align: "end",
+      className: "min-w-[17rem] p-1 text-xs",
+      children: [
+        jsx6("div", {
+          className: "px-2 py-1 text-[10px] uppercase font-semibold text-(--ui-text-tertiary)",
+          children: countLabel
+        }),
+        jsx6("ul", {
+          className: "flex flex-col gap-0.5",
+          children: attachments.map(
+            (att) => jsx6(AttachmentLine, { taskId, board, att, i18n, onPreview, hoverable: true })
+          )
+        })
+      ]
+    })
+  ] });
+}
+function AttachmentPreview({ taskId, board, att, siblings, i18n, onClose, onNavigate }) {
   const query = useQuery2({
     queryKey: ["kanban-gantt", "attachment", taskId, att.id],
     queryFn: () => fetchAttachment(taskId, board, att.id)
   });
+  const list = siblings && siblings.length ? siblings : [att];
+  const index = Math.max(0, list.findIndex((item) => item.id === att.id));
+  useEffect3(() => {
+    if (list.length < 2) return void 0;
+    const onKey = (event) => {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      const tag = event.target && event.target.tagName || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || event.target && event.target.isContentEditable) return;
+      event.preventDefault();
+      const step = event.key === "ArrowRight" ? 1 : -1;
+      onNavigate(list[(index + step + list.length) % list.length]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [list, index, onNavigate]);
+  const kind = previewKind(att.filename, att.content_type);
+  const titleIcon = attachmentIconName(kind);
   return jsx6(Dialog4, {
     open: true,
     onOpenChange: (next) => {
       if (!next) onClose();
     },
     children: jsx6(DialogContent4, {
-      className: "flex max-h-[80vh] w-[min(46rem,92vw)] max-w-none flex-col overflow-hidden",
+      className: "flex max-h-[85vh] w-[min(70rem,94vw)] max-w-none flex-col overflow-hidden",
       children: [
-        jsx6("div", { className: "flex items-center gap-2 pr-8 pb-2", children: [
-          jsx6(Codicon5, { name: "markdown", size: "0.85rem", className: "text-(--ui-text-tertiary)" }),
+        jsx6("div", { className: "flex items-center gap-2 pb-2", children: [
+          jsx6(Codicon5, { name: titleIcon, size: "0.85rem", className: "shrink-0 text-(--ui-text-tertiary)" }),
           jsx6(DialogTitle4, {
-            className: "truncate text-[12px] font-medium",
+            className: "min-w-0 flex-1 truncate text-[12px] font-medium",
             children: i18n.previewTitle(att.filename)
-          })
+          }),
+          // Only when there is somewhere to go: a single file gets no navigation strip.
+          list.length > 1 ? jsxs6("div", {
+            // `mr-10` is not decoration: the dialog's close button sits in the top-right
+            // corner, and the arrows have to stop short of it.
+            className: "mr-10 flex shrink-0 items-center gap-0.5",
+            children: [
+              jsx6(Button5, {
+                size: "icon-xs",
+                variant: "ghost",
+                "aria-label": i18n.previousAttachment,
+                title: i18n.previousAttachment,
+                disabled: index === 0,
+                onClick: () => onNavigate(list[(index - 1 + list.length) % list.length]),
+                children: jsx6(Codicon5, { name: "chevron-left", size: "0.85rem" })
+              }),
+              jsx6("span", {
+                className: "px-1 text-[10px] tabular-nums text-(--ui-text-tertiary)",
+                children: i18n.attachmentPosition(index + 1, list.length)
+              }),
+              jsx6(Button5, {
+                size: "icon-xs",
+                variant: "ghost",
+                "aria-label": i18n.nextAttachment,
+                title: i18n.nextAttachment,
+                disabled: index === list.length - 1,
+                onClick: () => onNavigate(list[(index + 1) % list.length]),
+                children: jsx6(Codicon5, { name: "chevron-right", size: "0.85rem" })
+              })
+            ]
+          }) : jsx6("div", { className: "mr-10 shrink-0" })
         ] }),
         jsx6("div", {
           className: "min-h-0 overflow-y-auto",
-          children: query.isLoading ? jsx6("div", { className: "grid h-24 place-items-center", children: jsx6(Loader, {}) }) : query.isError || !query.data ? jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.previewFailed }) : jsx6(MessageTextContent, { media: false, text: query.data.text || "" })
+          children: query.isLoading ? jsx6("div", { className: "grid h-24 place-items-center", children: jsx6(Loader, {}) }) : query.isError || !query.data ? jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.previewFailed }) : jsx6(AttachmentBody, { att, data: query.data, i18n })
         })
       ]
     })
@@ -3029,31 +3282,16 @@ function AttachmentsSection({ taskId, board, attachments, i18n, onPreview }) {
       className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)",
       children: i18n.attachments(attachments.length)
     }),
-    jsx6("ul", { className: "flex flex-col gap-0.5", children: attachments.map((att) => {
-      const isMarkdown = /\.(md|markdown)$/i.test(att.filename || "");
-      return jsxs6("li", {
-        className: "flex min-w-0 items-center gap-1.5 text-[11px] text-(--ui-text-secondary)",
-        children: [
-          jsx6("span", { className: "truncate", title: att.filename, children: att.filename }),
-          isMarkdown ? jsx6(Button5, {
-            size: "icon-xs",
-            variant: "ghost",
-            "aria-label": i18n.previewMarkdown(att.filename),
-            title: i18n.previewMarkdown(att.filename),
-            onClick: () => onPreview(att),
-            children: jsx6(Codicon5, { name: "open-preview", size: "0.75rem" })
-          }) : null,
-          jsx6(Button5, {
-            size: "icon-xs",
-            variant: "ghost",
-            "aria-label": i18n.downloadAttachment(att.filename),
-            title: i18n.downloadAttachment(att.filename),
-            onClick: () => void downloadAttachment(taskId, board, att, i18n),
-            children: jsx6(Codicon5, { name: "cloud-download", size: "0.75rem" })
-          })
-        ]
-      }, att.id);
-    }) })
+    jsx6("ul", { className: "flex flex-col gap-0.5", children: attachments.map(
+      (att) => jsx6(AttachmentLine, {
+        taskId,
+        board,
+        att,
+        i18n,
+        onPreview,
+        iconSize: "0.75rem"
+      })
+    ) }, "attachments")
   ] });
 }
 function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked = false, onToggleDock, boards = [] }) {
@@ -3427,6 +3665,9 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
         board,
         i18n,
         att: previewAtt,
+        // Same task, same list: the arrows walk the task's other attachments.
+        siblings: data?.task?.attachments || [previewAtt],
+        onNavigate: (att) => setPreviewAtt(att),
         onClose: () => setPreviewAtt(null)
       }) : null,
       // 2. Result (no max-h clamp)
@@ -3694,6 +3935,7 @@ function KanbanGanttPage() {
   const board = useValue2($boardSlug);
   const scope = useValue2($connectionScope);
   const openTaskId = useValue2($openTaskId);
+  const openAttachment = useValue2($openAttachment);
   const newTask = useValue2($newTask);
   const moveUnderId = useValue2($moveUnderId);
   const labelW = useValue2($labelW);
@@ -4567,6 +4809,16 @@ function KanbanGanttPage() {
           }) : null
         ]
       }),
+      // An attachment opened from a row's paperclip: its own dialog, like the detail's.
+      openAttachment ? jsx6(AttachmentPreview, {
+        taskId: openAttachment.taskId,
+        board: openAttachment.board,
+        att: openAttachment.att,
+        siblings: openAttachment.siblings || [openAttachment.att],
+        onNavigate: (att) => $openAttachment.set({ ...openAttachment, att }),
+        i18n,
+        onClose: () => $openAttachment.set(null)
+      }) : null,
       openTaskId ? jsx6(TaskDrawer, {
         taskId: openTaskId,
         board,

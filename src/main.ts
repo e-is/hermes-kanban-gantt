@@ -62,6 +62,7 @@ import {
   setPluginDoors,
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
   $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $detailModal, $titlePrefixTags, $openTaskId,
+  $openAttachment,
   $newTask, $moveUnderId, $wsEnabled, $connectionScope,
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
   createTask, fetchProjects, fetchProfiles,
@@ -92,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -663,7 +664,16 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
                     children: prefix
                   })
                 : null,
-              name
+              name,
+              jsx(AttachmentMenu, {
+                taskId: task.id,
+                board: task.board,
+                attachments: task.attachments,
+                i18n,
+                onPreview: att => $openAttachment.set(
+                  attachmentPreviewState(task.id, task.board, att, task.attachments)
+                )
+              })
             ]
           }),
           // Assignee at a glance: avatar when assigned, a faint dashed ring when not.
@@ -1200,6 +1210,44 @@ async function fetchAttachment(taskId, board, attachmentId) {
     + `?board=${encodeURIComponent(board || '')}`)
 }
 
+/**
+ * One attachment, shown the way its type deserves.
+ *
+ * Everything the webview renders itself is rebuilt into a Blob (the bytes arrive as text
+ * or base64 through the plugin's own route — no path, no proxy), except markdown, which
+ * keeps the app's own renderer. HTML goes into a sandboxed frame: it is user-supplied text
+ * and must not run scripts.
+ */
+function AttachmentBody({ att, data, i18n }) {
+  const kind = previewKind(att.filename, data?.content_type || att.content_type)
+  const url = useMemo(() => {
+    if (!data || kind === 'markdown' || kind === 'text') return null
+    const bytes = data.encoding === 'base64'
+      ? Uint8Array.from(atob(data.text || ''), c => c.charCodeAt(0))
+      : new TextEncoder().encode(data.text || '')
+    return URL.createObjectURL(new Blob([bytes], {
+      type: attachmentMime(att.filename, data.content_type || att.content_type)
+    }))
+  }, [data, att.filename, att.content_type, kind])
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url) }, [url])
+
+  if (kind === 'markdown') return jsx(MessageTextContent, { media: false, text: data?.text || '' })
+  if (kind === 'text') {
+    return jsx('pre', {
+      className: 'm-0 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed',
+      children: data?.text || ''
+    })
+  }
+  if (!url) return jsx('p', { className: 'text-[11px] text-(--ui-text-quaternary)', children: i18n.previewFailed })
+  if (kind === 'image') return jsx('img', { src: url, alt: att.filename, className: 'max-w-full rounded' })
+  if (kind === 'pdf') return jsx('iframe', { src: url, title: att.filename, className: 'h-[70vh] w-full border-0 rounded' })
+  if (kind === 'html') {
+    // `sandbox=""` = no scripts, no same-origin: a page from an attachment stays inert.
+    return jsx('iframe', { src: url, title: att.filename, sandbox: '', className: 'h-[70vh] w-full border-0 rounded' })
+  }
+  return jsx('p', { className: 'text-[11px] text-(--ui-text-quaternary)', children: i18n.previewFailed })
+}
+
 /** Save an attachment to disk.
  *
  * The plugin bridge only speaks JSON, so the route hands back text when the file is
@@ -1228,31 +1276,193 @@ async function downloadAttachment(taskId, board, att, i18n) {
   }
 }
 
-/** The markdown viewer: its own dialog, dismissed like every other overlay here. */
-function AttachmentPreview({ taskId, board, att, i18n, onClose }) {
+/** The icon a kind deserves: the same mark in the dialog title as in the list. */
+function attachmentIconName(kind) {
+  if (kind === 'markdown') return 'markdown'
+  if (kind === 'image') return 'file-media'
+  return 'file'
+}
+
+/** Where an attachment lives, captured the moment it is opened.
+ *
+ *  Both entry points — a row's paperclip and the detail view — build this the same way, so
+ *  the dialog can always walk the task's other attachments. */
+function attachmentPreviewState(taskId, board, att, siblings) {
+  const list = siblings && siblings.length ? siblings : [att]
+  return { taskId, board, att, siblings: list }
+}
+
+/** The two things one does with a file, offered identically everywhere: look at it when the
+ *  webview can (`previewKind`), save it always. Rendered by the paperclip's menu and by the
+ *  detail view, which is why it takes no layout of its own beyond the row it sits in. */
+function AttachmentActions({ taskId, board, att, i18n, onPreview, iconSize }) {
+  const size = iconSize || '0.7rem'
+  return jsxs('div', { className: 'flex shrink-0 items-center gap-0.5', children: [
+    previewKind(att.filename, att.content_type)
+      ? jsx(Button, {
+          size: 'icon-xs', variant: 'ghost',
+          'aria-label': i18n.previewMarkdown(att.filename),
+          title: i18n.previewMarkdown(att.filename),
+          onClick: () => onPreview(att),
+          children: jsx(Codicon, { name: 'open-preview', size })
+        })
+      : null,
+    jsx(Button, {
+      size: 'icon-xs', variant: 'ghost',
+      'aria-label': i18n.downloadAttachment(att.filename),
+      title: i18n.downloadAttachment(att.filename),
+      onClick: () => void downloadAttachment(taskId, board, att, i18n),
+      children: jsx(Codicon, { name: 'cloud-download', size })
+    })
+  ] })
+}
+
+/** One attachment line — the name, then its actions. One implementation for the paperclip's
+ *  menu and for the detail view, so the two can never drift apart. */
+function AttachmentLine({ taskId, board, att, i18n, onPreview, iconSize, hoverable }) {
+  return jsxs('li', {
+    className: cn(
+      'flex min-w-0 items-center gap-1.5 text-[11px] text-(--ui-text-secondary)',
+      hoverable && 'rounded px-2 py-1 hover:bg-(--chrome-action-hover)'
+    ),
+    children: [
+      jsx('span', {
+        className: 'min-w-0 flex-1 truncate',
+        title: att.filename,
+        children: att.filename
+      }),
+      jsx(AttachmentActions, { taskId, board, att, i18n, onPreview, iconSize })
+    ]
+  }, att.id)
+}
+
+/**
+ * The paperclip: a task with attachments carries one next to its name, and clicking it
+ * lists the files with the two things one does with a file — look at it, or save it.
+ *
+ * The eye only appears when the webview can actually show the type (`previewKind`), so the
+ * affordance never promises something it cannot do; everything else stays downloadable.
+ */
+function AttachmentMenu({ taskId, board, attachments, i18n, onPreview, className }) {
+  if (!attachments || !attachments.length) return null
+  const countLabel = i18n.attachments(attachments.length)
+  return jsxs(DropdownMenu, { children: [
+    jsx(DropdownMenuTrigger, {
+      asChild: true,
+      children: jsx('button', {
+        type: 'button',
+        className: cn(
+          'shrink-0 inline-flex items-center justify-center rounded p-0.5 border-0 bg-transparent cursor-pointer',
+          'text-(--ui-text-tertiary) hover:text-(--ui-text-secondary) hover:bg-(--chrome-action-hover)',
+          className
+        ),
+        title: countLabel,
+        'aria-label': countLabel,
+        // The name cell is a drag handle and opens the detail on click: the paperclip must
+        // not do either.
+        onClick: event => event.stopPropagation(),
+        onPointerDown: event => event.stopPropagation(),
+        children: jsx(Codicon, { name: 'paperclip', size: '0.75rem' })
+      })
+    }),
+    jsxs(DropdownMenuContent, {
+      align: 'end',
+      className: 'min-w-[17rem] p-1 text-xs',
+      children: [
+        jsx('div', {
+          className: 'px-2 py-1 text-[10px] uppercase font-semibold text-(--ui-text-tertiary)',
+          children: countLabel
+        }),
+        jsx('ul', {
+          className: 'flex flex-col gap-0.5',
+          children: attachments.map(att =>
+            jsx(AttachmentLine, { taskId, board, att, i18n, onPreview, hoverable: true })
+          )
+        })
+      ]
+    })
+  ] })
+}
+
+/**
+ * The markdown viewer: its own dialog, dismissed like every other overlay here.
+ */
+function AttachmentPreview({ taskId, board, att, siblings, i18n, onClose, onNavigate }) {
   const query = useQuery({
     queryKey: ['kanban-gantt', 'attachment', taskId, att.id],
     queryFn: () => fetchAttachment(taskId, board, att.id)
   })
+  const list = siblings && siblings.length ? siblings : [att]
+  const index = Math.max(0, list.findIndex(item => item.id === att.id))
+  // Arrows walk the same list as the buttons: reading a task's files should not mean aiming
+  // at a 1 rem target. Wrapping, so a two-file task toggles with one key.
+  useEffect(() => {
+    if (list.length < 2) return undefined
+    const onKey = event => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
+      const tag = (event.target && event.target.tagName) || ''
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (event.target && event.target.isContentEditable)) return
+      event.preventDefault()
+      const step = event.key === 'ArrowRight' ? 1 : -1
+      onNavigate(list[(index + step + list.length) % list.length])
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [list, index, onNavigate])
+  // Room to read a document in: the same generous width as the detail modal, because a
+  // markdown page in a 46 rem box is a keyhole.
+  const kind = previewKind(att.filename, att.content_type)
+  const titleIcon = attachmentIconName(kind)
   return jsx(Dialog, {
     open: true,
     onOpenChange: next => { if (!next) onClose() },
     children: jsx(DialogContent, {
-      className: 'flex max-h-[80vh] w-[min(46rem,92vw)] max-w-none flex-col overflow-hidden',
+      className: 'flex max-h-[85vh] w-[min(70rem,94vw)] max-w-none flex-col overflow-hidden',
       children: [
-        jsx('div', { className: 'flex items-center gap-2 pr-8 pb-2', children: [
-          jsx(Codicon, { name: 'markdown', size: '0.85rem', className: 'text-(--ui-text-tertiary)' }),
+        jsx('div', { className: 'flex items-center gap-2 pb-2', children: [
+          jsx(Codicon, { name: titleIcon, size: '0.85rem', className: 'shrink-0 text-(--ui-text-tertiary)' }),
           jsx(DialogTitle, {
-            className: 'truncate text-[12px] font-medium',
+            className: 'min-w-0 flex-1 truncate text-[12px] font-medium',
             children: i18n.previewTitle(att.filename)
-          })
+          }),
+          // Only when there is somewhere to go: a single file gets no navigation strip.
+          list.length > 1
+            ? jsxs('div', {
+                // `mr-10` is not decoration: the dialog's close button sits in the top-right
+                // corner, and the arrows have to stop short of it.
+                className: 'mr-10 flex shrink-0 items-center gap-0.5',
+                children: [
+                  jsx(Button, {
+                    size: 'icon-xs', variant: 'ghost',
+                    'aria-label': i18n.previousAttachment,
+                    title: i18n.previousAttachment,
+                    disabled: index === 0,
+                    onClick: () => onNavigate(list[(index - 1 + list.length) % list.length]),
+                    children: jsx(Codicon, { name: 'chevron-left', size: '0.85rem' })
+                  }),
+                  jsx('span', {
+                    className: 'px-1 text-[10px] tabular-nums text-(--ui-text-tertiary)',
+                    children: i18n.attachmentPosition(index + 1, list.length)
+                  }),
+                  jsx(Button, {
+                    size: 'icon-xs', variant: 'ghost',
+                    'aria-label': i18n.nextAttachment,
+                    title: i18n.nextAttachment,
+                    disabled: index === list.length - 1,
+                    onClick: () => onNavigate(list[(index + 1) % list.length]),
+                    children: jsx(Codicon, { name: 'chevron-right', size: '0.85rem' })
+                  })
+                ]
+              })
+            // No arrows, but the title still stops short of the close button.
+            : jsx('div', { className: 'mr-10 shrink-0' })
         ] }),
         jsx('div', { className: 'min-h-0 overflow-y-auto', children:
           query.isLoading
             ? jsx('div', { className: 'grid h-24 place-items-center', children: jsx(Loader, {}) })
             : query.isError || !query.data
               ? jsx('p', { className: 'text-[11px] text-(--ui-text-quaternary)', children: i18n.previewFailed })
-              : jsx(MessageTextContent, { media: false, text: query.data.text || '' })
+              : jsx(AttachmentBody, { att, data: query.data, i18n })
         })
       ]
     })
@@ -1267,28 +1477,11 @@ function AttachmentsSection({ taskId, board, attachments, i18n, onPreview }) {
       className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)',
       children: i18n.attachments(attachments.length)
     }),
-    jsx('ul', { className: 'flex flex-col gap-0.5', children: attachments.map(att => {
-      const isMarkdown = /\.(md|markdown)$/i.test(att.filename || '')
-      return jsxs('li', {
-        className: 'flex min-w-0 items-center gap-1.5 text-[11px] text-(--ui-text-secondary)',
-        children: [
-          jsx('span', { className: 'truncate', title: att.filename, children: att.filename }),
-          isMarkdown
-            ? jsx(Button, {
-                size: 'icon-xs', variant: 'ghost', 'aria-label': i18n.previewMarkdown(att.filename),
-                title: i18n.previewMarkdown(att.filename), onClick: () => onPreview(att),
-                children: jsx(Codicon, { name: 'open-preview', size: '0.75rem' })
-              })
-            : null,
-          jsx(Button, {
-            size: 'icon-xs', variant: 'ghost', 'aria-label': i18n.downloadAttachment(att.filename),
-            title: i18n.downloadAttachment(att.filename),
-            onClick: () => void downloadAttachment(taskId, board, att, i18n),
-            children: jsx(Codicon, { name: 'cloud-download', size: '0.75rem' })
-          })
-        ]
-      }, att.id)
-    }) })
+    jsx('ul', { className: 'flex flex-col gap-0.5', children: attachments.map(att =>
+      jsx(AttachmentLine, {
+        taskId, board, att, i18n, onPreview, iconSize: '0.75rem'
+      })
+    ) }, 'attachments')
   ] })
 }
 
@@ -1718,6 +1911,9 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
               previewAtt
                 ? jsx(AttachmentPreview, {
                     taskId: shownId, board, i18n, att: previewAtt,
+                    // Same task, same list: the arrows walk the task's other attachments.
+                    siblings: data?.task?.attachments || [previewAtt],
+                    onNavigate: att => setPreviewAtt(att),
                     onClose: () => setPreviewAtt(null)
                   })
                 : null,
@@ -2016,6 +2212,7 @@ export function KanbanGanttPage() {
   const board = useValue($boardSlug)
   const scope = useValue($connectionScope)
   const openTaskId = useValue($openTaskId)
+  const openAttachment = useValue($openAttachment)
   const newTask = useValue($newTask)
   const moveUnderId = useValue($moveUnderId)
   const labelW = useValue($labelW)
@@ -3060,6 +3257,19 @@ export function KanbanGanttPage() {
         : null
         ]
       }),
+
+      // An attachment opened from a row's paperclip: its own dialog, like the detail's.
+      openAttachment
+        ? jsx(AttachmentPreview, {
+            taskId: openAttachment.taskId,
+            board: openAttachment.board,
+            att: openAttachment.att,
+            siblings: openAttachment.siblings || [openAttachment.att],
+            onNavigate: att => $openAttachment.set({ ...openAttachment, att }),
+            i18n,
+            onClose: () => $openAttachment.set(null)
+          })
+        : null,
 
       openTaskId
         ? jsx(TaskDrawer, {

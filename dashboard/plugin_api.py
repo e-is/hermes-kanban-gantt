@@ -197,6 +197,7 @@ def _task_summary(row: sqlite3.Row, board_slug: Optional[str] = None) -> dict[st
         "run_started_at": row["run_started_at"],
         "run_ended_at": row["run_ended_at"],
         "runs": [],
+        "attachments": [],
     }
 
 
@@ -242,6 +243,28 @@ def _run_windows(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
         out[tid]["runs"].append(run_dict)
         out[tid]["run_started_at"] = s
         out[tid]["run_ended_at"] = e
+    return out
+
+
+def _task_attachments(conn: sqlite3.Connection) -> dict[str, list[dict[str, Any]]]:
+    """Attachment metadata per task, from ``task_attachments`` — one query, not one per row.
+
+    Only what a row needs to decide and to list: the detail endpoint carries the rest. The
+    bytes never come from here: they go through the content route, which runs on the gateway
+    that owns the board.
+    """
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in conn.execute(
+        "SELECT id, task_id, filename, content_type, size "
+        "FROM task_attachments ORDER BY created_at, id"
+    ):
+        tid = row[1] if isinstance(row, tuple) else row["task_id"]
+        out.setdefault(tid, []).append({
+            "id": row[0] if isinstance(row, tuple) else row["id"],
+            "filename": row[2] if isinstance(row, tuple) else row["filename"],
+            "content_type": row[3] if isinstance(row, tuple) else row["content_type"],
+            "size": row[4] if isinstance(row, tuple) else row["size"],
+        })
     return out
 
 
@@ -298,6 +321,7 @@ def _read_gantt(slug: str) -> dict:
     conn.row_factory = sqlite3.Row  # _task_summary indexes by column name
     try:
         runs = _run_windows(conn)
+        attachments = _task_attachments(conn)
         rows = conn.execute(
             "SELECT id, title, status, assignee, priority, created_at, started_at, completed_at, "
             "NULL AS run_started_at, NULL AS run_ended_at "
@@ -318,6 +342,9 @@ def _read_gantt(slug: str) -> dict:
             rec = _task_summary(row, board_slug=slug)
             rec["runs"] = []
             rec.update(runs.get(rec["id"], {}))  # real execution window & runs, if any
+            # Attachment METADATA only: the row needs to know whether to draw a paperclip,
+            # and what to list behind it. The bytes stay behind the content route.
+            rec["attachments"] = attachments.get(rec["id"], [])
             rec["children"] = children.get(rec["id"], [])
             rec["parents"] = parents.get(rec["id"], [])
             tasks.append(rec)
@@ -368,10 +395,13 @@ def _read_gantt_all() -> dict:
                 children.setdefault(parent_id, []).append(child_id)
                 parents.setdefault(child_id, []).append(parent_id)
 
+            # One query per board, like the runs above.
+            attachments = _task_attachments(conn)
             for row in rows:
                 rec = _task_summary(row, board_slug=bslug)
                 rec["runs"] = []
                 rec.update(runs.get(rec["id"], {}))
+                rec["attachments"] = attachments.get(rec["id"], [])
                 rec["children"] = children.get(rec["id"], [])
                 rec["parents"] = parents.get(rec["id"], [])
                 all_tasks.append(rec)

@@ -134,6 +134,56 @@ def test_gantt_snapshot(client):
 
     assert {"label": "TEST", "count": 2} in data["labels"]
 
+    # A row must always carry the field, empty when the task has no attachment: the
+    # paperclip reads it on every row, so a missing key would break the whole table.
+    assert all("attachments" in t for t in data["tasks"])
+    assert all(isinstance(t["attachments"], list) for t in data["tasks"])
+
+
+def test_task_attachments_are_grouped_by_task(tmp_path):
+    """`_task_attachments` is one query for the whole board, grouped afterwards.
+
+    It is the only place the row's metadata comes from, so what it must get right is the
+    grouping and the shape — the size and type travel with each file, the bytes do not.
+    """
+    import sqlite3
+
+    db = tmp_path / "kanban.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE task_attachments (id INTEGER PRIMARY KEY, task_id TEXT, filename TEXT, "
+        "content_type TEXT, size INTEGER, created_at TEXT)"
+    )
+    conn.executemany(
+        "INSERT INTO task_attachments (task_id, filename, content_type, size, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [("t_a", "degrade.png", "image/png", 81416, "2026-10-13 22:41:02"),
+         ("t_a", "notes.md", "text/markdown", 164, "2026-10-13 22:41:03"),
+         ("t_b", "archive.zip", "application/zip", 154, "2026-10-13 22:41:04")],
+    )
+    conn.commit()
+
+    grouped = plugin_api._task_attachments(conn)
+    conn.close()
+
+    assert set(grouped) == {"t_a", "t_b"}
+    assert [a["filename"] for a in grouped["t_a"]] == ["degrade.png", "notes.md"], "order kept"
+    assert grouped["t_a"][0]["content_type"] == "image/png"
+    assert grouped["t_a"][0]["size"] == 81416
+    assert "stored_path" not in grouped["t_a"][0], "the path is not the row's business"
+    assert [a["filename"] for a in grouped["t_b"]] == ["archive.zip"]
+    assert grouped["t_a"][0]["id"] != grouped["t_a"][1]["id"]
+
+
+def test_task_attachments_returns_empty_for_a_bare_board(client):
+    """No attachment table rows: every task gets an empty list, never a lookup failure."""
+    http, board = client
+    conn = plugin_api._connect(board["slug"], ro=True)
+    try:
+        assert plugin_api._task_attachments(conn) == {}
+    finally:
+        conn.close()
+
 
 def test_gantt_rejects_traversal(client):
     http, _ = client
