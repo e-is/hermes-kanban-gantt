@@ -668,17 +668,20 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
                     children: prefix
                   })
                 : null,
-              name,
-              jsx(AttachmentMenu, {
-                taskId: task.id,
-                board: task.board,
-                count: task.attachment_count,
-                i18n,
-                onPreview: (att, siblings) => $openAttachment.set(
-                  attachmentPreviewState(task.id, task.board, att, siblings)
-                )
-              })
+              name
             ]
+          }),
+          // The paperclip sits with the assignee, in the row's right-hand group: inside the
+          // truncated label cell, after a long title, it was pushed out of sight. In list view
+          // it has its own column instead, hence the guard.
+          listMode ? null : jsx(AttachmentMenu, {
+            taskId: task.id,
+            board: task.board,
+            count: task.attachment_count,
+            i18n,
+            onPreview: (att, siblings) => $openAttachment.set(
+              attachmentPreviewState(task.id, task.board, att, siblings)
+            )
           }),
           // Assignee at a glance: avatar when assigned, a faint dashed ring when not.
           // (The list view has its own assignee column.)
