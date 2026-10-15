@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.6.2 — the web dashboard stops offering a tab it cannot load
+
+Installing the plugin and opening the web dashboard gave a broken tab: "Could not load this plugin's
+script". A `dashboard/manifest.json` always implies a page — the registry fills in `entry:
+dist/index.js` and a tab at `/<name>` when the manifest is silent — and this plugin shipped no page
+bundle, so the SPA asked for a script that did not exist.
+
+The page now exists: `dashboard/dist/index.js`, a plain IIFE with no build step (the shape the
+bundled kanban plugin uses), which loads cleanly and says where the timeline actually lives — the
+desktop page — and which data routes this dashboard does serve. Its strings are translated
+(en/fr/zh), and the language follows the dashboard's own active locale through the SDK's `useI18n`
+rather than guessing from the browser.
+
+The plugin's `description` says the same thing in one line, so nobody has to open a broken tab to
+find out.
+
 ## 1.6.1 — attachments on the rows, a filter to find them, and a detail that reads
 
 **A task with files says so on the board.** A paperclip sits beside the assignee on the timeline,
