@@ -307,7 +307,7 @@ const ctx = {
     if (path === '/boards') return boards
     return {}
   },
-  storage: { get: (k, fb) => (k === 'board' ? 'sumaris-app' : fb), set: () => {} },
+  storage: { get: (k, fb) => (k === 'board' ? 'sumaris-app' : (k === 'viewMode' && globalThis.__kgView ? globalThis.__kgView : fb)), set: () => {} },
   i18n: { register: () => {} },
   register: c => { contributions.push(c); return () => {} },
   registerMany: cs => { contributions.push(...cs); return () => {} }
@@ -348,6 +348,24 @@ if (pageNode) {
   const clips = (flat.match(/"paperclip"/g) || []).length
   check(clips === 1, `exactly one paperclip, for the task with files (found ${clips})`)
   check(flat.includes('"area":"workspace.pageHeader"') || flat.includes('"area": "workspace.pageHeader"'), 'page projects its switcher into WORKSPACE_PAGE_HEADER_AREA')
+
+  // -------------------------------------------------------------------------
+  // The dedicated attachment column, in list view. The page reads its view mode through the
+  // storage door, so flipping that door renders the other view — no need to reach into state.
+  //
+  // What is asserted here is what the harness can honestly see: the column is DECLARED, with
+  // its own width and its own header. The icon INSIDE a row's cell is not reachable from this
+  // harness: `ListCells` throws under its i18n stub, and the stub turns a render exception
+  // into a silent `renderError` node, so the row cells never reach the tree. That assertion
+  // belongs to a harness whose i18n is real — noted rather than faked with a weaker check.
+  // -------------------------------------------------------------------------
+  globalThis.__kgView = 'list'
+  const listNode = page.render()
+  const listFlat = JSON.stringify(listNode)
+  check(listFlat.includes('minmax(0, 1fr) 150px 96px 64px 40px'),
+    'list view declares five tracks, the last 40 px wide, for the attachment column')
+  check(listFlat.includes('attachments-header'), 'the attachment column has a header cell of its own')
+  globalThis.__kgView = 'timeline'
 }
 
 // 4) titlebar chrome: switcher contributed to titleBar.center
