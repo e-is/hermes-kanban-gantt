@@ -2234,6 +2234,15 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
 
 /* ───────────────────────────────────── page ───────────────────────────────── */
 
+/** The modifier this platform uses for a wheel zoom: Hermes prints ⌘ on macOS, Ctrl
+ *  elsewhere, so the hint says what the reader's own keyboard shows. */
+export function modifierKeyLabel() {
+  const platform = typeof navigator === 'undefined'
+    ? ''
+    : String(navigator.platform || navigator.userAgent || '')
+  return /mac/i.test(platform) ? '⌘' : 'Ctrl'
+}
+
 export function KanbanGanttPage() {
   const i18n = useGanttI18n()
   const queryClient = useQueryClient()
@@ -2746,28 +2755,13 @@ export function KanbanGanttPage() {
     }
   }, [board, derived, trackW])
 
-  if (isLoading && !data) {
-    return jsx('div', { className: 'flex h-full items-center justify-center p-8', children: jsx(Loader, {}) })
-  }
-  if (isError) {
-    // Name the real cause. A board this gateway does not have is not a dead
-    // backend, and "plugin enabled? gateway restarted?" sent people restarting
-    // healthy gateways.
-    const gone = isMissingBoardError(error)
-    return jsx('div', { className: 'p-6', children: jsx(ErrorState, {
-      title: gone ? i18n.boardMissingTitle : i18n.cannotLoadBoard,
-      description: gone
-        ? i18n.boardMissingDesc(board || boardLabel(board), boardsData?.current || '')
-        : i18n.cannotLoadBoardDesc(base)
-    }) })
-  }
   // The board's data is not always there yet: on a first open, with no board remembered,
-  // the list resolves before the gantt does. This used to `return` early, which put every
-  // hook BELOW it — the wheel anchor, the period refs and effects, all added since — after
-  // a conditional exit. The first render then ran fewer hooks than the second, and React's
-  // #310 (\"more hooks than during the previous render\") replaced the page with its error
-  // boundary. Nothing below may exit early now: the reads are tolerant and the empty state
-  // is rendered in the JSX, next to the rows.
+  // the list resolves before the gantt does. Nothing here may exit early — no `return`
+  // above this line, ever: the wheel anchor, the period refs and every effect below are
+  // hooks, so a conditional exit makes the first render run fewer hooks than the second,
+  // and React's #310 (\"more hooks than during the previous render\") replaces the page with
+  // its error boundary. The loading and error states are therefore rendered at the END,
+  // next to the return, once every hook has run.
   void nowTick
   const now = Date.now() / 1000
   const rows = derived?.rows || []
@@ -2787,11 +2781,12 @@ export function KanbanGanttPage() {
   const pxPerSec = basePerSec * zoomUsed
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec))
 
-  // Wheel over the timeline = zoom anchored at the cursor; Shift+wheel = pan.
-  // The step follows the DELTA, not the event count: a mouse notch and a trackpad
-  // stream then feel the same (see `wheelZoomFactor`). A macOS pinch arrives as
-  // ctrl+wheel, so ctrl/meta is a zoom here too — over the timeline, that gesture is
-  // ours, and letting it through would zoom the whole app instead.
+  // Wheel over the timeline: ctrl/⌘+wheel zooms at the cursor, Shift+wheel pans, and a
+  // plain wheel is left alone so it keeps scrolling the rows — a bare wheel that zoomed
+  // moved the scale by accident and made the table impossible to scroll.
+  // A macOS pinch arrives as ctrl+wheel, so requiring the modifier costs nothing there,
+  // and the step follows the DELTA, not the event count, so a mouse notch and a trackpad
+  // stream feel the same (see `wheelZoomFactor`).
   const zoomAnchor = useRef(null)
   const handleWheel = event => {
     const el = scrollerRef.current
@@ -2804,6 +2799,8 @@ export function KanbanGanttPage() {
       event.preventDefault()
       return
     }
+    // No modifier: this wheel is not ours, so the page scrolls as usual.
+    if (!event.ctrlKey && !event.metaKey) return
     const factor = wheelZoomFactor(event.deltaY, event.deltaMode)
     const rect = el.getBoundingClientRect()
     const cursorPx = event.clientX - rect.left - labelW
@@ -2967,6 +2964,23 @@ export function KanbanGanttPage() {
 
   const dockDrawer = Boolean(openTaskId && drawerDocked)
 
+  // The two states that used to return early, now that every hook has run. A conditional
+  // exit above any hook is what produces React #310 — see the note at the top of the body.
+  if (isLoading && !data) {
+    return jsx('div', { className: 'flex h-full items-center justify-center p-8', children: jsx(Loader, {}) })
+  }
+  if (isError) {
+    // Name the real cause. A board this gateway does not have is not a dead backend, and
+    // "plugin enabled? gateway restarted?" sent people restarting healthy gateways.
+    const gone = isMissingBoardError(error)
+    return jsx('div', { className: 'p-6', children: jsx(ErrorState, {
+      title: gone ? i18n.boardMissingTitle : i18n.cannotLoadBoard,
+      description: gone
+        ? i18n.boardMissingDesc(board || boardLabel(board), boardsData?.current || '')
+        : i18n.cannotLoadBoardDesc(base)
+    }) })
+  }
+
   return jsxs('div', {
     ref: containerRef,
     // No root padding: the desktop shell already insets plugin pages, and the
@@ -3065,7 +3079,7 @@ export function KanbanGanttPage() {
                   value: String(zoomPct),
                   onInput: event => handleZoomPct(Number(event.target.value)),
                   className: 'w-24',
-                  title: i18n.zoomWheelHint,
+                  title: i18n.zoomWheelHint(modifierKeyLabel()),
                   'aria-label': i18n.zoomTimeline
                 }),
                 jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${zoomPct}%` })

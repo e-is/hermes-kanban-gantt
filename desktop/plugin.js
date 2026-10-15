@@ -142,7 +142,7 @@ var GANTT_LOCALES = {
     closeWindow: "Close",
     filterCards: "Filter cards…",
     zoomTimeline: "Zoom timeline",
-    zoomWheelHint: "Wheel or pinch over the timeline: zoom · Shift+Wheel: pan · Double-click the ruler: reset",
+    zoomWheelHint: (mod) => `${mod}+wheel over the timeline: zoom · Wheel alone: scroll · Double-click the ruler: reset`,
     nowMarker: "Now",
     untitled: "Untitled",
     viewOptions: "View options",
@@ -362,7 +362,7 @@ var GANTT_LOCALES = {
     closeWindow: "Fermer",
     filterCards: "Filtrer les tâches…",
     zoomTimeline: "Zoom timeline",
-    zoomWheelHint: "Molette ou pincement sur la chronologie : zoom · Maj+molette : défilement · Double-clic sur la règle : réinitialiser",
+    zoomWheelHint: (mod) => `${mod}+molette sur la chronologie : zoom · Molette seule : défilement · Double-clic sur la règle : réinitialiser`,
     nowMarker: "Maintenant",
     untitled: "Sans titre",
     viewOptions: "Options d'affichage",
@@ -593,7 +593,7 @@ var GANTT_LOCALES = {
     closeWindow: "关闭",
     filterCards: "筛选任务…",
     zoomTimeline: "时间线缩放",
-    zoomWheelHint: "在时间线上滚动或捏合：缩放 · Shift+滚轮：平移 · 双击标尺：重置",
+    zoomWheelHint: (mod) => `${mod}+滚轮：缩放 · 单独滚动：滚动 · 双击标尺：重置`,
     nowMarker: "现在",
     nothingToDisplay: "暂无可显示内容",
     noTasksMatch: "没有任务符合搜索或筛选条件。",
@@ -3956,6 +3956,10 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     })
   });
 }
+function modifierKeyLabel() {
+  const platform = typeof navigator === "undefined" ? "" : String(navigator.platform || navigator.userAgent || "");
+  return /mac/i.test(platform) ? "⌘" : "Ctrl";
+}
 function KanbanGanttPage() {
   const i18n = useGanttI18n();
   const queryClient = useQueryClient2();
@@ -4351,16 +4355,6 @@ function KanbanGanttPage() {
       el.scrollLeft = el.scrollWidth;
     }
   }, [board, derived, trackW]);
-  if (isLoading && !data) {
-    return jsx6("div", { className: "flex h-full items-center justify-center p-8", children: jsx6(Loader, {}) });
-  }
-  if (isError) {
-    const gone = isMissingBoardError(error);
-    return jsx6("div", { className: "p-6", children: jsx6(ErrorState, {
-      title: gone ? i18n.boardMissingTitle : i18n.cannotLoadBoard,
-      description: gone ? i18n.boardMissingDesc(board || boardLabel(board), boardsData?.current || "") : i18n.cannotLoadBoardDesc(base)
-    }) });
-  }
   void nowTick;
   const now = Date.now() / 1e3;
   const rows = derived?.rows || [];
@@ -4384,6 +4378,7 @@ function KanbanGanttPage() {
       event.preventDefault();
       return;
     }
+    if (!event.ctrlKey && !event.metaKey) return;
     const factor = wheelZoomFactor(event.deltaY, event.deltaMode);
     const rect = el.getBoundingClientRect();
     const cursorPx = event.clientX - rect.left - labelW;
@@ -4529,6 +4524,16 @@ function KanbanGanttPage() {
   })();
   const dominantTone = statusTone(dominantStatus);
   const dockDrawer = Boolean(openTaskId && drawerDocked);
+  if (isLoading && !data) {
+    return jsx6("div", { className: "flex h-full items-center justify-center p-8", children: jsx6(Loader, {}) });
+  }
+  if (isError) {
+    const gone = isMissingBoardError(error);
+    return jsx6("div", { className: "p-6", children: jsx6(ErrorState, {
+      title: gone ? i18n.boardMissingTitle : i18n.cannotLoadBoard,
+      description: gone ? i18n.boardMissingDesc(board || boardLabel(board), boardsData?.current || "") : i18n.cannotLoadBoardDesc(base)
+    }) });
+  }
   return jsxs6("div", {
     ref: containerRef,
     // No root padding: the desktop shell already insets plugin pages, and the
@@ -4621,7 +4626,7 @@ function KanbanGanttPage() {
                       value: String(zoomPct),
                       onInput: (event) => handleZoomPct(Number(event.target.value)),
                       className: "w-24",
-                      title: i18n.zoomWheelHint,
+                      title: i18n.zoomWheelHint(modifierKeyLabel()),
                       "aria-label": i18n.zoomTimeline
                     }),
                     jsx6("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${zoomPct}%` })
@@ -5034,5 +5039,6 @@ var plugin = {
 var main_default = plugin;
 export {
   KanbanGanttPage,
-  main_default as default
+  main_default as default,
+  modifierKeyLabel
 };
