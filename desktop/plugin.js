@@ -126,6 +126,7 @@ var GANTT_LOCALES = {
     dockDetail: "Dock the detail beside the gantt",
     detailMeta: "Information",
     metaStatus: "Status",
+    metaPriority: "Priority",
     metaAssignee: "Assignee",
     metaWorkspace: "Workspace",
     metaCreated: "Created",
@@ -347,6 +348,7 @@ var GANTT_LOCALES = {
     dockDetail: "Ancrer le détail à côté du gantt",
     detailMeta: "Informations",
     metaStatus: "Statut",
+    metaPriority: "Priorité",
     metaAssignee: "Assigné à",
     metaWorkspace: "Espace de travail",
     metaCreated: "Créée",
@@ -579,6 +581,7 @@ var GANTT_LOCALES = {
     dockDetail: "将详情固定在甘特图旁",
     detailMeta: "信息",
     metaStatus: "状态：",
+    metaPriority: "优先级：",
     metaAssignee: "负责人",
     metaWorkspace: "工作区",
     metaCreated: "创建时间",
@@ -3182,6 +3185,17 @@ async function downloadAttachment(taskId, board, att, i18n) {
     host.notify({ kind: "error", message: `${i18n.previewFailed} — ${att.filename}` });
   }
 }
+function priorityDisplay(priority) {
+  const value = Number(priority);
+  if (!Number.isFinite(value) || value <= 0) {
+    return jsx6("span", { className: "text-(--ui-text-quaternary)", children: "—" });
+  }
+  return jsxs6("span", {
+    className: "inline-flex items-center gap-0.5 font-medium",
+    style: { color: "#e0a13a" },
+    children: [jsx6(Codicon5, { name: "arrow-up", size: "0.65rem" }), String(value)]
+  });
+}
 function attachmentIconName(kind) {
   if (kind === "markdown") return "markdown";
   if (kind === "image") return "file-media";
@@ -3231,9 +3245,17 @@ function AttachmentLine({ taskId, board, att, i18n, onPreview, iconSize, hoverab
         "aria-label": i18n.previewMarkdown(att.filename),
         onClick: () => onPreview(att),
         children: att.filename
-      }) : jsx6("span", {
-        className: "min-w-0 flex-1 truncate",
-        title: att.filename,
+      }) : jsx6("button", {
+        // Not previewable: the name is still a gesture, and the only useful one is the
+        // download. The tooltip says so instead of promising a preview that cannot happen.
+        type: "button",
+        className: cn3(
+          "min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left cursor-pointer",
+          "text-(--ui-text-secondary) hover:text-(--ui-text-primary) hover:underline"
+        ),
+        title: i18n.downloadAttachment(att.filename),
+        "aria-label": i18n.downloadAttachment(att.filename),
+        onClick: () => void downloadAttachment(taskId, board, att, i18n),
         children: att.filename
       }),
       jsx6(AttachmentActions, { taskId, board, att, i18n, onPreview, iconSize })
@@ -3774,14 +3796,25 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
           children: jsx6(MessageTextContent, { media: false, text: data.task.body })
         }) : jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.noDescription })
       ] }),
-      // 1b. Attachments: markdown ones open in their own dialog, any of them
-      // can be saved. The bytes are fetched per file, never with the detail.
-      jsx6(AttachmentsSection, {
+      // 1b. Attachments and the priority line, for the DOCKED detail and its panel: in the
+      // modal both belong to the right-hand column instead, so this block yields to it
+      // rather than duplicating them in the body.
+      detailModal ? null : jsx6(AttachmentsSection, {
         taskId: shownId,
         board,
         i18n,
         attachments: data?.task?.attachments || [],
         onPreview: (att) => setPreviewAtt(att)
+      }),
+      detailModal ? null : jsxs6("div", {
+        className: "flex flex-col gap-0.5",
+        children: [
+          jsx6("div", {
+            className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)",
+            children: i18n.metaPriority
+          }),
+          priorityDisplay(task?.priority)
+        ]
       }),
       previewAtt ? jsx6(AttachmentPreview, {
         taskId: shownId,
@@ -4035,16 +4068,23 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
             }),
             metaRow(i18n.metaStatus, task?.status || "—"),
             metaRow(i18n.metaAssignee, task?.assignee || "—"),
+            metaRow(i18n.metaPriority, priorityDisplay(task?.priority)),
             task?.workspace_path ? metaRow(i18n.metaWorkspace, task.workspace_path) : null,
             metaRow(i18n.metaCreated, when(task?.created_at)),
             metaRow(
               i18n.metaLastActivity,
               when(task?.completed_at || task?.started_at || task?.created_at)
             ),
-            task?.attachments?.length ? metaRow(
-              i18n.attachments(task.attachments.length),
-              task.attachments.map((a) => a.filename).join(", ")
-            ) : null
+            // The files as a real section, with their eye and their download, rather than a
+            // comma-joined list of names: the modal's right column is where the official plugin
+            // puts them, and it is the only place here that has the room for the actions.
+            task?.attachments?.length ? jsx6(AttachmentsSection, {
+              taskId: shownId,
+              board,
+              i18n,
+              attachments: task.attachments,
+              onPreview: (att) => setPreviewAtt(att)
+            }) : null
           ]
         })
       ] })

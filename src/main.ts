@@ -1328,6 +1328,21 @@ async function downloadAttachment(taskId, board, att, i18n) {
   }
 }
 
+/** How a priority reads: an upward arrow and the number in amber when it is set, a dash when it is
+ *  not. The official plugin draws it exactly this way, and the amber is the tone the palette
+ *  already gives "blocked" — a priority IS a warning-level fact about a task. */
+function priorityDisplay(priority) {
+  const value = Number(priority)
+  if (!Number.isFinite(value) || value <= 0) {
+    return jsx('span', { className: 'text-(--ui-text-quaternary)', children: '—' })
+  }
+  return jsxs('span', {
+    className: 'inline-flex items-center gap-0.5 font-medium',
+    style: { color: '#e0a13a' },
+    children: [jsx(Codicon, { name: 'arrow-up', size: '0.65rem' }), String(value)]
+  })
+}
+
 /** The icon a kind deserves: the same mark in the dialog title as in the list. */
 function attachmentIconName(kind) {
   if (kind === 'markdown') return 'markdown'
@@ -1392,9 +1407,17 @@ function AttachmentLine({ taskId, board, att, i18n, onPreview, iconSize, hoverab
             onClick: () => onPreview(att),
             children: att.filename
           })
-        : jsx('span', {
-            className: 'min-w-0 flex-1 truncate',
-            title: att.filename,
+        : jsx('button', {
+            // Not previewable: the name is still a gesture, and the only useful one is the
+            // download. The tooltip says so instead of promising a preview that cannot happen.
+            type: 'button',
+            className: cn(
+              'min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left cursor-pointer',
+              'text-(--ui-text-secondary) hover:text-(--ui-text-primary) hover:underline'
+            ),
+            title: i18n.downloadAttachment(att.filename),
+            'aria-label': i18n.downloadAttachment(att.filename),
+            onClick: () => void downloadAttachment(taskId, board, att, i18n),
             children: att.filename
           }),
       jsx(AttachmentActions, { taskId, board, att, i18n, onPreview, iconSize })
@@ -2012,12 +2035,23 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                     : jsx('p', { className: 'text-[11px] text-(--ui-text-quaternary)', children: i18n.noDescription })
               ] }),
 
-              // 1b. Attachments: markdown ones open in their own dialog, any of them
-              // can be saved. The bytes are fetched per file, never with the detail.
-              jsx(AttachmentsSection, {
+              // 1b. Attachments and the priority line, for the DOCKED detail and its panel: in the
+              // modal both belong to the right-hand column instead, so this block yields to it
+              // rather than duplicating them in the body.
+              detailModal ? null : jsx(AttachmentsSection, {
                 taskId: shownId, board, i18n,
                 attachments: data?.task?.attachments || [],
                 onPreview: att => setPreviewAtt(att)
+              }),
+              detailModal ? null : jsxs('div', {
+                className: 'flex flex-col gap-0.5',
+                children: [
+                  jsx('div', {
+                    className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)',
+                    children: i18n.metaPriority
+                  }),
+                  priorityDisplay(task?.priority)
+                ]
               }),
               previewAtt
                 ? jsx(AttachmentPreview, {
@@ -2299,13 +2333,20 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
             }),
             metaRow(i18n.metaStatus, task?.status || '—'),
             metaRow(i18n.metaAssignee, task?.assignee || '—'),
+            metaRow(i18n.metaPriority, priorityDisplay(task?.priority)),
             task?.workspace_path ? metaRow(i18n.metaWorkspace, task.workspace_path) : null,
             metaRow(i18n.metaCreated, when(task?.created_at)),
             metaRow(i18n.metaLastActivity,
               when(task?.completed_at || task?.started_at || task?.created_at)),
+            // The files as a real section, with their eye and their download, rather than a
+            // comma-joined list of names: the modal's right column is where the official plugin
+            // puts them, and it is the only place here that has the room for the actions.
             task?.attachments?.length
-              ? metaRow(i18n.attachments(task.attachments.length),
-                        task.attachments.map(a => a.filename).join(', '))
+              ? jsx(AttachmentsSection, {
+                  taskId: shownId, board, i18n,
+                  attachments: task.attachments,
+                  onPreview: att => setPreviewAtt(att)
+                })
               : null
           ]
         })
