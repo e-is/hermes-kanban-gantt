@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.6.0 — attachments on the board, a timeline you can steer, three languages
+
+**Attachments reach the board itself.** A task with files carries a paperclip next to its
+name, on the timeline and in list view alike. Opening it lists the files with the two things
+one does with a file — look at it, or save it — and the eye appears only for the types the
+webview can actually render, so the control never promises what it cannot do. The file names
+are fetched when the paperclip is opened: the board's payload carries a count only (one
+`GROUP BY` per board), so listing a board costs the same whether its tasks hold three
+attachments or three thousand.
+
+**The preview reads the file's type.** Markdown keeps the app's own renderer, plain text is
+shown as text, and images, PDFs and HTML render in the dialog — HTML in a sandboxed frame,
+because an attachment is user-supplied text and must not run scripts. Anything else stays
+download-only rather than pretending. The bytes never ride with the board payload: they come
+from the plugin's own content route, which runs on the gateway that owns the board, which is
+why a remote gateway needs no proxy. The dialog is a reading surface rather than a keyhole,
+with previous/next arrows in a toolbar, a position counter, and ←/→ keys that wrap; a task
+with a single file shows no navigation at all.
+
+**The timeline is steerable.** Hour gridlines appear once the scale passes a threshold, a
+"now" line marks the present moment, and the wheel zooms anchored at the cursor — with
+Ctrl/⌘ only, so a bare wheel keeps scrolling the rows as it should, and Shift+wheel pans. The
+scale runs from 1 to 100 %, where 100 always means "six hours across the pane", whatever the
+pane's width — and it stops there, because zooming further smears the ruler without adding
+anything. Five period shortcuts (6 h, 12 h, 24 h, 3 d, 7 d) put a slice of the timeline on
+screen in one click, stay calibrated when the pane or the name column is resized, and clear
+themselves the moment the scale or the scroll moves: they describe what is on screen, so they
+stop claiming it once it is no longer true.
+
+**Titles are shown verbatim.** A leading `[EPIC]` or `[P0]` is the author's text and is
+rendered as written. An option in the "…" menu turns that prefix into a tag when it reads
+better that way, and only then.
+
+**Chinese joins English and French**, including every string the new period, prefix and
+attachment features introduced.
+
+**Tones mean one thing each.** Red is reserved for hard failures — crashed, failed,
+spawn_failed — and is taken from the outcome of the run rather than the task's current status,
+so a recently failed task no longer looks like a task that is merely blocked. Amber is
+blocked, green is live, pink is review.
+
+**An empty board invites the first task.** The empty state keeps its message, drops the
+legend, which has nothing to describe there, and offers a "New task" button right under it.
+The period selector is hidden in list view, as the zoom slider already was: both are timeline
+affordances, and a disabled control in a view that cannot honour it is just noise.
+
 ## 1.5.0 — the detail as a modal, attachments at last, and two fixes measured rather than guessed
 
 **The task detail opens as a modal.** A switch in the detail header — next to the close
