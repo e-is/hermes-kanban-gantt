@@ -3094,10 +3094,19 @@ function AttachmentBody({ att, data, i18n }) {
     });
   }
   if (!url) return jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.previewFailed });
-  if (kind === "image") return jsx6("img", { src: url, alt: att.filename, className: "max-w-full rounded" });
-  if (kind === "pdf") return jsx6("iframe", { src: url, title: att.filename, className: "h-[70vh] w-full border-0 rounded" });
+  if (kind === "image") {
+    return jsx6("img", {
+      src: url,
+      alt: att.filename,
+      // Centred and fitted: a large screenshot should be readable whole, not cropped.
+      className: "mx-auto block max-h-full max-w-full rounded object-contain"
+    });
+  }
+  if (kind === "pdf") {
+    return jsx6("iframe", { src: url, title: att.filename, className: "h-[75vh] w-full border-0 rounded" });
+  }
   if (kind === "html") {
-    return jsx6("iframe", { src: url, title: att.filename, sandbox: "", className: "h-[70vh] w-full border-0 rounded" });
+    return jsx6("iframe", { src: url, title: att.filename, sandbox: "", className: "h-[75vh] w-full border-0 rounded" });
   }
   return jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.previewFailed });
 }
@@ -3143,7 +3152,7 @@ function AttachmentActions({ taskId, board, att, i18n, onPreview, iconSize }) {
       "aria-label": i18n.previewMarkdown(att.filename),
       title: i18n.previewMarkdown(att.filename),
       onClick: () => onPreview(att),
-      children: jsx6(Codicon5, { name: "open-preview", size })
+      children: jsx6(Codicon5, { name: "eye", size })
     }) : null,
     jsx6(Button5, {
       size: "icon-xs",
@@ -3260,21 +3269,34 @@ function AttachmentPreview({ taskId, board, att, siblings, i18n, onClose, onNavi
     onOpenChange: (next) => {
       if (!next) onClose();
     },
-    children: jsx6(DialogContent4, {
-      className: "flex max-h-[85vh] w-[min(70rem,94vw)] max-w-none flex-col overflow-hidden",
+    children: jsxs6(DialogContent4, {
+      // Room to read in: a wide document, a large image. The old box was a keyhole for both,
+      // and a fixed height rather than a viewport one.
+      className: "flex h-[92vh] w-[min(92rem,96vw)] max-w-none flex-col overflow-hidden p-0",
       children: [
-        jsx6("div", { className: "flex items-center gap-2 pb-2", children: [
-          jsx6(Codicon5, { name: titleIcon, size: "0.85rem", className: "shrink-0 text-(--ui-text-tertiary)" }),
-          jsx6(DialogTitle4, {
-            className: "min-w-0 flex-1 truncate text-[12px] font-medium",
-            children: i18n.previewTitle(att.filename)
-          }),
-          // Only when there is somewhere to go: a single file gets no navigation strip.
-          list.length > 1 ? jsxs6("div", {
-            // `mr-10` is not decoration: the dialog's close button sits in the top-right
-            // corner, and the arrows have to stop short of it.
-            className: "mr-10 flex shrink-0 items-center gap-0.5",
-            children: [
+        // Header: the file's icon and name, and NOTHING else. Keeping the navigation out of
+        // this row is what stops it from colliding with the dialog's own close button.
+        jsxs6("div", {
+          className: "flex shrink-0 items-center gap-2 border-b border-(--ui-stroke-tertiary) px-4 py-2.5 pr-12",
+          children: [
+            jsx6(Codicon5, { name: titleIcon, size: "0.85rem", className: "shrink-0 text-(--ui-text-tertiary)" }),
+            jsx6(DialogTitle4, {
+              className: "min-w-0 flex-1 truncate text-[12px] font-medium",
+              children: i18n.previewTitle(att.filename)
+            })
+          ]
+        }),
+        jsx6("div", {
+          className: "min-h-0 flex-1 overflow-auto px-4 py-3",
+          children: query.isLoading ? jsx6("div", { className: "grid h-24 place-items-center", children: jsx6(Loader, {}) }) : query.isError || !query.data ? jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.previewFailed }) : jsx6(AttachmentBody, { att, data: query.data, i18n })
+        }),
+        // The toolbar: navigation on the left, the file's own action on the right. A real bar
+        // of its own — the arrows used to float over the header and crowd the close button.
+        jsxs6("div", {
+          className: "flex shrink-0 items-center gap-1 border-t border-(--ui-stroke-tertiary) px-3 py-1.5",
+          children: [
+            // Nothing at all when the task has a single file: no empty strip, no dead arrows.
+            list.length > 1 ? jsxs6("div", { className: "flex items-center gap-0.5", children: [
               jsx6(Button5, {
                 size: "icon-xs",
                 variant: "ghost",
@@ -3297,12 +3319,19 @@ function AttachmentPreview({ taskId, board, att, siblings, i18n, onClose, onNavi
                 onClick: () => onNavigate(list[(index + 1) % list.length]),
                 children: jsx6(Codicon5, { name: "chevron-right", size: "0.85rem" })
               })
-            ]
-          }) : jsx6("div", { className: "mr-10 shrink-0" })
-        ] }),
-        jsx6("div", {
-          className: "min-h-0 overflow-y-auto",
-          children: query.isLoading ? jsx6("div", { className: "grid h-24 place-items-center", children: jsx6(Loader, {}) }) : query.isError || !query.data ? jsx6("p", { className: "text-[11px] text-(--ui-text-quaternary)", children: i18n.previewFailed }) : jsx6(AttachmentBody, { att, data: query.data, i18n })
+            ] }) : null,
+            jsx6("div", {
+              className: "ml-auto flex items-center gap-0.5",
+              children: jsx6(Button5, {
+                size: "icon-xs",
+                variant: "ghost",
+                "aria-label": i18n.downloadAttachment(att.filename),
+                title: i18n.downloadAttachment(att.filename),
+                onClick: () => void downloadAttachment(taskId, board, att, i18n),
+                children: jsx6(Codicon5, { name: "cloud-download", size: "0.8rem" })
+              })
+            })
+          ]
         })
       ]
     })
