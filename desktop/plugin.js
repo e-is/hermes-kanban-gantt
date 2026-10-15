@@ -3250,26 +3250,7 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
   if (!(Number(count) > 0)) return null;
   const attachments = query.data || [];
   const countLabel = i18n.attachments(count);
-  const triggerBody = jsxs6("span", {
-    className: "relative inline-flex items-center justify-center",
-    children: [
-      jsx6(Codicon5, { name: "attach", size: "0.75rem" }),
-      jsx6("span", {
-        className: "absolute rounded-full font-semibold tabular-nums",
-        style: {
-          top: "-5px",
-          right: "-6px",
-          padding: "0 3px",
-          fontSize: "9px",
-          lineHeight: "1.25",
-          color: "var(--ui-text-secondary)",
-          backgroundColor: "var(--ui-bg-tertiary)",
-          border: "1px solid var(--ui-stroke-tertiary)"
-        },
-        children: Number(count) > 9 ? "9+" : String(count)
-      })
-    ]
-  });
+  const triggerBody = jsx6(Codicon5, { name: "attach", size: "0.8rem" });
   return jsxs6(DropdownMenu3, { children: [
     jsx6(DropdownMenuTrigger3, {
       asChild: true,
