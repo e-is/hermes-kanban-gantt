@@ -2590,7 +2590,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     ]
   });
 }
-var LIST_COLUMNS = "minmax(0, 1fr) 150px 96px 64px";
+var LIST_COLUMNS = "minmax(0, 1fr) 150px 96px 64px 40px";
 function ListCells({ task, now, statusTitle, dotColor }) {
   const i18n = useGanttI18n();
   const last = lastActivity(task);
@@ -2614,6 +2614,21 @@ function ListCells({ task, now, statusTitle, dotColor }) {
       className: "px-2 text-[10px] tabular-nums text-right text-(--ui-text-tertiary)",
       title: last ? new Date(last * 1e3).toLocaleString() : "",
       children: relativeAge(last, now, i18n.relativeUnits)
+    }),
+    jsx6("div", {
+      key: "attachments",
+      // The dedicated end column asked for: as narrow as the paperclip it can hold, and it
+      // has to be the LAST cell, because LIST_COLUMNS ends with its 40 px.
+      className: "flex items-center justify-end pr-2",
+      children: jsx6(AttachmentMenu, {
+        taskId: task.id,
+        board: task.board,
+        count: task.attachment_count,
+        i18n,
+        onPreview: (att, siblings) => $openAttachment.set(
+          attachmentPreviewState(task.id, task.board, att, siblings)
+        )
+      })
     })
   ];
 }
@@ -4845,12 +4860,22 @@ function KanbanGanttPage() {
                           })
                         ]
                       }),
-                      ...listMode ? [i18n.assigneeColumn, i18n.statusColumn, i18n.lastActivityColumn].map((h, i) => jsx6("div", {
-                        key: h,
-                        className: cn3("flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", i === 2 && "justify-end"),
-                        style: { height: "24px" },
-                        children: h
-                      })) : [jsx6(Ruler, { key: "ruler", min: domain.min, max: domain.max, pxPerSec, onReset: resetView })]
+                      ...listMode ? [
+                        ...[i18n.assigneeColumn, i18n.statusColumn, i18n.lastActivityColumn].map((h, i) => jsx6("div", {
+                          key: h,
+                          className: cn3("flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", i === 2 && "justify-end"),
+                          style: { height: "24px" },
+                          children: h
+                        })),
+                        // The attachment column is as narrow as a paperclip, so its header
+                        // is the icon rather than a word that would never fit.
+                        jsx6("div", {
+                          key: "attachments-header",
+                          className: "flex items-center justify-end border-b border-(--ui-stroke-tertiary) pr-2 text-(--ui-text-tertiary)",
+                          style: { height: "24px" },
+                          children: jsx6(Codicon5, { name: "paperclip", size: "0.7rem" })
+                        })
+                      ] : [jsx6(Ruler, { key: "ruler", min: domain.min, max: domain.max, pxPerSec, onReset: resetView })]
                     ]
                   }),
                   jsxs6("div", {

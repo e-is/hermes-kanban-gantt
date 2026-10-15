@@ -3320,20 +3320,22 @@ export function KanbanGanttPage() {
                         ]
                       }),
                       ...(listMode
-                        ? [i18n.assigneeColumn, i18n.statusColumn, i18n.lastActivityColumn].map((h, i) => jsx('div', {
-                            key: h,
-                            className: cn('flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none', i === 2 && 'justify-end'),
-                            style: { height: '24px' },
-                            children: h
-                          })),
-                          // The attachment column is as narrow as a paperclip, so its header
-                          // is the icon rather than a word that would never fit.
-                          jsx('div', {
-                            key: 'attachments-header',
-                            className: 'flex items-center justify-end border-b border-(--ui-stroke-tertiary) pr-2 text-(--ui-text-tertiary)',
-                            style: { height: '24px' },
-                            children: jsx(Codicon, { name: 'paperclip', size: '0.7rem' })
-                          })
+                        ? [
+                            ...[i18n.assigneeColumn, i18n.statusColumn, i18n.lastActivityColumn].map((h, i) => jsx('div', {
+                              key: h,
+                              className: cn('flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none', i === 2 && 'justify-end'),
+                              style: { height: '24px' },
+                              children: h
+                            })),
+                            // The attachment column is as narrow as a paperclip, so its header
+                            // is the icon rather than a word that would never fit.
+                            jsx('div', {
+                              key: 'attachments-header',
+                              className: 'flex items-center justify-end border-b border-(--ui-stroke-tertiary) pr-2 text-(--ui-text-tertiary)',
+                              style: { height: '24px' },
+                              children: jsx(Codicon, { name: 'paperclip', size: '0.7rem' })
+                            })
+                          ]
                         : [jsx(Ruler, { key: 'ruler', min: domain.min, max: domain.max, pxPerSec, onReset: resetView })])
                     ]
                   }),
