@@ -3813,7 +3813,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
             className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)",
             children: i18n.metaPriority
           }),
-          priorityDisplay(task?.priority)
+          priorityDisplay(data?.task?.priority)
         ]
       }),
       previewAtt ? jsx6(AttachmentPreview, {
