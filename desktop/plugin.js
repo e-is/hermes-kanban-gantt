@@ -5250,6 +5250,8 @@ var plugin = {
 };
 var main_default = plugin;
 export {
+  $detailModal,
+  $openTaskId,
   KanbanGanttPage,
   main_default as default,
   modifierKeyLabel

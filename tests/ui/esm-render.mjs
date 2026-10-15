@@ -289,8 +289,10 @@ check(illegal.length === 0, 'loader import-scan found illegal specifiers: ' + JS
 
 // 2) import + register
 let plugin
+let pluginModule
 try {
-  plugin = (await import(pathToFileURL(PLUGIN_PATH).href + '?t=' + Date.now())).default
+  pluginModule = await import(pathToFileURL(PLUGIN_PATH).href + '?t=' + Date.now())
+  plugin = pluginModule.default
 } catch (err) {
   check(false, 'plugin failed to import: ' + err.message)
   console.log('FAILURES: ' + failures)
@@ -362,6 +364,27 @@ if (pageNode) {
   check(rowCount(filteredFlat) === 1,
     `the attachment filter leaves only the task with files (found ${rowCount(filteredFlat)})`)
   globalThis.__kgOnlyAtt = false
+  // The DETAIL, which nothing covered until now: open a task, render, and look at what the drawer
+  // draws. Driving the state beats clicking a row — the stub does not reach the row nodes — and it
+  // is the path that hid a "cannot access before initialization" crash while every check stayed
+  // green, because the harness had never opened a task at all.
+  pluginModule.$openTaskId.set('t_1')
+  const detailFlat = JSON.stringify(page.render())
+  check(detailFlat.includes('noDescription'),
+    'the detail draws its sections (the fixture task has no description, so that state shows)')
+  check(!detailFlat.includes('detailMeta'),
+    'docked by default: the modal column (its "Information" heading) is not rendered')
+  check(!detailFlat.includes('Cannot access') && !detailFlat.includes('renderError'),
+    'the detail renders without throwing')
+
+  // The modal branch, which the panel never exercises.
+  pluginModule.$detailModal.set(true)
+  const modalFlat = JSON.stringify(page.render())
+  check(modalFlat.includes('detailMeta'), 'the modal renders its right-hand information column')
+  check(modalFlat.includes('metaPriority'), 'the modal column carries the priority row')
+  pluginModule.$detailModal.set(false)
+  pluginModule.$openTaskId.set(null)
+
   check(flat.includes('"area":"workspace.pageHeader"') || flat.includes('"area": "workspace.pageHeader"'), 'page projects its switcher into WORKSPACE_PAGE_HEADER_AREA')
 
   // -------------------------------------------------------------------------

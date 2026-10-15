@@ -2381,6 +2381,12 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
 
 /* ───────────────────────────────────── page ───────────────────────────────── */
 
+// Exported for the render harness: opening a task and switching to the modal are STATE, so a test
+// can drive them directly instead of hunting for a row node to click — which the stub cannot even
+// reach. Without this, the whole detail body is untestable, and it is where a temporal-dead-zone
+// crash hid for a full evening while sixteen checks stayed green.
+export { $openTaskId, $detailModal } from './state'
+
 /** The modifier this platform uses for a wheel zoom: Hermes prints ⌘ on macOS, Ctrl
  *  elsewhere, so the hint says what the reader's own keyboard shows. */
 export function modifierKeyLabel() {
