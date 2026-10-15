@@ -4383,6 +4383,7 @@ function KanbanGanttPage() {
       if (intent === "scroll") return;
       const el = scrollerRef.current;
       event.preventDefault();
+      event.stopPropagation();
       if (intent === "pan") {
         if (el) el.scrollLeft += pan;
         return;

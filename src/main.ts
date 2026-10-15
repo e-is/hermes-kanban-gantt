@@ -2802,8 +2802,13 @@ export function KanbanGanttPage() {
       const intent = wheelIntent(event)
       if (intent === 'scroll') return
       const el = scrollerRef.current
-      // Before anything else: the desktop must not zoom under the reader.
+      // `preventDefault()` is what cancels Chromium's page zoom, and it only works because this
+      // listener is non-passive. `stopPropagation()` is belt and braces: if the app ever grows
+      // its own ctrl+wheel handler, the gesture stops here instead of reaching it. Not
+      // `stopImmediatePropagation()`: that would also silence sibling listeners on this same
+      // node, which have nothing to do with the gesture.
       event.preventDefault()
+      event.stopPropagation()
       if (intent === 'pan') {
         if (el) el.scrollLeft += pan
         return
