@@ -308,6 +308,40 @@ def test_task_detail_lists_attachments(client):
     assert "text" not in att and "content" not in att
 
 
+def test_gantt_reports_the_attachment_count(client):
+    """The board snapshot must COUNT attachments — that count is what the paperclip reads.
+
+    The detail endpoint was already covered; this is the other half, and the one that was
+    missing in practice: a backend field, a front-end icon, and no test tying them together.
+    Two attachments on one task and none on the others, so a count that merely exists is not
+    enough to pass.
+    """
+    http, board = client
+    _attach(board, board["child"], "degrade.png", b"\x89PNG\r\n\x1a\n" + b"0" * 32, "image/png")
+    _attach(board, board["child"], "notes.md", b"# Notes\n")
+
+    tasks = http.get(f"/gantt?board={board['slug']}").json()["tasks"]
+    counts = {t["id"]: t["attachment_count"] for t in tasks}
+
+    assert counts[board["child"]] == 2, "the count must travel with the board, not the files"
+    assert counts[board["parent"]] == 0
+    assert counts[board["solo"]] == 0
+
+
+def test_attachment_list_route_serves_metadata_on_demand(client):
+    """The route the paperclip calls when it opens: names and types, and no bytes."""
+    http, board = client
+    _attach(board, board["solo"], "rapport.pdf", b"%PDF-1.4\n", "application/pdf")
+
+    r = http.get(f"/tasks/{board['solo']}/attachments?board={board['slug']}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["task_id"] == board["solo"]
+    assert [a["filename"] for a in data["attachments"]] == ["rapport.pdf"]
+    assert data["attachments"][0]["content_type"] == "application/pdf"
+    assert "stored_path" not in data["attachments"][0], "the path is not the client's business"
+
+
 def test_attachment_content_returns_markdown_as_text(client):
     http, board = client
     body = b"# Notes\n\n**bold**\n\n- one\n"
