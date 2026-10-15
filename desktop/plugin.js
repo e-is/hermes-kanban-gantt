@@ -3249,10 +3249,7 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
         },
         onPointerDown: (event) => event.stopPropagation(),
         onPointerEnter: () => setWanted(true),
-        // TEMPORARY DEBUG MARKER: an "A" rather than the Codicon, to tell "the element is not
-        // rendered" from "the icon font shows nothing". Replace with
-        // `jsx(Codicon, { name: 'paperclip', size: '0.75rem' })` once visibility is confirmed.
-        children: "A"
+        children: jsx6(Codicon5, { name: "paperclip", size: "0.75rem" })
       })
     }),
     jsxs6(DropdownMenuContent3, {
@@ -4921,9 +4918,9 @@ function KanbanGanttPage() {
                           key: "attachments-header",
                           className: "flex items-center justify-end border-b border-(--ui-stroke-tertiary) pr-2 text-(--ui-text-tertiary)",
                           style: { height: "24px" },
-                          // TEMPORARY DEBUG MARKER: an "A" (Attachment) instead of the
-                          // Codicon, to see whether the column header is rendered at all.
-                          children: "A"
+                          // The column is as narrow as a paperclip, so its header is the
+                          // icon rather than a word that would never fit.
+                          children: jsx6(Codicon5, { name: "paperclip", size: "0.7rem" })
                         })
                       ] : [jsx6(Ruler, { key: "ruler", min: domain.min, max: domain.max, pxPerSec, onReset: resetView })]
                     ]
