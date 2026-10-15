@@ -1418,16 +1418,11 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
     queryFn: () => fetchAttachments(taskId, board),
     enabled: wanted
   })
-  // TEMPORARY DEBUG MARKER — remove with the "A" below. The trigger is now rendered for EVERY
-  // row, even when the API reports no attachment, and carries a literal "A" beside the icon.
-  // That separates two failures that look identical on screen: the component never being
-  // reached, versus a count of 0 (or a missing field) hiding it.
+  // Only a task that has files carries the affordance: the count comes from the board snapshot,
+  // so this is one comparison, not a fetch.
+  if (!count) return null
   const attachments = query.data || []
   const countLabel = i18n.attachments(count)
-  const triggerBody = jsxs('span', {
-    className: 'inline-flex items-center gap-0.5',
-    children: [jsx(Codicon, { name: 'paperclip', size: '0.75rem' }), 'A']
-  })
   return jsxs(DropdownMenu, { children: [
     jsx(DropdownMenuTrigger, {
       asChild: true,
@@ -1445,7 +1440,7 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
         onClick: event => { event.stopPropagation(); setWanted(true) },
         onPointerDown: event => event.stopPropagation(),
         onPointerEnter: () => setWanted(true),
-        children: triggerBody
+        children: jsx(Codicon, { name: 'paperclip', size: '0.75rem' })
       })
     }),
     jsxs(DropdownMenuContent, {

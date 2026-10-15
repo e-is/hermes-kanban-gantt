@@ -3247,12 +3247,9 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
     queryFn: () => fetchAttachments(taskId, board),
     enabled: wanted
   });
+  if (!count) return null;
   const attachments = query.data || [];
   const countLabel = i18n.attachments(count);
-  const triggerBody = jsxs6("span", {
-    className: "inline-flex items-center gap-0.5",
-    children: [jsx6(Codicon5, { name: "paperclip", size: "0.75rem" }), "A"]
-  });
   return jsxs6(DropdownMenu3, { children: [
     jsx6(DropdownMenuTrigger3, {
       asChild: true,
@@ -3273,7 +3270,7 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
         },
         onPointerDown: (event) => event.stopPropagation(),
         onPointerEnter: () => setWanted(true),
-        children: triggerBody
+        children: jsx6(Codicon5, { name: "paperclip", size: "0.75rem" })
       })
     }),
     jsxs6(DropdownMenuContent3, {
