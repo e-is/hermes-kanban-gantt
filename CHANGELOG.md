@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.6.1 — attachments on the rows, a filter to find them, and a detail that reads
+
+**A task with files says so on the board.** A paperclip sits beside the assignee on the timeline,
+and in a dedicated narrow column at the end of the table in list view, on the tasks that have
+attachments and nowhere else. Opening it lists the files with the two things one does with a file —
+look at it, or save it. The board's payload carries a count per task, never the filenames: the list
+is fetched when the paperclip is opened, so listing a board costs the same whether its tasks hold
+three attachments or three thousand.
+
+**The preview reads the file's type.** Markdown through the app's own renderer, plain text as text,
+images and PDFs rendered, HTML in a sandboxed frame — an attachment is user-supplied text and must
+not run scripts. Anything else stays download-only rather than pretending. The bytes never ride with
+the board payload: they come from the plugin's own content route, which runs on the gateway that
+owns the board, which is why a remote gateway needs no proxy.
+
+**A filter finds the tasks that have files** — "only tasks with attachments", off by default, in the
+funnel menu beside the status and assignee filters, and composed with them.
+
+**The keyboard walks the rows.** With the detail docked, ↑/↓ move the selection one row down or up
+in the displayed order and open that task, keeping the focus on the row so the next press continues
+from there. Inside the preview, ←/→ walk a task's files, wrapping, and a task with a single file
+shows no navigation at all.
+
+**Clicking a file name acts.** A name whose type can be previewed opens the preview; a name that
+cannot is a download, with a tooltip that says so instead of promising a preview that cannot happen.
+
+**The detail reads like a document.** In the modal, the right-hand column carries the facts —
+status, assignee, **priority**, workspace, dates, the attachments as a real section with their eye
+and their download, and the parent and child links. The body is left for reading: description,
+result, latest summary, comments. Priority was absent from both views before, and is drawn the way
+the official plugin draws it: an upward arrow and the number in amber.
+
+**An empty relation section is not drawn**: "no children" on a leaf task, "no parents" on a root
+one, were blocks that had nothing to say.
+
 ## 1.6.0 — attachments on the board, a timeline you can steer, three languages
 
 **Attachments reach the board itself.** A task with files carries a paperclip next to its
