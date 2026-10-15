@@ -1966,7 +1966,9 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
               //    children (read-only for now: removing that link means
               //    re-parenting the child itself). Clicking a name opens that
               //    task's detail, which also selects its row in the gantt.
-              jsx(TaskRelations, {
+              //    In the modal both belong to the right-hand column, like the priority and the
+              //    attachments, so this block yields to it rather than repeating them.
+              detailModal ? null : jsx(TaskRelations, {
                 heading: i18n.parents,
                 tasks: relations.parents,
                 emptyLabel: relations.parents.length === 0 ? i18n.noParents : undefined,
@@ -1979,10 +1981,11 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 openLabel: i18n.openTask,
                 disabled: unlinkMutation.isPending
               }),
-              jsx(TaskRelations, {
+              // Children only when there are some: "no children" on every leaf task is noise, and
+              // most tasks are leaves. Parents keep their empty state, which is informative.
+              detailModal || relations.children.length === 0 ? null : jsx(TaskRelations, {
                 heading: i18n.children,
                 tasks: relations.children,
-                emptyLabel: relations.children.length === 0 ? i18n.noChildren : undefined,
                 onOpen: id => $openTaskId.set(id),
                 openLabel: i18n.openTask
               }),
@@ -2347,7 +2350,28 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                   attachments: task.attachments,
                   onPreview: att => setPreviewAtt(att)
                 })
-              : null
+              : null,
+            // Relations follow the priority and the files: this column is where the modal keeps
+            // the facts about a task, and the body below it is for reading material.
+            jsx(TaskRelations, {
+              heading: i18n.parents,
+              tasks: relations.parents,
+              emptyLabel: relations.parents.length === 0 ? i18n.noParents : undefined,
+              onOpen: id => $openTaskId.set(id),
+              onRemove: id => {
+                const parent = relations.parents.find(t => t.id === id)
+                setPendingUnlink({ id, title: parent ? parent.title : id })
+              },
+              removeLabel: i18n.removeParentLink,
+              openLabel: i18n.openTask,
+              disabled: unlinkMutation.isPending
+            }),
+            relations.children.length === 0 ? null : jsx(TaskRelations, {
+              heading: i18n.children,
+              tasks: relations.children,
+              onOpen: id => $openTaskId.set(id),
+              openLabel: i18n.openTask
+            })
           ]
         })
       ] })
