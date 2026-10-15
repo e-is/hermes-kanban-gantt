@@ -347,11 +347,11 @@ if (pageNode) {
   check(flat.includes('Epic — first task'), 'page renders task titles')
   // The paperclip has to reach the RENDER, not merely the data. The count is textual because the
   // row nodes sit behind a child the stub does not invoke, so a tree walk cannot reach them.
-  // Two: the one row that has files, plus the filter menu's own paperclip. A second attached task
-  // would make it three, so this proves the fileless rows carry none.
+  // Four today: three rows plus the filter menu, because the debug marker renders the trigger on
+  // EVERY row. Back to two — one row with files plus the menu — when the marker comes out.
   const paperclips = (flat.match(/"paperclip"/g) || []).length
-  check(paperclips === 2,
-    `one paperclip in the row with files plus the filter menu icon (found ${paperclips})`)
+  check(paperclips === 4,
+    `a paperclip on every row (debug marker) plus the filter menu icon (found ${paperclips})`)
 
   // The "only tasks with attachments" filter. The fixture has exactly one task with files, so
   // with the option off the board shows all three rows and with it on it shows that one row —

@@ -1418,11 +1418,19 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
     queryFn: () => fetchAttachments(taskId, board),
     enabled: wanted
   })
-  // Only a task that has files carries the affordance: the count comes from the board snapshot,
-  // so this is one comparison, not a fetch.
-  if (!count) return null
+  // TEMPORARY DEBUG MARKER — remove with the "A" below. Rendered on EVERY row, with the raw value
+  // from the board snapshot beside the letter, so the screen answers both questions at once:
+  // does the count arrive row by row, and is anything visible in this spot at all. A row showing
+  // "A2" is a task the API counted two files for; "A0" or "A?" is a count that never arrived.
   const attachments = query.data || []
   const countLabel = i18n.attachments(count)
+  const triggerBody = jsxs('span', {
+    className: 'inline-flex items-center gap-0.5',
+    children: [
+      jsx(Codicon, { name: 'paperclip', size: '0.75rem' }),
+      `A${count === undefined || count === null ? '?' : count}`
+    ]
+  })
   return jsxs(DropdownMenu, { children: [
     jsx(DropdownMenuTrigger, {
       asChild: true,
@@ -1440,7 +1448,7 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
         onClick: event => { event.stopPropagation(); setWanted(true) },
         onPointerDown: event => event.stopPropagation(),
         onPointerEnter: () => setWanted(true),
-        children: jsx(Codicon, { name: 'paperclip', size: '0.75rem' })
+        children: triggerBody
       })
     }),
     jsxs(DropdownMenuContent, {
