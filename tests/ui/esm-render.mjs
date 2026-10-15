@@ -72,8 +72,8 @@ const boards = {
 // POST-queryFn shape of the /gantt snapshot.
 const gantt = {
   tasks: [
-    { id: 't_1', title: 'Epic — first task', status: 'running', assignee: 'alice', started_at: 1_800_000_000, created_at: 1_799_000_000, archived: false },
-    { id: 't_2', title: 'Child task (done)', status: 'done', assignee: 'bob', completed_at: 1_800_100_000, created_at: 1_799_000_000, archived: false },
+    { id: 't_1', title: 'Epic — first task', status: 'running', assignee: 'alice', started_at: 1_800_000_000, created_at: 1_799_000_000, archived: false, attachment_count: 2 },
+    { id: 't_2', title: 'Child task (done)', status: 'done', assignee: 'bob', completed_at: 1_800_100_000, created_at: 1_799_000_000, archived: false, attachment_count: 0 },
     { id: 't_3', title: 'Blocked task', status: 'blocked', created_at: 1_799_000_000, archived: false }
   ],
   total: 3
@@ -340,6 +340,11 @@ if (pageNode) {
   pageNode = page.render() // second render picks up resolved query data
   const flat = JSON.stringify(pageNode)
   check(flat.includes('Epic — first task'), 'page renders task titles')
+  // The paperclip has to reach the RENDER, not merely the data: a task with files shows one
+  // and carries its count in the label, and a task without files shows none.
+  check(flat.includes('Attachments (2)'), 'the paperclip carries the task attachment count')
+  check((flat.match(/"paperclip"/g) || []).length >= 1, 'a task with files renders a paperclip')
+  check(!flat.includes('Attachments (0)'), 'a task with no files gets no paperclip')
   check(flat.includes('"area":"workspace.pageHeader"') || flat.includes('"area": "workspace.pageHeader"'), 'page projects its switcher into WORKSPACE_PAGE_HEADER_AREA')
 }
 
