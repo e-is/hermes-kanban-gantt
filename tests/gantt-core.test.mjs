@@ -780,6 +780,22 @@ test('the now line is measured from the timeline origin, not the container edge'
   assert.equal(nowLineX(NOW, min, NOW - 1, pxPerSec, labelW), null)
 })
 
+/* ── walking the rows with the keyboard ─────────────────────────────────────── */
+
+test('arrow navigation moves one row at a time, and stops at the ends', () => {
+  const { neighbourId } = core
+  const order = ['t_a', 't_b', 't_c']
+  assert.equal(neighbourId(order, 't_a', 1), 't_b')
+  assert.equal(neighbourId(order, 't_b', 1), 't_c')
+  assert.equal(neighbourId(order, 't_c', -1), 't_b')
+  assert.equal(neighbourId(order, 't_a', -1), null, 'no wrap upwards')
+  assert.equal(neighbourId(order, 't_c', 1), null, 'no wrap downwards')
+  assert.equal(neighbourId(order, 't_unknown', 1), null, 'an id outside the order goes nowhere')
+  assert.equal(neighbourId([], 't_a', 1), null)
+  assert.equal(neighbourId(order, 't_a', 0), null)
+  assert.equal(neighbourId(undefined, 't_a', 1), null, 'a missing order is not a crash')
+})
+
 /* ── the wheel belongs to the timeline, not to the desktop ──────────────────── */
 
 test('a wheel is a zoom only with ctrl or meta, a pan with shift, a scroll otherwise', () => {

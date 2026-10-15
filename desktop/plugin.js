@@ -1121,6 +1121,14 @@ var PREVIEW_BY_EXTENSION = [
   [["pdf"], "pdf"],
   [["html", "htm"], "html"]
 ];
+function neighbourId(ids, current, step) {
+  const list = ids || [];
+  const at = list.indexOf(current);
+  if (at < 0 || !step) return null;
+  const next = at + step;
+  if (next < 0 || next >= list.length) return null;
+  return list[next];
+}
 function wheelIntent(event) {
   if (event.ctrlKey || event.metaKey) return "zoom";
   if (event.shiftKey) return "pan";
@@ -2456,6 +2464,10 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
       isSelected ? "bg-(--ui-accent)/12 font-semibold" : isChecked ? "bg-(--ui-accent)/6" : descendantOfSelected ? "bg-(--ui-accent)/7" : isEven ? "bg-black/[0.02] dark:bg-white/[0.02]" : "bg-transparent",
       "hover:bg-(--ui-accent)/8"
     ),
+    // Addressable and focusable: the row is what the keyboard moves through when the detail
+    // is docked, and `focus()` needs both a handle and a `tabIndex`.
+    "data-row-id": task.id,
+    tabIndex: -1,
     style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
     onClick: (e) => {
       if (e.target.tagName === "INPUT" && e.target.type === "checkbox") return;
@@ -3186,7 +3198,19 @@ function AttachmentLine({ taskId, board, att, i18n, onPreview, iconSize, hoverab
       hoverable && "rounded px-2 py-1 hover:bg-(--chrome-action-hover)"
     ),
     children: [
-      jsx6("span", {
+      // The name IS the gesture: clicked, it opens the preview — when the webview can show the
+      // type. Otherwise it stays plain text rather than pretending to be a link.
+      previewKind(att.filename, att.content_type) ? jsx6("button", {
+        type: "button",
+        className: cn3(
+          "min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left cursor-pointer",
+          "text-(--ui-text-secondary) hover:text-(--ui-text-primary) hover:underline"
+        ),
+        title: i18n.previewMarkdown(att.filename),
+        "aria-label": i18n.previewMarkdown(att.filename),
+        onClick: () => onPreview(att),
+        children: att.filename
+      }) : jsx6("span", {
         className: "min-w-0 flex-1 truncate",
         title: att.filename,
         children: att.filename
@@ -3225,7 +3249,10 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
         },
         onPointerDown: (event) => event.stopPropagation(),
         onPointerEnter: () => setWanted(true),
-        children: jsx6(Codicon5, { name: "paperclip", size: "0.75rem" })
+        // TEMPORARY DEBUG MARKER: an "A" rather than the Codicon, to tell "the element is not
+        // rendered" from "the icon font shows nothing". Replace with
+        // `jsx(Codicon, { name: 'paperclip', size: '0.75rem' })` once visibility is confirmed.
+        children: "A"
       })
     }),
     jsxs6(DropdownMenuContent3, {
@@ -4445,6 +4472,27 @@ function KanbanGanttPage() {
     host2.addEventListener("wheel", onWheel, { passive: false });
     return () => host2.removeEventListener("wheel", onWheel);
   }, [domain.min, pxPerSec, labelW, zoomPct, zoomUsed, zoomMax, handleZoomPct]);
+  useEffect3(() => {
+    if (!openTaskId || !drawerDocked) return void 0;
+    const onArrow = (event) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const tag = event.target && event.target.tagName || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || event.target && event.target.isContentEditable) return;
+      const order = (derived?.rows || []).map((row) => row.task.id);
+      const next = neighbourId(order, openTaskId, event.key === "ArrowDown" ? 1 : -1);
+      if (!next) return;
+      event.preventDefault();
+      $openTaskId.set(next);
+      requestAnimationFrame(() => {
+        const element = document.querySelector(`[data-row-id="${next}"]`);
+        if (!element) return;
+        element.focus();
+        element.scrollIntoView({ block: "nearest" });
+      });
+    };
+    window.addEventListener("keydown", onArrow);
+    return () => window.removeEventListener("keydown", onArrow);
+  }, [openTaskId, drawerDocked, derived]);
   const resetView = () => {
     handleZoomPct(ZOOM_PCT_MIN);
     if (scrollerRef.current) scrollerRef.current.scrollLeft = 0;
@@ -4873,7 +4921,9 @@ function KanbanGanttPage() {
                           key: "attachments-header",
                           className: "flex items-center justify-end border-b border-(--ui-stroke-tertiary) pr-2 text-(--ui-text-tertiary)",
                           style: { height: "24px" },
-                          children: jsx6(Codicon5, { name: "paperclip", size: "0.7rem" })
+                          // TEMPORARY DEBUG MARKER: an "A" (Attachment) instead of the
+                          // Codicon, to see whether the column header is rendered at all.
+                          children: "A"
                         })
                       ] : [jsx6(Ruler, { key: "ruler", min: domain.min, max: domain.max, pxPerSec, onReset: resetView })]
                     ]

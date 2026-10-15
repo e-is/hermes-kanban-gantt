@@ -96,6 +96,14 @@ var PREVIEW_BY_EXTENSION = [
   [["pdf"], "pdf"],
   [["html", "htm"], "html"]
 ];
+function neighbourId(ids, current, step) {
+  const list = ids || [];
+  const at = list.indexOf(current);
+  if (at < 0 || !step) return null;
+  const next = at + step;
+  if (next < 0 || next >= list.length) return null;
+  return list[next];
+}
 function wheelIntent(event) {
   if (event.ctrlKey || event.metaKey) return "zoom";
   if (event.shiftKey) return "pan";
@@ -578,6 +586,7 @@ export {
   matchPeriod,
   matchesSearch,
   maxZoom,
+  neighbourId,
   nowLineX,
   nowOffset,
   periodPxPerSec,

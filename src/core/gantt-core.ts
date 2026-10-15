@@ -109,6 +109,21 @@ const PREVIEW_BY_EXTENSION = [
   [['pdf'], 'pdf'],
   [['html', 'htm'], 'html']
 ]
+/** The id `step` positions away in a visible row order, or null at the ends.
+ *
+ *  Arrow navigation walks the rows as they are displayed, in their order: no wrapping, because
+ *  a list that jumps from the last row to the first is disorienting when the pane scrolls.
+ *  Returns null rather than the current id when there is nowhere to go, so the caller can
+ *  leave the event to the page. */
+export function neighbourId(ids, current, step) {
+  const list = ids || []
+  const at = list.indexOf(current)
+  if (at < 0 || !step) return null
+  const next = at + step
+  if (next < 0 || next >= list.length) return null
+  return list[next]
+}
+
 /** Which gesture a wheel event is, once its modifiers are read.
  *
  *  Ctrl/⌘ is the zoom. It is also Chromium's page zoom, which is why the caller has to stop

@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -547,6 +547,10 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               : 'bg-transparent',
       'hover:bg-(--ui-accent)/8'
     ),
+    // Addressable and focusable: the row is what the keyboard moves through when the detail
+    // is docked, and `focus()` needs both a handle and a `tabIndex`.
+    'data-row-id': task.id,
+    tabIndex: -1,
     style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
     onClick: e => {
       // If clicking inside the checkbox itself, don't trigger row click handler again
@@ -1359,11 +1363,25 @@ function AttachmentLine({ taskId, board, att, i18n, onPreview, iconSize, hoverab
       hoverable && 'rounded px-2 py-1 hover:bg-(--chrome-action-hover)'
     ),
     children: [
-      jsx('span', {
-        className: 'min-w-0 flex-1 truncate',
-        title: att.filename,
-        children: att.filename
-      }),
+      // The name IS the gesture: clicked, it opens the preview — when the webview can show the
+      // type. Otherwise it stays plain text rather than pretending to be a link.
+      previewKind(att.filename, att.content_type)
+        ? jsx('button', {
+            type: 'button',
+            className: cn(
+              'min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left cursor-pointer',
+              'text-(--ui-text-secondary) hover:text-(--ui-text-primary) hover:underline'
+            ),
+            title: i18n.previewMarkdown(att.filename),
+            'aria-label': i18n.previewMarkdown(att.filename),
+            onClick: () => onPreview(att),
+            children: att.filename
+          })
+        : jsx('span', {
+            className: 'min-w-0 flex-1 truncate',
+            title: att.filename,
+            children: att.filename
+          }),
       jsx(AttachmentActions, { taskId, board, att, i18n, onPreview, iconSize })
     ]
   }, att.id)
@@ -1405,7 +1423,10 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
         onClick: event => { event.stopPropagation(); setWanted(true) },
         onPointerDown: event => event.stopPropagation(),
         onPointerEnter: () => setWanted(true),
-        children: jsx(Codicon, { name: 'paperclip', size: '0.75rem' })
+        // TEMPORARY DEBUG MARKER: an "A" rather than the Codicon, to tell "the element is not
+        // rendered" from "the icon font shows nothing". Replace with
+        // `jsx(Codicon, { name: 'paperclip', size: '0.75rem' })` once visibility is confirmed.
+        children: 'A'
       })
     }),
     jsxs(DropdownMenuContent, {
@@ -2869,6 +2890,34 @@ export function KanbanGanttPage() {
     host.addEventListener('wheel', onWheel, { passive: false })
     return () => host.removeEventListener('wheel', onWheel)
   }, [domain.min, pxPerSec, labelW, zoomPct, zoomUsed, zoomMax, handleZoomPct])
+
+  // ↑/↓ walk the rows while the detail is DOCKED beside the gantt: a reader comparing two tasks
+  // should not have to aim at each row in turn. Two deliberate limits — the modal keeps the
+  // arrows for the preview's own navigation, and fields keep their caret movement.
+  useEffect(() => {
+    if (!openTaskId || !drawerDocked) return undefined
+    const onArrow = event => {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+      const tag = (event.target && event.target.tagName) || ''
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+          || (event.target && event.target.isContentEditable)) return
+      const order = (derived?.rows || []).map(row => row.task.id)
+      const next = neighbourId(order, openTaskId, event.key === 'ArrowDown' ? 1 : -1)
+      if (!next) return
+      event.preventDefault()
+      $openTaskId.set(next)
+      // Keep the keyboard where it is: the row that just opened takes the focus, so the next
+      // press continues from there instead of from the document.
+      requestAnimationFrame(() => {
+        const element = document.querySelector(`[data-row-id="${next}"]`)
+        if (!element) return
+        element.focus()
+        element.scrollIntoView({ block: 'nearest' })
+      })
+    }
+    window.addEventListener('keydown', onArrow)
+    return () => window.removeEventListener('keydown', onArrow)
+  }, [openTaskId, drawerDocked, derived])
   const resetView = () => {
     handleZoomPct(ZOOM_PCT_MIN)
     if (scrollerRef.current) scrollerRef.current.scrollLeft = 0
@@ -3333,7 +3382,9 @@ export function KanbanGanttPage() {
                               key: 'attachments-header',
                               className: 'flex items-center justify-end border-b border-(--ui-stroke-tertiary) pr-2 text-(--ui-text-tertiary)',
                               style: { height: '24px' },
-                              children: jsx(Codicon, { name: 'paperclip', size: '0.7rem' })
+                              // TEMPORARY DEBUG MARKER: an "A" (Attachment) instead of the
+                            // Codicon, to see whether the column header is rendered at all.
+                            children: 'A'
                             })
                           ]
                         : [jsx(Ruler, { key: 'ruler', min: domain.min, max: domain.max, pxPerSec, onReset: resetView })])
