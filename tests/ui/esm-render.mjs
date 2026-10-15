@@ -345,13 +345,12 @@ if (pageNode) {
   pageNode = page.render() // second render picks up resolved query data
   const flat = JSON.stringify(pageNode)
   check(flat.includes('Epic — first task'), 'page renders task titles')
-  // The paperclip has to reach the RENDER, not merely the data. The count is textual because the
-  // row nodes sit behind a child the stub does not invoke, so a tree walk cannot reach them.
-  // Two: the one row that has files, plus the filter menu's own paperclip — because the trigger is
-  // conditional again (`Number(count) > 0`), so the two fileless rows carry none.
-  const paperclips = (flat.match(/"paperclip"/g) || []).length
-  check(paperclips === 2,
-    `one paperclip in the row with files plus the filter menu icon (found ${paperclips})`)
+  // The attachment icon has to reach the RENDER, not merely the data — and it is `attach`, not
+  // `paperclip`: that name renders as nothing in this app's icon set, which cost an afternoon.
+  // The count is textual because the row nodes sit behind a child the stub does not invoke, so a
+  // tree walk cannot reach them. Two: the one row with files, plus the filter menu's own icon.
+  const icons = (flat.match(/"attach"/g) || []).length
+  check(icons === 2, `one icon in the row with files plus the filter menu's (found ${icons})`)
 
   // The "only tasks with attachments" filter. The fixture has exactly one task with files, so
   // with the option off the board shows all three rows and with it on it shows that one row —

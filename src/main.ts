@@ -888,7 +888,7 @@ function FilterDropdown({
             onClick: () => onToggleOnlyAttachments(!onlyAttachments),
             className: 'flex items-center gap-2 cursor-pointer text-xs py-1.5',
             children: [
-              jsx(Codicon, { name: 'paperclip', size: '0.8rem', className: 'shrink-0 text-(--ui-text-tertiary)' }),
+              jsx(Codicon, { name: 'attach', size: '0.8rem', className: 'shrink-0 text-(--ui-text-tertiary)' }),
               jsx('span', { className: 'flex-1', children: i18n.filterWithAttachments }),
               onlyAttachments ? jsx(Codicon, { name: 'check', size: '0.8rem', className: 'ml-auto' }) : null
             ]
@@ -1425,11 +1425,27 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
   if (!(Number(count) > 0)) return null
   const attachments = query.data || []
   const countLabel = i18n.attachments(count)
+  // The icon alone, with the count riding on it top-right: enough to read "this task has files,
+  // and how many" without opening anything. Positions and type sizes are inline because the
+  // desktop stylesheet is precompiled — an arbitrary Tailwind class would simply not exist.
   const triggerBody = jsxs('span', {
-    className: 'inline-flex items-center gap-0.5',
+    className: 'relative inline-flex items-center justify-center',
     children: [
-      jsx(Codicon, { name: 'paperclip', size: '0.75rem' }),
-      `A${count === undefined || count === null ? '?' : count}`
+      jsx(Codicon, { name: 'attach', size: '0.75rem' }),
+      jsx('span', {
+        className: 'absolute rounded-full font-semibold tabular-nums',
+        style: {
+          top: '-5px',
+          right: '-6px',
+          padding: '0 3px',
+          fontSize: '9px',
+          lineHeight: '1.25',
+          color: 'var(--ui-text-secondary)',
+          backgroundColor: 'var(--ui-bg-tertiary)',
+          border: '1px solid var(--ui-stroke-tertiary)'
+        },
+        children: Number(count) > 9 ? '9+' : String(count)
+      })
     ]
   })
   return jsxs(DropdownMenu, { children: [
@@ -3421,7 +3437,7 @@ export function KanbanGanttPage() {
                               style: { height: '24px' },
                               // The column is as narrow as a paperclip, so its header is the
                               // icon rather than a word that would never fit.
-                              children: jsx(Codicon, { name: 'paperclip', size: '0.7rem' })
+                              children: jsx(Codicon, { name: 'attach', size: '0.7rem' })
                             })
                           ]
                         : [jsx(Ruler, { key: 'ruler', min: domain.min, max: domain.max, pxPerSec, onReset: resetView })])

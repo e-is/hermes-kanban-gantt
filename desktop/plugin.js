@@ -2782,7 +2782,7 @@ function FilterDropdown({
             onClick: () => onToggleOnlyAttachments(!onlyAttachments),
             className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
             children: [
-              jsx6(Codicon5, { name: "paperclip", size: "0.8rem", className: "shrink-0 text-(--ui-text-tertiary)" }),
+              jsx6(Codicon5, { name: "attach", size: "0.8rem", className: "shrink-0 text-(--ui-text-tertiary)" }),
               jsx6("span", { className: "flex-1", children: i18n.filterWithAttachments }),
               onlyAttachments ? jsx6(Codicon5, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
             ]
@@ -3251,10 +3251,23 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
   const attachments = query.data || [];
   const countLabel = i18n.attachments(count);
   const triggerBody = jsxs6("span", {
-    className: "inline-flex items-center gap-0.5",
+    className: "relative inline-flex items-center justify-center",
     children: [
-      jsx6(Codicon5, { name: "paperclip", size: "0.75rem" }),
-      `A${count === void 0 || count === null ? "?" : count}`
+      jsx6(Codicon5, { name: "attach", size: "0.75rem" }),
+      jsx6("span", {
+        className: "absolute rounded-full font-semibold tabular-nums",
+        style: {
+          top: "-5px",
+          right: "-6px",
+          padding: "0 3px",
+          fontSize: "9px",
+          lineHeight: "1.25",
+          color: "var(--ui-text-secondary)",
+          backgroundColor: "var(--ui-bg-tertiary)",
+          border: "1px solid var(--ui-stroke-tertiary)"
+        },
+        children: Number(count) > 9 ? "9+" : String(count)
+      })
     ]
   });
   return jsxs6(DropdownMenu3, { children: [
@@ -4959,7 +4972,7 @@ function KanbanGanttPage() {
                           style: { height: "24px" },
                           // The column is as narrow as a paperclip, so its header is the
                           // icon rather than a word that would never fit.
-                          children: jsx6(Codicon5, { name: "paperclip", size: "0.7rem" })
+                          children: jsx6(Codicon5, { name: "attach", size: "0.7rem" })
                         })
                       ] : [jsx6(Ruler, { key: "ruler", min: domain.min, max: domain.max, pxPerSec, onReset: resetView })]
                     ]
