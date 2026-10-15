@@ -433,25 +433,77 @@ async def resize_sidebar(ui: Desktop, target: int = SIDEBAR_W):
 
 
 async def open_plugin(ui: Desktop):
-    ok = await ui.ev("""(() => {
+    """Open the plugin surface with a REAL pointer click, then wait until it is mounted.
+
+    The sidebar ignores synthetic clicks in this shell — the same trap as the board switcher — and
+    the old version only checked that the entry EXISTED. So a reload that closed the surface (the
+    view-state reset does exactly that) left the run about to capture a page that was never opened,
+    and to photograph an empty plugin without saying so.
+    """
+    box = await ui.ev("""(() => {
       const span = [...document.querySelectorAll('span')].find(s => s.textContent.trim() === 'Kanban Gantt');
       const btn = span && span.closest('button');
-      if (!btn) return false; btn.click(); return true;
+      if (!btn) return null;
+      const r = btn.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     })()""")
-    if not ok:
+    if not box:
         raise Dead("the « Kanban Gantt » entry is missing from the sidebar")
-    await asyncio.sleep(2.5)
+    await ui.click_xy(box["x"], box["y"])
+    # Mounted means its own chrome is on screen: the board switcher is the first thing it draws.
+    for _ in range(20):
+        await asyncio.sleep(1.0)
+        ready = await ui.ev("""(() => [...document.querySelectorAll('button')]
+          .some(e => /^Board\\b/.test((e.textContent || '').trim())))()""")
+        if ready:
+            print("  plugin surface mounted")
+            return
+    raise Dead("« Kanban Gantt » was clicked but its page never mounted")
 
 
 async def select_board(ui: Desktop):
-    opened = await ui.ev("""(() => {
+    """Point the plugin at the demo board, with REAL pointer events, and verify it took.
+
+    A synthetic `.click()` neither opens this switcher nor picks its items — the script already
+    knows that for the gateway chip and uses coordinates there. It went unnoticed because a manual
+    session usually left the board on `gantt-demo` already; the day the page state was reset first,
+    the run captured whatever board the app happened to hold and photographed an empty plugin. So:
+    coordinates, then read the chip back and refuse to continue if the selection did not take.
+    """
+    box = await ui.ev("""(() => {
       const b = [...document.querySelectorAll('button')].find(e => /^Board\\b/.test(e.textContent.trim()));
-      if (!b) return false; b.click(); return true;
+      if (!b) return null;
+      const r = b.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     })()""")
-    await asyncio.sleep(0.8)
-    if opened:
-        await ui.click_text(DEMO_BOARD, exact=False, scope="[role=menuitem],button,div")
+    if not box:
+        raise Dead("the board switcher is not on the page — is the plugin surface open?")
+    await ui.click_xy(box["x"], box["y"])
+    await asyncio.sleep(1.0)
+    item = await ui.ev(f"""(() => {{
+      // The menu shows the LABEL ("Gantt Demo") while the slug is "gantt-demo": comparing the one
+      // against the other found nothing, clicked nothing, and left the chip on the previous board.
+      const wants = {json.dumps([DEMO_BOARD, DEMO_BOARD.replace('-', ' '), DEMO_BOARD.replace('-', ' ').title()])}
+        .map(w => w.toLowerCase());
+      const hits = [...document.querySelectorAll('[role=menuitem], button, div')].filter(e => {{
+        const text = (e.textContent || '').trim().toLowerCase();
+        return text.length < 40 && wants.some(w => text.indexOf(w) >= 0);
+      }});
+      if (!hits.length) return null;
+      const r = hits[hits.length - 1].getBoundingClientRect();
+      return {{ x: r.left + r.width / 2, y: r.top + r.height / 2 }};
+    }})()""")
+    if item:
+        await ui.click_xy(item["x"], item["y"])
         await asyncio.sleep(2.0)
+    chip = await ui.ev("""(() => {
+      const b = [...document.querySelectorAll('button')].find(e => /^Board\\b/.test(e.textContent.trim()));
+      return b ? b.textContent.trim() : '';
+    })()""")
+    print(f"  board chip: {chip}")
+    # Either form is fine here: the chip prints the label, the seed works in slugs.
+    if DEMO_BOARD not in (chip or "").lower() and DEMO_BOARD.replace('-', ' ') not in (chip or "").lower():
+        raise Dead(f"the board switcher still reads {chip!r} — the captures would show the wrong board")
     rows = await ui.ev("(() => document.body.innerText.split('\\n').filter(t => t.trim().length > 12).length)()")
     print(f"  rows with text: {rows}")
 
