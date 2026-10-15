@@ -633,6 +633,26 @@ async def notify(ui: Desktop, message: str):
         print(f"  (could not raise the notification: {exc})")
 
 
+async def reset_view_state(ui: Desktop):
+    """Put the plugin page back to its default surface before capturing.
+
+    Every key below survives a reload, so a capture run inherits whatever the last session left:
+    a list view instead of the timeline, the "only tasks with attachments" filter still on, a
+    folded tree. The scenario then finds no fold square and no task to open.
+    """
+    folds = await ui.ev("""(() => {
+      localStorage.removeItem('hermes.plugin.kanban-gantt.viewMode');
+      localStorage.removeItem('hermes.plugin.kanban-gantt.onlyAttachments');
+      localStorage.removeItem('hermes.plugin.kanban-gantt.disabledStatuses');
+      const foldKeys = Object.keys(localStorage).filter(k => k.indexOf('kanban-gantt.fold') >= 0);
+      foldKeys.forEach(k => localStorage.removeItem(k));
+      return foldKeys.length;
+    })()""")
+    await ui.call("Page.reload", {"ignoreCache": True})
+    await asyncio.sleep(9)
+    print(f"  view state reset ({folds} fold key(s) cleared)")
+
+
 def seed_board():
     """Re-seed the demo board, then capture at once.
 
@@ -696,6 +716,11 @@ async def main():
         await ensure_local_gateway(ui)
         await ensure_current_board(ui)
         await collapse_private_sections(ui)
+        # The capture must not inherit what the last session left on the page. These keys survive a
+        # reload, so a run could find a list view instead of the timeline, the "only tasks with
+        # attachments" filter still on, or a folded tree — and then report "no fold square found",
+        # no task to open, and five frames instead of twelve.
+        await reset_view_state(ui)
         await open_plugin(ui)
         await select_board(ui)
         await run_scenario(ui, make_gif=not args.no_gif)
