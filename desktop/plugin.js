@@ -1121,6 +1121,11 @@ var PREVIEW_BY_EXTENSION = [
   [["pdf"], "pdf"],
   [["html", "htm"], "html"]
 ];
+function wheelIntent(event) {
+  if (event.ctrlKey || event.metaKey) return "zoom";
+  if (event.shiftKey) return "pan";
+  return "scroll";
+}
 function previewKind(filename, contentType) {
   const name = String(filename || "").toLowerCase();
   const dot = name.lastIndexOf(".");
@@ -4368,27 +4373,33 @@ function KanbanGanttPage() {
   const pxPerSec = basePerSec * zoomUsed;
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec));
   const zoomAnchor = useRef2(null);
-  const handleWheel = (event) => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const pan = event.deltaY !== 0 ? event.deltaY : event.deltaX;
-    if (!pan) return;
-    if (event.shiftKey) {
-      el.scrollLeft += pan;
+  useEffect3(() => {
+    const host2 = containerRef.current;
+    if (!host2) return void 0;
+    const onWheel = (event) => {
+      const pan = event.deltaY !== 0 ? event.deltaY : event.deltaX;
+      if (!pan) return;
+      const intent = wheelIntent(event);
+      if (intent === "scroll") return;
+      const el = scrollerRef.current;
       event.preventDefault();
-      return;
-    }
-    if (!event.ctrlKey && !event.metaKey) return;
-    const factor = wheelZoomFactor(event.deltaY, event.deltaMode);
-    const rect = el.getBoundingClientRect();
-    const cursorPx = event.clientX - rect.left - labelW;
-    const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec;
-    const next = clampZoomPct(zoomPctFromFactor(zoomUsed * factor, ZOOM_MIN_FACTOR, zoomMax));
-    if (next === zoomPct) return;
-    event.preventDefault();
-    zoomAnchor.current = { at, cursorPx };
-    handleZoomPct(next);
-  };
+      if (intent === "pan") {
+        if (el) el.scrollLeft += pan;
+        return;
+      }
+      if (!el || !el.contains(event.target)) return;
+      const factor = wheelZoomFactor(event.deltaY, event.deltaMode);
+      const rect = el.getBoundingClientRect();
+      const cursorPx = event.clientX - rect.left - labelW;
+      const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec;
+      const next = clampZoomPct(zoomPctFromFactor(zoomUsed * factor, ZOOM_MIN_FACTOR, zoomMax));
+      if (next === zoomPct) return;
+      zoomAnchor.current = { at, cursorPx };
+      handleZoomPct(next);
+    };
+    host2.addEventListener("wheel", onWheel, { passive: false });
+    return () => host2.removeEventListener("wheel", onWheel);
+  }, [domain.min, pxPerSec, labelW, zoomPct, zoomUsed, zoomMax, handleZoomPct]);
   const resetView = () => {
     handleZoomPct(ZOOM_PCT_MIN);
     if (scrollerRef.current) scrollerRef.current.scrollLeft = 0;
@@ -4735,7 +4746,9 @@ function KanbanGanttPage() {
               jsxs6("div", {
                 ref: scrollerRef,
                 className: "overflow-auto flex-1 min-h-0 relative",
-                onWheel: handleWheel,
+                // The wheel is handled by a native listener on the page (see above): React's
+                // own wheel listeners are passive, and a passive listener cannot stop the
+                // desktop from zooming.
                 onScroll: handleScroll,
                 children: [
                   jsxs6("div", {

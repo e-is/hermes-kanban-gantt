@@ -780,6 +780,21 @@ test('the now line is measured from the timeline origin, not the container edge'
   assert.equal(nowLineX(NOW, min, NOW - 1, pxPerSec, labelW), null)
 })
 
+/* ── the wheel belongs to the timeline, not to the desktop ──────────────────── */
+
+test('a wheel is a zoom only with ctrl or meta, a pan with shift, a scroll otherwise', () => {
+  const { wheelIntent } = core
+  assert.equal(wheelIntent({ ctrlKey: true, metaKey: false, shiftKey: false }), 'zoom')
+  assert.equal(wheelIntent({ ctrlKey: false, metaKey: true, shiftKey: false }), 'zoom',
+    'the macOS pinch arrives as ctrl+wheel, but ⌘ is the chord a reader tries')
+  assert.equal(wheelIntent({ ctrlKey: true, metaKey: false, shiftKey: true }), 'zoom',
+    'the zoom wins: shift must not turn a ctrl+wheel into a pan')
+  assert.equal(wheelIntent({ ctrlKey: false, metaKey: false, shiftKey: true }), 'pan')
+  assert.equal(wheelIntent({ ctrlKey: false, metaKey: false, shiftKey: false }), 'scroll',
+    'a bare wheel scrolls the rows: zooming on it made the table unscrollable')
+  assert.equal(wheelIntent({}), 'scroll')
+})
+
 /* ── attachments: the eye only appears where the browser can show something ──── */
 
 test('an attachment is previewable by its extension, and by its declared type', () => {

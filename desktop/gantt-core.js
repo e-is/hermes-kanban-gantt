@@ -96,6 +96,11 @@ var PREVIEW_BY_EXTENSION = [
   [["pdf"], "pdf"],
   [["html", "htm"], "html"]
 ];
+function wheelIntent(event) {
+  if (event.ctrlKey || event.metaKey) return "zoom";
+  if (event.shiftKey) return "pan";
+  return "scroll";
+}
 function previewKind(filename, contentType) {
   const name = String(filename || "").toLowerCase();
   const dot = name.lastIndexOf(".");
@@ -592,6 +597,7 @@ export {
   treeMarks,
   treeRows,
   visibleWindow,
+  wheelIntent,
   wheelZoomFactor,
   zoomFactorFromPct,
   zoomPctFromFactor

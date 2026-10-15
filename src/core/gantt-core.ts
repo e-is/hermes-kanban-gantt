@@ -109,6 +109,17 @@ const PREVIEW_BY_EXTENSION = [
   [['pdf'], 'pdf'],
   [['html', 'htm'], 'html']
 ]
+/** Which gesture a wheel event is, once its modifiers are read.
+ *
+ *  Ctrl/⌘ is the zoom. It is also Chromium's page zoom, which is why the caller has to stop
+ *  the event: the gesture belongs to the timeline, not to the desktop. Shift alone pans, and
+ *  anything else is an ordinary scroll that we leave entirely alone. */
+export function wheelIntent(event) {
+  if (event.ctrlKey || event.metaKey) return 'zoom'
+  if (event.shiftKey) return 'pan'
+  return 'scroll'
+}
+
 /**
  * How to show an attachment, or null when only a download makes sense.
  *

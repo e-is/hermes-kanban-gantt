@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -2781,36 +2781,47 @@ export function KanbanGanttPage() {
   const pxPerSec = basePerSec * zoomUsed
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec))
 
-  // Wheel over the timeline: ctrl/⌘+wheel zooms at the cursor, Shift+wheel pans, and a
-  // plain wheel is left alone so it keeps scrolling the rows — a bare wheel that zoomed
-  // moved the scale by accident and made the table impossible to scroll.
-  // A macOS pinch arrives as ctrl+wheel, so requiring the modifier costs nothing there,
-  // and the step follows the DELTA, not the event count, so a mouse notch and a trackpad
-  // stream feel the same (see `wheelZoomFactor`).
+  // Ctrl/⌘+wheel is Chromium's PAGE zoom, and Electron inherits it — which is why the whole
+  // desktop used to scale with the timeline. A React `onWheel` cannot stop that: React
+  // registers wheel listeners as passive, so `preventDefault()` there is ignored. Hence a
+  // native, non-passive listener on the page itself:
+  //     over the timeline  → zoom the timeline at the cursor;
+  //     elsewhere in the plugin → swallow the gesture, so the desktop keeps its scale;
+  //     a bare wheel → left alone, it scrolls the rows;
+  //     Shift+wheel → pan.
+  // The step follows the DELTA, not the event count, so a mouse notch and a trackpad stream
+  // feel the same (see `wheelZoomFactor`).
   const zoomAnchor = useRef(null)
-  const handleWheel = event => {
-    const el = scrollerRef.current
-    if (!el) return
-    // A trackpad's horizontal swipe carries deltaX and no deltaY.
-    const pan = event.deltaY !== 0 ? event.deltaY : event.deltaX
-    if (!pan) return
-    if (event.shiftKey) {
-      el.scrollLeft += pan
+  useEffect(() => {
+    const host = containerRef.current
+    if (!host) return undefined
+    const onWheel = event => {
+      // A trackpad's horizontal swipe carries deltaX and no deltaY.
+      const pan = event.deltaY !== 0 ? event.deltaY : event.deltaX
+      if (!pan) return
+      const intent = wheelIntent(event)
+      if (intent === 'scroll') return
+      const el = scrollerRef.current
+      // Before anything else: the desktop must not zoom under the reader.
       event.preventDefault()
-      return
+      if (intent === 'pan') {
+        if (el) el.scrollLeft += pan
+        return
+      }
+      // Zoom — only where the pointer is actually over the timeline.
+      if (!el || !el.contains(event.target)) return
+      const factor = wheelZoomFactor(event.deltaY, event.deltaMode)
+      const rect = el.getBoundingClientRect()
+      const cursorPx = event.clientX - rect.left - labelW
+      const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec
+      const next = clampZoomPct(zoomPctFromFactor(zoomUsed * factor, ZOOM_MIN_FACTOR, zoomMax))
+      if (next === zoomPct) return
+      zoomAnchor.current = { at, cursorPx }
+      handleZoomPct(next)
     }
-    // No modifier: this wheel is not ours, so the page scrolls as usual.
-    if (!event.ctrlKey && !event.metaKey) return
-    const factor = wheelZoomFactor(event.deltaY, event.deltaMode)
-    const rect = el.getBoundingClientRect()
-    const cursorPx = event.clientX - rect.left - labelW
-    const at = domain.min + (el.scrollLeft + cursorPx) / pxPerSec
-    const next = clampZoomPct(zoomPctFromFactor(zoomUsed * factor, ZOOM_MIN_FACTOR, zoomMax))
-    if (next === zoomPct) return
-    event.preventDefault()
-    zoomAnchor.current = { at, cursorPx }
-    handleZoomPct(next)
-  }
+    host.addEventListener('wheel', onWheel, { passive: false })
+    return () => host.removeEventListener('wheel', onWheel)
+  }, [domain.min, pxPerSec, labelW, zoomPct, zoomUsed, zoomMax, handleZoomPct])
   const resetView = () => {
     handleZoomPct(ZOOM_PCT_MIN)
     if (scrollerRef.current) scrollerRef.current.scrollLeft = 0
@@ -3195,7 +3206,9 @@ export function KanbanGanttPage() {
               jsxs('div', {
                 ref: scrollerRef,
                 className: 'overflow-auto flex-1 min-h-0 relative',
-                onWheel: handleWheel,
+                // The wheel is handled by a native listener on the page (see above): React's
+                // own wheel listeners are passive, and a passive listener cannot stop the
+                // desktop from zooming.
                 onScroll: handleScroll,
                 children: [
                   jsxs('div', {
