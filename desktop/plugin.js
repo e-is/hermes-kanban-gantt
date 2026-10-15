@@ -3734,10 +3734,11 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       //    task's detail, which also selects its row in the gantt.
       //    In the modal both belong to the right-hand column, like the priority and the
       //    attachments, so this block yields to it rather than repeating them.
-      detailModal ? null : jsx6(TaskRelations, {
+      // Parents only when there are some, like the children below: an empty relation block
+      // is noise in every mode.
+      detailModal || relations.parents.length === 0 ? null : jsx6(TaskRelations, {
         heading: i18n.parents,
         tasks: relations.parents,
-        emptyLabel: relations.parents.length === 0 ? i18n.noParents : void 0,
         onOpen: (id) => $openTaskId.set(id),
         onRemove: (id) => {
           const parent = relations.parents.find((t) => t.id === id);
@@ -4090,10 +4091,9 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
             }) : null,
             // Relations follow the priority and the files: this column is where the modal keeps
             // the facts about a task, and the body below it is for reading material.
-            jsx6(TaskRelations, {
+            relations.parents.length === 0 ? null : jsx6(TaskRelations, {
               heading: i18n.parents,
               tasks: relations.parents,
-              emptyLabel: relations.parents.length === 0 ? i18n.noParents : void 0,
               onOpen: (id) => $openTaskId.set(id),
               onRemove: (id) => {
                 const parent = relations.parents.find((t) => t.id === id);
