@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -810,10 +810,12 @@ function FilterDropdown({
   disabledStatuses,
   onToggleStatus,
   showArchived,
-  onToggleArchived
+  onToggleArchived,
+  onlyAttachments,
+  onToggleOnlyAttachments
 }) {
   const i18n = useGanttI18n()
-  const active = selectedAssignees.size > 0 || disabledStatuses.size > 0 || showArchived
+  const active = selectedAssignees.size > 0 || disabledStatuses.size > 0 || showArchived || onlyAttachments
   return jsxs(DropdownMenu, {
     children: [
       jsx(DropdownMenuTrigger, {
@@ -876,6 +878,16 @@ function FilterDropdown({
             children: [
               jsx('span', { className: 'flex-1', children: i18n.showArchived }),
               showArchived ? jsx(Codicon, { name: 'check', size: '0.8rem', className: 'ml-auto' }) : null
+            ]
+          }),
+          jsxs(DropdownMenuItem, {
+            // Off by default, like every other filter here: checking it narrows the board.
+            onClick: () => onToggleOnlyAttachments(!onlyAttachments),
+            className: 'flex items-center gap-2 cursor-pointer text-xs py-1.5',
+            children: [
+              jsx(Codicon, { name: 'paperclip', size: '0.8rem', className: 'shrink-0 text-(--ui-text-tertiary)' }),
+              jsx('span', { className: 'flex-1', children: i18n.filterWithAttachments }),
+              onlyAttachments ? jsx(Codicon, { name: 'check', size: '0.8rem', className: 'ml-auto' }) : null
             ]
           })
         ]
@@ -2508,10 +2520,22 @@ export function KanbanGanttPage() {
     })
   }
 
+  // "Only tasks with attachments" — off by default, persisted like the other preferences, and
+  // applied in the same pass as every other filter, so it composes with them.
+  const [onlyAttachments, setOnlyAttachments] = useState(() => {
+    const saved = getStorage() ? getStorage().get('onlyAttachments', null) : null
+    return saved === '1' || saved === true
+  })
+  const toggleOnlyAttachments = next => {
+    setOnlyAttachments(Boolean(next))
+    if (getStorage()) getStorage().set('onlyAttachments', next ? '1' : '0')
+  }
+
   const derived = useMemo(() => {
     if (!data || !data.tasks) return null
     let visible = data.tasks
     if (!showArchived) visible = visible.filter(t => !t.archived)
+    if (onlyAttachments) visible = visible.filter(hasAttachments)
     if (disabledStatuses.size > 0) {
       visible = visible.filter(t => !disabledStatuses.has(t.status))
     }
@@ -2530,7 +2554,7 @@ export function KanbanGanttPage() {
     const domain = computeDomain(visible)
     const allAssignees = Array.from(new Set(data.tasks.map(t => t.assignee).filter(Boolean))).sort()
     return { rows, domain, total: visible.length, tasks: visible, allAssignees }
-  }, [data, showArchived, disabledStatuses, selectedAssignees, search, fold, openTaskId])
+  }, [data, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId])
 
   // The header toggle: if anything the user can collapse is open, collapse it all;
   // otherwise open everything. It walks the rows, so it acts on exactly the set
@@ -3143,7 +3167,9 @@ export function KanbanGanttPage() {
                 disabledStatuses,
                 onToggleStatus: handleToggleStatus,
                 showArchived,
-                onToggleArchived: setShowArchived
+                onToggleArchived: setShowArchived,
+                onlyAttachments,
+                onToggleOnlyAttachments: toggleOnlyAttachments
               }),
               jsxs('div', {
                 className: 'inline-flex items-center gap-1.5 border-b border-transparent focus-within:border-(--ui-stroke-secondary) px-1 py-0.5 ml-1',

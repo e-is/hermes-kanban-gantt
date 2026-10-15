@@ -109,6 +109,14 @@ const PREVIEW_BY_EXTENSION = [
   [['pdf'], 'pdf'],
   [['html', 'htm'], 'html']
 ]
+/** True when the board snapshot reports at least one attachment on this task.
+ *
+ *  The snapshot carries a COUNT, not the files, so this is the whole test — and it is the same
+ *  one the paperclip uses, which is why a filtered row and a row with an icon never disagree. */
+export function hasAttachments(task) {
+  return Number((task && task.attachment_count) || 0) > 0
+}
+
 /** The id `step` positions away in a visible row order, or null at the ends.
  *
  *  Arrow navigation walks the rows as they are displayed, in their order: no wrapping, because

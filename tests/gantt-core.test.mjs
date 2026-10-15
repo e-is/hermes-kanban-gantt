@@ -780,6 +780,20 @@ test('the now line is measured from the timeline origin, not the container edge'
   assert.equal(nowLineX(NOW, min, NOW - 1, pxPerSec, labelW), null)
 })
 
+/* ── the attachment filter ──────────────────────────────────────────────────── */
+
+test('a task counts as attached from its count alone', () => {
+  const { hasAttachments } = core
+  assert.equal(hasAttachments({ attachment_count: 2 }), true)
+  assert.equal(hasAttachments({ attachment_count: 1 }), true)
+  assert.equal(hasAttachments({ attachment_count: 0 }), false)
+  assert.equal(hasAttachments({}), false, 'a board that never reported the field')
+  assert.equal(hasAttachments({ attachment_count: null }), false)
+  assert.equal(hasAttachments(null), false)
+  assert.equal(hasAttachments(undefined), false)
+  assert.equal(hasAttachments({ attachment_count: '3' }), true, 'a stringified count still counts')
+})
+
 /* ── walking the rows with the keyboard ─────────────────────────────────────── */
 
 test('arrow navigation moves one row at a time, and stops at the ends', () => {

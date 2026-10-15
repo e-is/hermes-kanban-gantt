@@ -96,6 +96,9 @@ var PREVIEW_BY_EXTENSION = [
   [["pdf"], "pdf"],
   [["html", "htm"], "html"]
 ];
+function hasAttachments(task) {
+  return Number(task && task.attachment_count || 0) > 0;
+}
 function neighbourId(ids, current, step) {
   const list = ids || [];
   const at = list.indexOf(current);
@@ -578,6 +581,7 @@ export {
   computeDomain,
   descendantsOf,
   dropCandidates,
+  hasAttachments,
   hourTickPlan,
   isDescendant,
   isMissingBoardError,

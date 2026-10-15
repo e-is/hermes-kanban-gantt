@@ -307,7 +307,12 @@ const ctx = {
     if (path === '/boards') return boards
     return {}
   },
-  storage: { get: (k, fb) => (k === 'board' ? 'sumaris-app' : (k === 'viewMode' && globalThis.__kgView ? globalThis.__kgView : fb)), set: () => {} },
+  storage: { get: (k, fb) => {
+    if (k === 'board') return 'sumaris-app'
+    if (k === 'viewMode' && globalThis.__kgView) return globalThis.__kgView
+    if (k === 'onlyAttachments' && globalThis.__kgOnlyAtt) return '1'
+    return fb
+  }, set: () => {} },
   i18n: { register: () => {} },
   register: c => { contributions.push(c); return () => {} },
   registerMany: cs => { contributions.push(...cs); return () => {} }
@@ -347,6 +352,17 @@ if (pageNode) {
   // — and that the tasks without files got none.
   const clips = (flat.match(/"paperclip"/g) || []).length
   check(clips === 1, `exactly one paperclip, for the task with files (found ${clips})`)
+
+  // The "only tasks with attachments" filter. The fixture has exactly one task with files, so
+  // with the option off the board shows all three rows and with it on it shows that one row —
+  // and the option has to be OFF unless it was stored, which is what the default render proves.
+  const rowCount = text => (text.match(/"data-row-id"/g) || []).length
+  check(rowCount(flat) === 3, `all three rows by default (found ${rowCount(flat)})`)
+  globalThis.__kgOnlyAtt = true
+  const filteredFlat = JSON.stringify(page.render())
+  check(rowCount(filteredFlat) === 1,
+    `the attachment filter leaves only the task with files (found ${rowCount(filteredFlat)})`)
+  globalThis.__kgOnlyAtt = false
   check(flat.includes('"area":"workspace.pageHeader"') || flat.includes('"area": "workspace.pageHeader"'), 'page projects its switcher into WORKSPACE_PAGE_HEADER_AREA')
 
   // -------------------------------------------------------------------------

@@ -179,6 +179,7 @@ var GANTT_LOCALES = {
     allProfiles: "All profiles",
     statuses: "Statuses",
     showArchived: "Show archived",
+    filterWithAttachments: "Only tasks with attachments",
     unassigned: "Unassigned",
     unassignedEmpty: "Unassigned (empty)",
     reassigned: "(reassigned)",
@@ -399,6 +400,7 @@ var GANTT_LOCALES = {
     allProfiles: "Tous les profils",
     statuses: "États",
     showArchived: "Afficher les archivés",
+    filterWithAttachments: "Seulement les tâches avec pièces jointes",
     unassigned: "Non assigné",
     unassignedEmpty: "Non assigné (vide)",
     reassigned: "(réaffecté)",
@@ -619,6 +621,7 @@ var GANTT_LOCALES = {
     allProfiles: "全部执行者",
     statuses: "状态",
     showArchived: "显示已归档",
+    filterWithAttachments: "仅显示有附件的任务",
     unassigned: "未指派",
     unassignedEmpty: "未指派（空）",
     reassigned: "（已改派）",
@@ -1121,6 +1124,9 @@ var PREVIEW_BY_EXTENSION = [
   [["pdf"], "pdf"],
   [["html", "htm"], "html"]
 ];
+function hasAttachments(task) {
+  return Number(task && task.attachment_count || 0) > 0;
+}
 function neighbourId(ids, current, step) {
   const list = ids || [];
   const at = list.indexOf(current);
@@ -2698,10 +2704,12 @@ function FilterDropdown({
   disabledStatuses,
   onToggleStatus,
   showArchived,
-  onToggleArchived
+  onToggleArchived,
+  onlyAttachments,
+  onToggleOnlyAttachments
 }) {
   const i18n = useGanttI18n();
-  const active = selectedAssignees.size > 0 || disabledStatuses.size > 0 || showArchived;
+  const active = selectedAssignees.size > 0 || disabledStatuses.size > 0 || showArchived || onlyAttachments;
   return jsxs6(DropdownMenu3, {
     children: [
       jsx6(DropdownMenuTrigger3, {
@@ -2764,6 +2772,16 @@ function FilterDropdown({
             children: [
               jsx6("span", { className: "flex-1", children: i18n.showArchived }),
               showArchived ? jsx6(Codicon5, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
+            ]
+          }),
+          jsxs6(DropdownMenuItem3, {
+            // Off by default, like every other filter here: checking it narrows the board.
+            onClick: () => onToggleOnlyAttachments(!onlyAttachments),
+            className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
+            children: [
+              jsx6(Codicon5, { name: "paperclip", size: "0.8rem", className: "shrink-0 text-(--ui-text-tertiary)" }),
+              jsx6("span", { className: "flex-1", children: i18n.filterWithAttachments }),
+              onlyAttachments ? jsx6(Codicon5, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
             ]
           })
         ]
@@ -4190,10 +4208,19 @@ function KanbanGanttPage() {
       return next;
     });
   };
+  const [onlyAttachments, setOnlyAttachments] = useState4(() => {
+    const saved = getStorage() ? getStorage().get("onlyAttachments", null) : null;
+    return saved === "1" || saved === true;
+  });
+  const toggleOnlyAttachments = (next) => {
+    setOnlyAttachments(Boolean(next));
+    if (getStorage()) getStorage().set("onlyAttachments", next ? "1" : "0");
+  };
   const derived = useMemo2(() => {
     if (!data || !data.tasks) return null;
     let visible = data.tasks;
     if (!showArchived) visible = visible.filter((t) => !t.archived);
+    if (onlyAttachments) visible = visible.filter(hasAttachments);
     if (disabledStatuses.size > 0) {
       visible = visible.filter((t) => !disabledStatuses.has(t.status));
     }
@@ -4209,7 +4236,7 @@ function KanbanGanttPage() {
     const domain2 = computeDomain(visible);
     const allAssignees = Array.from(new Set(data.tasks.map((t) => t.assignee).filter(Boolean))).sort();
     return { rows: rows2, domain: domain2, total: visible.length, tasks: visible, allAssignees };
-  }, [data, showArchived, disabledStatuses, selectedAssignees, search, fold, openTaskId]);
+  }, [data, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId]);
   const handleToggleAll = () => {
     const parents = (derived?.rows || []).filter((r) => r.hasChildren);
     if (!parents.length) return;
@@ -4689,7 +4716,9 @@ function KanbanGanttPage() {
                     disabledStatuses,
                     onToggleStatus: handleToggleStatus,
                     showArchived,
-                    onToggleArchived: setShowArchived
+                    onToggleArchived: setShowArchived,
+                    onlyAttachments,
+                    onToggleOnlyAttachments: toggleOnlyAttachments
                   }),
                   jsxs6("div", {
                     className: "inline-flex items-center gap-1.5 border-b border-transparent focus-within:border-(--ui-stroke-secondary) px-1 py-0.5 ml-1",
