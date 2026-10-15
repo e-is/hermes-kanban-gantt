@@ -324,6 +324,8 @@ def test_gantt_reports_the_attachment_count(client):
     counts = {t["id"]: t["attachment_count"] for t in tasks}
 
     assert counts[board["child"]] == 2, "the count must travel with the board, not the files"
+    assert isinstance(counts[board["child"]], int), "a NUMBER, not a string: truthiness would lie"
+    assert isinstance(counts[board["parent"]], int), "including the zeroes"
     assert counts[board["parent"]] == 0
     assert counts[board["solo"]] == 0
 

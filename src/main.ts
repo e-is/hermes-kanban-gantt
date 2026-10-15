@@ -1418,10 +1418,11 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
     queryFn: () => fetchAttachments(taskId, board),
     enabled: wanted
   })
-  // TEMPORARY DEBUG MARKER — remove with the "A" below. Rendered on EVERY row, with the raw value
-  // from the board snapshot beside the letter, so the screen answers both questions at once:
-  // does the count arrive row by row, and is anything visible in this spot at all. A row showing
-  // "A2" is a task the API counted two files for; "A0" or "A?" is a count that never arrived.
+  // Only a task that has files carries the affordance, and the test is NUMERIC: the count arrives
+  // as a number, but a "0" coming back as a string would be truthy and would show the icon on
+  // every fileless row. `Number(count) > 0` is right in both cases, and it is the same predicate
+  // the filter uses.
+  if (!(Number(count) > 0)) return null
   const attachments = query.data || []
   const countLabel = i18n.attachments(count)
   const triggerBody = jsxs('span', {

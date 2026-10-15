@@ -3247,6 +3247,7 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
     queryFn: () => fetchAttachments(taskId, board),
     enabled: wanted
   });
+  if (!(Number(count) > 0)) return null;
   const attachments = query.data || [];
   const countLabel = i18n.attachments(count);
   const triggerBody = jsxs6("span", {
