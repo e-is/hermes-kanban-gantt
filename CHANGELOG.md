@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.3 — a mislabelled file can no longer run, and "ready" stops answering 500
+
+**A security fix.** The previewer chose its renderer from the file name, but handed the Blob the
+type the board *declared* — so a file named `x.pdf` stored as `text/html` reached the PDF frame,
+which is not sandboxed, as script-capable HTML on the desktop origin. A model can plant one: the
+core's `kanban_attach` takes a content type from its caller, and `kanban_attach_url` copies the
+remote server's `Content-Type`. The Blob's MIME is now derived from the kind the previewer picked,
+so the unsandboxed frame can only ever receive `application/pdf`; `text/html` is produced only for
+the kind that is rendered inside a sandboxed frame, and a file that matches no kind falls back to a
+type no renderer acts on.
+
+**Moving a task to "ready" from `todo` or `triage` answered 500.** The route imported
+`_set_status_direct` from `hermes_cli.kanban_db`, where it has never existed — it lives in the
+bundled kanban plugin — so the import raised and the request failed. It now goes through the public
+`kanban_db.promote_task`, which is also what applies the parent gating, with the plugin's own direct
+write as the fallback for origins `promote_task` does not accept.
+
 ## 1.6.2 — the web dashboard stops offering a tab it cannot load
 
 Installing the plugin and opening the web dashboard gave a broken tab: "Could not load this plugin's

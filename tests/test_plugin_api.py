@@ -555,6 +555,43 @@ def test_status_block_then_unblock(client):
     assert by_id[board["child"]]["status"] == "ready"
 
 
+def test_status_ready_from_todo_and_triage(client):
+    """`ready` answered 500 for every task that was not already parked.
+
+    The route imported ``_set_status_direct`` from ``hermes_cli.kanban_db``, where it does not
+    exist in any release — it lives in the bundled kanban plugin — so the import raised before a
+    single write happened. Raised in review of the 1.6.1 catalogue pin.
+    """
+    http, board = client
+    slug = board["slug"]
+    tid = _mk(slug, "[TEST] promoted to ready")
+
+    conn = kbc.connect(board=TEST_SLUG)
+    try:
+        conn.execute("UPDATE tasks SET status = 'todo' WHERE id = ?", (tid,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    r = http.patch(f"/tasks/{tid}/status?board={slug}", json={"action": "ready"})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"ok": True, "task_id": tid, "action": "ready"}
+    assert http.get(f"/tasks/{tid}?board={slug}").json()["task"]["status"] == "ready"
+
+    # promote_task accepts todo and blocked only, so an older origin still lands through the
+    # plugin's own direct write — the path that keeps a task from being stranded in triage.
+    conn = kbc.connect(board=TEST_SLUG)
+    try:
+        conn.execute("UPDATE tasks SET status = 'triage' WHERE id = ?", (tid,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    r = http.patch(f"/tasks/{tid}/status?board={slug}", json={"action": "ready"})
+    assert r.status_code == 200, r.text
+    assert http.get(f"/tasks/{tid}?board={slug}").json()["task"]["status"] == "ready"
+
+
 def test_status_unknown_action(client):
     http, board = client
     r = http.patch(f"/tasks/{board['child']}/status?board={board['slug']}",

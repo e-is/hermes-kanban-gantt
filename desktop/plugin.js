@@ -1159,15 +1159,14 @@ function previewKind(filename, contentType) {
   return null;
 }
 function attachmentMime(filename, contentType) {
-  const declared = String(contentType || "").split(";")[0].trim();
-  if (declared) return declared;
-  switch (previewKind(filename, "")) {
+  switch (previewKind(filename, contentType)) {
     case "markdown":
       return "text/markdown";
     case "text":
       return "text/plain";
     case "pdf":
       return "application/pdf";
+    // Only the sandboxed branch renders this kind, and the frame is what keeps it inert.
     case "html":
       return "text/html";
     case "image": {

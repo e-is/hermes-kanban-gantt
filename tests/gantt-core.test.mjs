@@ -855,17 +855,30 @@ test('an attachment is previewable by its extension, and by its declared type', 
   assert.equal(previewKind('notes.md', 'application/octet-stream'), 'markdown')
 })
 
-test('the MIME handed to the Blob is the declared one, else a guess', () => {
+test('the MIME handed to the Blob comes from the kind, never from the declaration', () => {
   const { attachmentMime } = core
   assert.equal(attachmentMime('a.pdf', 'application/pdf'), 'application/pdf')
   assert.equal(attachmentMime('a.txt', 'text/plain; charset=utf-8'), 'text/plain',
-    'parameters are dropped: the Blob wants the bare type')
+    'the declared type is only consulted for its parameters, never to override the kind')
   assert.equal(attachmentMime('a.png', ''), 'image/png')
   assert.equal(attachmentMime('a.jpg', ''), 'image/jpeg')
   assert.equal(attachmentMime('a.svg', ''), 'image/svg+xml')
   assert.equal(attachmentMime('a.md', ''), 'text/markdown')
   assert.equal(attachmentMime('a.html', ''), 'text/html')
   assert.equal(attachmentMime('a.zip', ''), 'application/octet-stream')
+
+  // The kind decides, never the declaration: the extension picks the renderer, and the frame the
+  // renderer lives in is what makes the result safe.
+  assert.equal(core.previewKind('x.pdf', 'text/html'), 'pdf',
+    'the extension still picks the renderer')
+  assert.equal(attachmentMime('x.pdf', 'text/html'), 'application/pdf',
+    'the pdf frame can only ever be handed a pdf blob, whatever the board declared')
+  assert.equal(attachmentMime('x.png', 'text/html'), 'image/png',
+    'an image stays an image when the declaration disagrees')
+  assert.equal(attachmentMime('x.bin', 'text/html'), 'text/html',
+    'no extension to contradict the declaration means the html KIND — which the only caller renders inside a sandboxed frame')
+  assert.equal(attachmentMime('x.bin', 'application/x-msdownload'), 'application/octet-stream',
+    'a type that matches no kind we render falls back to one no renderer acts on')
 })
 
 /* ── the period shortcuts ───────────────────────────────────────────────────── */

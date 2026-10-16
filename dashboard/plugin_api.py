@@ -719,15 +719,22 @@ def _apply_action(conn, kanban_db, action: str, task_id: str, payload: StatusBod
     if action == "archive":
         return kanban_db.archive_task(conn, task_id)
     if action == "ready":
-        # promote / return to ready: unblock if parked, else a direct write
-        # (parent gating enforced inside _set_status_direct)
+        # promote / return to ready: unblock if parked, else promote through the domain layer.
+        # The previous draft imported _set_status_direct from hermes_cli.kanban_db, where it does
+        # not exist in any release — it lives in the bundled kanban plugin — so "ready" raised
+        # ImportError and answered 500. promote_task is the public path and carries the parent
+        # gating this branch used to get from that private helper; it only accepts todo/blocked,
+        # so an older origin still falls back to the direct write below.
         cur = kanban_db.get_task(conn, task_id)
         if cur is None:
             return False
         if cur.status in ("blocked", "scheduled"):
             return kanban_db.unblock_task(conn, task_id)
-        from hermes_cli.kanban_db import _set_status_direct
-        return bool(_set_status_direct(conn, task_id, "ready"))
+        ok, _reason = kanban_db.promote_task(
+            conn, task_id, actor="gantt", reason="status set to ready (gantt)")
+        if ok:
+            return True
+        return _direct_status(conn, kanban_db, task_id, "ready")
     if action == "todo":
         return bool(kanban_db.reopen_review_task(conn, task_id)) or _direct_status(conn, kanban_db, task_id, "todo")
     if action == "triage":

@@ -165,15 +165,24 @@ export function previewKind(filename, contentType) {
   if (mime.startsWith('text/')) return 'text'
   return null
 }
-/** The MIME to hand the Blob: what the board declared, else a sensible guess from the
- *  extension, so the webview picks the right renderer instead of downloading the lot. */
+/** The MIME to hand the Blob: derived from the KIND, never from the type the board declared.
+ *
+ *  This is a security boundary, not a formatting choice. `previewKind` chooses the renderer from
+ *  the file name, and the `pdf` branch mounts its blob in an UNSANDBOXED frame — so honouring a
+ *  declared `text/html` for a file called `x.pdf` would run attacker-supplied script on the desktop
+ *  origin. A model can plant one: the core `kanban_attach` takes a content type from its caller and
+ *  `kanban_attach_url` copies the remote server's.
+ *
+ *  Deriving from the kind means the unsandboxed pdf branch can only ever be handed
+ *  `application/pdf`, whatever the declaration says; the unknown case falls back to a MIME no
+ *  renderer will act on.
+ */
 export function attachmentMime(filename, contentType) {
-  const declared = String(contentType || '').split(';')[0].trim()
-  if (declared) return declared
-  switch (previewKind(filename, '')) {
+  switch (previewKind(filename, contentType)) {
     case 'markdown': return 'text/markdown'
     case 'text': return 'text/plain'
     case 'pdf': return 'application/pdf'
+    // Only the sandboxed branch renders this kind, and the frame is what keeps it inert.
     case 'html': return 'text/html'
     case 'image': {
       const name = String(filename || '').toLowerCase()
