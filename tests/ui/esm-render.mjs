@@ -379,6 +379,13 @@ if (pageNode) {
 
   // The modal branch, which the panel never exercises.
   pluginModule.$detailModal.set(true)
+  // The feed strip: tabs, not collapsible blocks. The fixture task has neither events nor runs, so
+  // the strip must offer Comments alone — an empty tab is a promise the panel cannot keep — and
+  // Comments is what a reader lands on, because that is where a first comment gets written.
+  check((detailFlat.match(/"role":"tab"/g) || []).length === 1,
+    'the feed offers Comments alone when a task has neither events nor runs')
+  check(detailFlat.includes('"aria-selected":"true"'),
+    'the feed opens on the first tab rather than on nothing')
   const modalFlat = JSON.stringify(page.render())
   check(modalFlat.includes('detailMeta'), 'the modal renders its right-hand information column')
   check(modalFlat.includes('metaPriority'), 'the modal column carries the priority row')

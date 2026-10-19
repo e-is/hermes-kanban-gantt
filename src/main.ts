@@ -1037,6 +1037,26 @@ function AssigneeBadge({ assignee, assignees = [], onAssign, disabled }) {
   ] })
 }
 
+/** One segment of the detail's feed strip.
+ *
+ *  A button rather than a tab widget: the three panels are siblings and only one is mounted at a
+ *  time, so there is nothing for a widget to manage beyond the selection this already carries. The
+ *  classes are the view toggle's, which keeps the two segmented controls looking like one idea.
+ */
+function FeedTab({ label, active, onClick }) {
+  return jsx('button', {
+    type: 'button',
+    role: 'tab',
+    'aria-selected': active ? 'true' : 'false',
+    onClick,
+    className: cn(
+      'inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0',
+      active ? 'bg-(--ui-accent)/15 text-(--ui-accent) font-medium' : 'bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)'
+    ),
+    children: label
+  })
+}
+
 function ViewToggle({ value, onChange }) {
   const i18n = useGanttI18n()
   const item = (mode, icon, label) => jsx('button', {
@@ -1678,9 +1698,11 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   }, [shownId])
 
   const [comment, setComment] = useState('')
-  const [runsOpen, setRunsOpen] = useState(false)
-  const [commentsOpen, setCommentsOpen] = useState(true)
   const [showAllComments, setShowAllComments] = useState(false)
+  // Which panel of the detail's feed is open. Comments first, because a task with none is exactly
+  // where the first one gets written; the strip drops Activity and Runs when a task has neither, so
+  // a tab never opens on an empty panel.
+  const [feedTab, setFeedTab] = useState('comments')
   // Parent link awaiting confirmation (the click that asked to remove it).
   const [pendingUnlink, setPendingUnlink] = useState(null)
 
@@ -2096,58 +2118,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                   ] })
                 : null,
 
-              // 4. Run history (Collapsible section, collapsed by default, no internal scrollbar)
-              (data?.task?.runs || []).length
-                ? jsxs('div', { className: 'border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5', children: [
-                    jsxs('button', {
-                      type: 'button',
-                      className: 'flex items-center justify-between w-full text-left py-1 px-1 -mx-1 rounded hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent text-(--ui-text-primary)',
-                      onClick: () => setRunsOpen(o => !o),
-                      children: [
-                        jsxs('div', { className: 'flex items-center gap-1.5', children: [
-                          jsx('span', { className: 'text-[10px] text-(--ui-text-tertiary) select-none', children: runsOpen ? '▼' : '▶' }),
-                          jsx('span', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: i18n.runs(data.task.runs.length) })
-                        ] }),
-                        jsx('span', { className: 'text-[10px] text-(--ui-text-quaternary)', children: runsOpen ? i18n.hide : i18n.show })
-                      ]
-                    }),
-                    runsOpen ? jsx('div', { className: 'flex flex-col gap-2 pt-1', children: data.task.runs.map((r, i) => {
-                      const failed = ['crashed', 'failed', 'timed_out', 'gave_up'].includes(r.outcome || r.status)
-                      const isDiffProfile = r.profile && data?.task?.assignee && r.profile !== data.task.assignee
-                      const durationStr = (() => {
-                        if (!r.started_at) return ''
-                        const end = r.ended_at || Math.floor(Date.now() / 1000)
-                        const sec = Math.max(0, end - r.started_at)
-                        if (sec < 60) return `${sec}s`
-                        if (sec < 3600) return `${Math.floor(sec / 60)}m`
-                        const h = Math.floor(sec / 3600)
-                        const m = Math.floor((sec % 3600) / 60)
-                        return m > 0 ? `${h}h ${m}m` : `${h}h`
-                      })()
-                      const dateStr = r.started_at
-                        ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(r.started_at * 1000))
-                        : ''
-
-                      return jsxs('div', {
-                        key: r.id || i,
-                        className: 'flex flex-col gap-1 text-[11px] border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)',
-                        children: [
-                          jsxs('div', { className: 'flex flex-wrap items-center gap-1.5 text-[10px]', children: [
-                            jsx(Badge, { size: 'xs', variant: failed ? 'destructive' : r.ended_at ? 'muted' : 'secondary', children: r.outcome || r.status || 'run' }),
-                            r.profile ? jsxs('span', { className: cn('font-medium', isDiffProfile ? 'text-amber-500 font-semibold' : 'text-(--ui-text-secondary)'), children: [
-                              '👤 ', r.profile, isDiffProfile ? jsx('span', { className: 'text-[9px] text-(--ui-text-quaternary) ml-1', children: i18n.reassigned }) : null
-                            ] }) : null,
-                            durationStr ? jsx('span', { className: 'text-(--ui-text-tertiary)', children: `⏱ ${durationStr}` }) : null,
-                            dateStr ? jsx('span', { className: 'text-(--ui-text-quaternary) ml-auto text-[9.5px]', children: dateStr }) : null
-                          ] }),
-                          r.summary
-                            ? jsx('div', { className: 'mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50', children: jsx(MessageTextContent, { media: false, text: r.summary }) })
-                            : null
-                        ]
-                      })
-                    }) }) : null
-                  ] })
-                : null,
+              // 4. Les exécutions ont leur propre onglet dans le flux (plus bas) : le bloc repliable
+              //    qui vivait ici faisait doublon avec lui.
 
               // 5. Commentaires (Collapsible section, open by default, 3 latest by default with button to show previous, no internal scrollbar)
               (() => {
@@ -2155,26 +2127,31 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 const totalComments = commentsList.length
                 const visibleComments = showAllComments ? commentsList : commentsList.slice(-3)
                 const hiddenCount = totalComments - visibleComments.length
+                const eventsList = data?.task?.events || []
+                const runsList = data?.task?.runs || []
+                // A task that loses its last event — or the strip rebuilding after a refresh —
+                // must not leave the reader on a tab that is no longer offered.
+                const activeTab = feedTab === 'activity' && eventsList.length === 0 ? 'comments'
+                  : feedTab === 'runs' && runsList.length === 0 ? 'comments'
+                  : feedTab
 
                 return jsxs('div', { className: 'border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5', children: [
-                  jsxs('button', {
-                    type: 'button',
-                    className: 'flex items-center justify-between w-full text-left py-1 px-1 -mx-1 rounded hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent text-(--ui-text-primary)',
-                    onClick: () => {
-                      setCommentsOpen(o => {
-                        if (o) setShowAllComments(false) // reset when collapsing
-                        return !o
-                      })
-                    },
+                  // The feed strip: same segmented idiom as the view toggle, and each label carries
+                  // its count, so the reader knows there is something to see before clicking.
+                  jsxs('span', {
+                    role: 'group',
+                    className: 'inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5 self-start',
                     children: [
-                      jsxs('div', { className: 'flex items-center gap-1.5', children: [
-                        jsx('span', { className: 'text-[10px] text-(--ui-text-tertiary) select-none', children: commentsOpen ? '▼' : '▶' }),
-                        jsx('span', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: i18n.comments(totalComments) })
-                      ] }),
-                      jsx('span', { className: 'text-[10px] text-(--ui-text-quaternary)', children: commentsOpen ? i18n.hide : i18n.show })
+                      jsx(FeedTab, { label: i18n.comments(totalComments), active: activeTab === 'comments', onClick: () => setFeedTab('comments') }),
+                      eventsList.length
+                        ? jsx(FeedTab, { label: i18n.activity(eventsList.length), active: activeTab === 'activity', onClick: () => setFeedTab('activity') })
+                        : null,
+                      runsList.length
+                        ? jsx(FeedTab, { label: i18n.runs(runsList.length), active: activeTab === 'runs', onClick: () => setFeedTab('runs') })
+                        : null
                     ]
                   }),
-                  commentsOpen ? jsxs('div', { className: 'flex flex-col gap-1.5 pt-1', children: [
+                  activeTab === 'comments' ? jsxs('div', { className: 'flex flex-col gap-1.5 pt-1', children: [
                     hiddenCount > 0 ? jsx('button', {
                       type: 'button',
                       className: 'text-[10.5px] text-(--ui-accent) hover:underline cursor-pointer border-0 bg-transparent text-left py-0.5 select-none',
@@ -2218,21 +2195,61 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                         children: i18n.send
                       })
                     ] })
-                  ] }) : null
+                  ] }) : null,
+                  // Les deux autres panneaux du flux : les événements et les runs que la route de
+                  // détail renvoie déjà. Chacun n'est monté que si son onglet est actif, et l'onglet
+                  // n'est offert que s'il y a de quoi lire.
+                  activeTab === 'activity'
+                    ? jsx('div', { className: 'flex flex-col gap-0.5 max-h-40 overflow-auto', children: eventsList.slice(-12).reverse().map((e, i) => {
+                        const when = e.created_at
+                          ? new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(e.created_at * 1000))
+                          : ''
+                        return jsxs('div', { key: e.id || i, className: 'flex items-baseline gap-1.5 text-[10px] text-(--ui-text-tertiary)', children: [
+                          jsx('span', { className: 'text-(--ui-text-secondary)', children: String(e.kind || 'event') }),
+                          e.actor ? jsx('span', { children: e.actor }) : null,
+                          when ? jsx('span', { className: 'ml-auto text-(--ui-text-quaternary)', children: when }) : null
+                        ] })
+                      }) })
+                    : null,
+                  activeTab === 'runs'
+                    ? jsx('div', { className: 'flex flex-col gap-2', children: runsList.map((r, i) => {
+                        const failed = ['crashed', 'failed', 'timed_out', 'gave_up'].includes(r.outcome || r.status)
+                        const isDiffProfile = r.profile && data?.task?.assignee && r.profile !== data.task.assignee
+                        const durationStr = (() => {
+                          if (!r.started_at) return ''
+                          const end = r.ended_at || Math.floor(Date.now() / 1000)
+                          const sec = Math.max(0, end - r.started_at)
+                          if (sec < 60) return `${sec}s`
+                          if (sec < 3600) return `${Math.floor(sec / 60)}m`
+                          const h = Math.floor(sec / 3600)
+                          const m = Math.floor((sec % 3600) / 60)
+                          return m > 0 ? `${h}h ${m}m` : `${h}h`
+                        })()
+                        const dateStr = r.started_at
+                          ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(r.started_at * 1000))
+                          : ''
+
+                        return jsxs('div', {
+                          key: r.id || i,
+                          className: 'flex flex-col gap-1 text-[11px] border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)',
+                          children: [
+                            jsxs('div', { className: 'flex flex-wrap items-center gap-1.5 text-[10px]', children: [
+                              jsx(Badge, { size: 'xs', variant: failed ? 'destructive' : r.ended_at ? 'muted' : 'secondary', children: r.outcome || r.status || 'run' }),
+                              r.profile ? jsxs('span', { className: cn('font-medium', isDiffProfile ? 'text-amber-500 font-semibold' : 'text-(--ui-text-secondary)'), children: [
+                                '👤 ', r.profile, isDiffProfile ? jsx('span', { className: 'text-[9px] text-(--ui-text-quaternary) ml-1', children: i18n.reassigned }) : null
+                              ] }) : null,
+                              durationStr ? jsx('span', { className: 'text-(--ui-text-tertiary)', children: `⏱ ${durationStr}` }) : null,
+                              dateStr ? jsx('span', { className: 'text-(--ui-text-quaternary) ml-auto text-[9.5px]', children: dateStr }) : null
+                            ] }),
+                            r.summary
+                              ? jsx('div', { className: 'mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50', children: jsx(MessageTextContent, { media: false, text: r.summary }) })
+                              : null
+                          ]
+                        })
+                      }) })
+                    : null
                 ] })
               })(),
-
-              // 6. Activité (Derniers événements)
-              (data?.task?.events || []).length
-                ? jsxs('div', { className: 'border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1', children: [
-                    jsx('div', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: i18n.activity(data.task.events.length) }),
-                    jsx('div', { className: 'flex flex-col gap-0.5 max-h-32 overflow-auto', children: data.task.events.slice(-12).reverse().map((e, i) => jsx('div', {
-                      key: i,
-                      className: 'text-[10px] text-(--ui-text-tertiary)',
-                      children: String(e.kind || 'event')
-                    }, i)) })
-                  ] })
-                : null
             ] }),
       // Drops a parent link — behind a confirmation, so a stray click on the
       // row's ✕ never silently rewires the tree.
