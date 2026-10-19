@@ -1042,18 +1042,32 @@ function AssigneeBadge({ assignee, assignees = [], onAssign, disabled }) {
  *  A button rather than a tab widget: the three panels are siblings and only one is mounted at a
  *  time, so there is nothing for a widget to manage beyond the selection this already carries. The
  *  classes are the view toggle's, which keeps the two segmented controls looking like one idea.
+ *
+ *  The count is a badge beside the label, not a number inside it: "Comments" then "3" reads at a
+ *  glance in a 11 px strip, where "Comments (3)" turns the tab into a sentence to parse. `aria-label`
+ *  keeps the full form for a screen reader.
  */
-function FeedTab({ label, active, onClick }) {
+function FeedTab({ label, count, ariaLabel, active, onClick }) {
   return jsx('button', {
     type: 'button',
     role: 'tab',
     'aria-selected': active ? 'true' : 'false',
+    'aria-label': ariaLabel,
     onClick,
     className: cn(
-      'inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0',
+      'inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0',
       active ? 'bg-(--ui-accent)/15 text-(--ui-accent) font-medium' : 'bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)'
     ),
-    children: label
+    children: [
+      jsx('span', { className: 'whitespace-nowrap', children: label }),
+      jsx('span', {
+        className: cn(
+          'inline-flex min-w-[1.05rem] items-center justify-center rounded-full px-1 text-[9.5px] font-semibold leading-[1.35] tabular-nums',
+          active ? 'bg-(--ui-accent)/22 text-(--ui-accent)' : 'bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)'
+        ),
+        children: String(count)
+      })
+    ]
   })
 }
 
@@ -2152,12 +2166,12 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                     role: 'group',
                     className: 'inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5 self-start',
                     children: [
-                      jsx(FeedTab, { label: i18n.comments(totalComments), active: activeTab === 'comments', onClick: () => setFeedTab('comments') }),
+                      jsx(FeedTab, { label: i18n.tabComments, count: totalComments, ariaLabel: i18n.comments(totalComments), active: activeTab === 'comments', onClick: () => setFeedTab('comments') }),
                       eventsList.length
-                        ? jsx(FeedTab, { label: i18n.activity(eventsList.length), active: activeTab === 'activity', onClick: () => setFeedTab('activity') })
+                        ? jsx(FeedTab, { label: i18n.tabActivity, count: eventsList.length, ariaLabel: i18n.activity(eventsList.length), active: activeTab === 'activity', onClick: () => setFeedTab('activity') })
                         : null,
                       runsList.length
-                        ? jsx(FeedTab, { label: i18n.runs(runsList.length), active: activeTab === 'runs', onClick: () => setFeedTab('runs') })
+                        ? jsx(FeedTab, { label: i18n.tabRuns, count: runsList.length, ariaLabel: i18n.runs(runsList.length), active: activeTab === 'runs', onClick: () => setFeedTab('runs') })
                         : null
                     ]
                   }),

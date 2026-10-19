@@ -386,6 +386,14 @@ if (pageNode) {
     'the feed offers Comments alone when a task has neither events nor runs')
   check(detailFlat.includes('"aria-selected":"true"'),
     'the feed opens on the first tab rather than on nothing')
+  // The count is a badge beside the label, not "Comments (0)" inside it: the label is its
+  // own span fed by the plain key, the badge is a second span carrying the number, and the
+  // screen reader still gets the counting form through aria-label. (The harness's i18n stub
+  // returns keys, so "tabComments" and "comments" below ARE those two call sites.)
+  check(detailFlat.includes('"children":"tabComments"'), 'the tab label comes from the plain key')
+  check(detailFlat.includes('"aria-label":"comments"'), 'the counting form survives, for a screen reader')
+  check(detailFlat.includes('tabular-nums'), 'the count renders as a badge beside the label')
+  check(detailFlat.includes('"children":"0"'), 'the badge carries the count itself')
   // The CLI block: kanban-graph closes its detail with a copyable command, and it is the
   // one thing a shell-first reader wants from a GUI. The board comes from the task (or
   // the selected board), the id from the drawer.

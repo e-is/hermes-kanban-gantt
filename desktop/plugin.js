@@ -205,6 +205,11 @@ var GANTT_LOCALES = {
     addCommentPlaceholder: "Add a comment…",
     send: "Send",
     activity: (n) => `Activity (${n})`,
+    // The tab labels, WITHOUT the count: the count is a badge beside them, so a reader
+    // sees "Comments 3" rather than parsing a number out of a sentence.
+    tabComments: "Comments",
+    tabActivity: "Activity",
+    tabRuns: "Runs",
     action: "Action:",
     copyTaskId: "Copy task id",
     copyTitle: "Copy title",
@@ -430,6 +435,10 @@ var GANTT_LOCALES = {
     addCommentPlaceholder: "Ajouter un commentaire…",
     send: "Envoyer",
     activity: (n) => `Activité (${n})`,
+    // Les libellés SANS le compte : le compte est un badge à côté.
+    tabComments: "Commentaires",
+    tabActivity: "Activité",
+    tabRuns: "Exécutions",
     action: "Action :",
     copyTaskId: "Copier l’ID de tâche",
     copyTitle: "Copier le titre",
@@ -655,6 +664,9 @@ var GANTT_LOCALES = {
     addCommentPlaceholder: "添加评论…",
     send: "发送",
     activity: (n) => `活动（${n}）`,
+    tabComments: "评论",
+    tabActivity: "活动",
+    tabRuns: "运行记录",
     action: "操作：",
     copyTaskId: "复制任务 ID",
     copyTitle: "复制标题",
@@ -2928,17 +2940,27 @@ function AssigneeBadge({ assignee, assignees = [], onAssign, disabled }) {
     })
   ] });
 }
-function FeedTab({ label, active, onClick }) {
+function FeedTab({ label, count, ariaLabel, active, onClick }) {
   return jsx6("button", {
     type: "button",
     role: "tab",
     "aria-selected": active ? "true" : "false",
+    "aria-label": ariaLabel,
     onClick,
     className: cn3(
-      "inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0",
+      "inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0",
       active ? "bg-(--ui-accent)/15 text-(--ui-accent) font-medium" : "bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)"
     ),
-    children: label
+    children: [
+      jsx6("span", { className: "whitespace-nowrap", children: label }),
+      jsx6("span", {
+        className: cn3(
+          "inline-flex min-w-[1.05rem] items-center justify-center rounded-full px-1 text-[9.5px] font-semibold leading-[1.35] tabular-nums",
+          active ? "bg-(--ui-accent)/22 text-(--ui-accent)" : "bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)"
+        ),
+        children: String(count)
+      })
+    ]
   });
 }
 function ViewToggle({ value, onChange }) {
@@ -3890,9 +3912,9 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
             role: "group",
             className: "inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5 self-start",
             children: [
-              jsx6(FeedTab, { label: i18n.comments(totalComments), active: activeTab === "comments", onClick: () => setFeedTab("comments") }),
-              eventsList.length ? jsx6(FeedTab, { label: i18n.activity(eventsList.length), active: activeTab === "activity", onClick: () => setFeedTab("activity") }) : null,
-              runsList.length ? jsx6(FeedTab, { label: i18n.runs(runsList.length), active: activeTab === "runs", onClick: () => setFeedTab("runs") }) : null
+              jsx6(FeedTab, { label: i18n.tabComments, count: totalComments, ariaLabel: i18n.comments(totalComments), active: activeTab === "comments", onClick: () => setFeedTab("comments") }),
+              eventsList.length ? jsx6(FeedTab, { label: i18n.tabActivity, count: eventsList.length, ariaLabel: i18n.activity(eventsList.length), active: activeTab === "activity", onClick: () => setFeedTab("activity") }) : null,
+              runsList.length ? jsx6(FeedTab, { label: i18n.tabRuns, count: runsList.length, ariaLabel: i18n.runs(runsList.length), active: activeTab === "runs", onClick: () => setFeedTab("runs") }) : null
             ]
           }),
           activeTab === "comments" ? jsxs6("div", { className: "flex flex-col gap-1.5 pt-1", children: [

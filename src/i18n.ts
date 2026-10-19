@@ -105,6 +105,11 @@ const GANTT_LOCALES = {
     addCommentPlaceholder: 'Add a comment…',
     send: 'Send',
     activity: n => `Activity (${n})`,
+    // The tab labels, WITHOUT the count: the count is a badge beside them, so a reader
+    // sees "Comments 3" rather than parsing a number out of a sentence.
+    tabComments: 'Comments',
+    tabActivity: 'Activity',
+    tabRuns: 'Runs',
     action: 'Action:',
     copyTaskId: 'Copy task id',
     copyTitle: 'Copy title',
@@ -336,6 +341,10 @@ const GANTT_LOCALES = {
     addCommentPlaceholder: 'Ajouter un commentaire…',
     send: 'Envoyer',
     activity: n => `Activité (${n})`,
+    // Les libellés SANS le compte : le compte est un badge à côté.
+    tabComments: 'Commentaires',
+    tabActivity: 'Activité',
+    tabRuns: 'Exécutions',
     action: 'Action :',
     copyTaskId: 'Copier l’ID de tâche',
     copyTitle: 'Copier le titre',
@@ -567,6 +576,9 @@ const GANTT_LOCALES = {
     addCommentPlaceholder: '添加评论…',
     send: '发送',
     activity: n => `活动（${n}）`,
+    tabComments: '评论',
+    tabActivity: '活动',
+    tabRuns: '运行记录',
     action: '操作：',
     copyTaskId: '复制任务 ID',
     copyTitle: '复制标题',
