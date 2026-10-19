@@ -6,8 +6,8 @@
   "description": "Gantt timeline view for the Hermes kanban boards (unified plugin: desktop/ + dashboard/).",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "node --check desktop/plugin.js && node --check desktop/gantt-core.js",
-    "test": "node --test tests/gantt-core.test.mjs tests/rest-method.test.mjs tests/ws-core.test.mjs && node tests/ui/esm-render.mjs && node tests/ui/hook-order.test.mjs && bash tests/run_tests.sh",
+    "check": "node --check desktop/plugin.js && node --check desktop/gantt-core.js && node --check desktop/graph-core.js",
+    "test": "node --test tests/gantt-core.test.mjs tests/graph-core.test.mjs tests/rest-method.test.mjs tests/ws-core.test.mjs && node tests/ui/esm-render.mjs && node tests/ui/hook-order.test.mjs && bash tests/run_tests.sh",
     "skills:list": "npx skills list",
     "skills:install": "npx skills experimental_install",
     "skills:update": "npx skills update -p -y || echo 'skills:update failed (ignored)'",

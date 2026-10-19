@@ -1,0 +1,408 @@
+/**
+ * Unit tests for the PURE graph logic (src/core/graph-core.ts).
+ *
+ * Imported from the built artifact (desktop/graph-core.js, produced by `npm run build`
+ * from src/core/graph-core.ts) — the tested code is exactly the shipped code.
+ *
+ * Two families of test here are not "does it compute the right number" but "does it
+ * come back at all": the loop suite and the scale suite carry a WALL-CLOCK assertion,
+ * because a hang is the failure mode being ruled out and a hanging test would block the
+ * suite instead of failing it.
+ *
+ * Run: node --test tests/graph-core.test.mjs
+ */
+
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const core = await import(join(HERE, '..', 'desktop', 'graph-core.js'))
+
+const {
+  graphNodes, graphEdges, dedupeEdges, edgesWithin, ranks, orderRanks, rankComparator,
+  reduceEdges, lineage, activityBuckets, activityMap, layoutGraph, scopeIds, SCOPES,
+  NODE_W, NODE_H, SPARK_BAND
+} = core
+
+const H = 3600
+const NOW = 1_800_000_000
+
+/** A task shaped like the board snapshot's rows (only the fields the core reads). */
+const task = (id, extra = {}) => ({
+  id,
+  title: extra.title || id,
+  status: extra.status || 'todo',
+  priority: extra.priority ?? null,
+  assignee: extra.assignee || '',
+  parents: extra.parents || [],
+  children: extra.children || [],
+  events: extra.events || [],
+  runs: extra.runs || [],
+  attachment_count: extra.attachment_count || 0,
+  ...extra
+})
+
+/** Fail fast instead of hanging: the property under test is "it returns". */
+function withinMs(ms, fn) {
+  const started = performance.now()
+  const out = fn()
+  const elapsed = performance.now() - started
+  assert.ok(elapsed < ms, `took ${elapsed.toFixed(1)} ms, budget ${ms} ms`)
+  return out
+}
+
+// ── edges ────────────────────────────────────────────────────────────────────
+
+test('edges come from parents and children, and are deduplicated', () => {
+  const tasks = [
+    task('a', { children: [{ id: 'b' }] }),
+    task('b', { parents: [{ id: 'a' }] })
+  ]
+  const edges = graphEdges(tasks)
+  assert.deepEqual(edges, [{ from: 'a', to: 'b' }])
+})
+
+test('a self-parent is dropped, not drawn as a loop', () => {
+  assert.deepEqual(dedupeEdges([{ from: 'a', to: 'a' }]), [])
+})
+
+test('edges with a dangling end are dropped and counted', () => {
+  const { edges, dangling } = edgesWithin(['a', 'b'], [
+    { from: 'a', to: 'b' },
+    { from: 'ghost', to: 'b' },
+    { from: 'a', to: 'gone' }
+  ])
+  assert.deepEqual(edges, [{ from: 'a', to: 'b' }])
+  assert.equal(dangling, 2)
+})
+
+// ── ranks ────────────────────────────────────────────────────────────────────
+
+test('a chain ranks 0,1,2 and an orphan stays at 0', () => {
+  const nodes = ['a', 'b', 'c', 'solo']
+  const { ranks: r, cyclic } = ranks(nodes, [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }])
+  assert.equal(r.get('a'), 0)
+  assert.equal(r.get('b'), 1)
+  assert.equal(r.get('c'), 2)
+  assert.equal(r.get('solo'), 0)
+  assert.deepEqual(cyclic, [])
+})
+
+test('a diamond layers the join BELOW its deepest parent', () => {
+  const nodes = ['a', 'b', 'c', 'd']
+  const edges = [{ from: 'a', to: 'b' }, { from: 'a', to: 'c' }, { from: 'b', to: 'd' }, { from: 'c', to: 'd' }]
+  const { ranks: r } = ranks(nodes, edges)
+  assert.deepEqual([r.get('a'), r.get('b'), r.get('c'), r.get('d')], [0, 1, 1, 2])
+})
+
+test('a multi-parent node sits below the DEEPEST parent (longest path, not BFS)', () => {
+  // a -> b -> c -> d, and a -> d. BFS would put d at 1; the graph must agree with the
+  // chain, so d is at 3.
+  const nodes = ['a', 'b', 'c', 'd']
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'd' }, { from: 'a', to: 'd' }]
+  const { ranks: r } = ranks(nodes, edges)
+  assert.equal(r.get('d'), 3)
+})
+
+test('ranks are deterministic regardless of input order', () => {
+  const nodes = ['a', 'b', 'c', 'd']
+  const edges = [{ from: 'a', to: 'b' }, { from: 'a', to: 'c' }, { from: 'b', to: 'd' }, { from: 'c', to: 'd' }]
+  const one = ranks(nodes, edges).ranks
+  const two = ranks([...nodes].reverse(), [...edges].reverse()).ranks
+  for (const id of nodes) assert.equal(one.get(id), two.get(id))
+})
+
+// ── cycles: can a loop happen? yes — and it must not hang ────────────────────
+
+test('a two-task loop terminates, is reported, and both nodes are drawn', () => {
+  const { ranks: r, cyclic } = withinMs(1000, () => ranks(['a', 'b'], [{ from: 'a', to: 'b' }, { from: 'b', to: 'a' }]))
+  assert.deepEqual(cyclic, ['a', 'b'])
+  // Bounded by the leftover set: a rank may climb to 2, never to infinity.
+  assert.ok(r.get('a') <= 2 && r.get('b') <= 2)
+})
+
+test('a three-cycle with a tail hangs the tail off the loop, and stops', () => {
+  const nodes = ['a', 'b', 'c', 'tail']
+  const edges = [
+    { from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'a' },
+    { from: 'c', to: 'tail' }
+  ]
+  const { ranks: r, cyclic } = withinMs(1000, () => ranks(nodes, edges))
+  assert.deepEqual(cyclic, ['a', 'b', 'c'])
+  assert.ok(r.get('tail') > r.get('c') || r.get('tail') > 0)
+})
+
+test('a loop reachable only from an otherwise orphaned component still terminates', () => {
+  const nodes = ['x', 'y', 'a', 'b']
+  const edges = [{ from: 'x', to: 'y' }, { from: 'y', to: 'x' }]
+  const { cyclic } = withinMs(1000, () => ranks(nodes, edges))
+  assert.deepEqual(cyclic, ['x', 'y'])
+})
+
+test('a self-parent declared in the data cannot create a loop in the ranks', () => {
+  const { ranks: r, cyclic } = withinMs(1000, () => ranks(['a'], [{ from: 'a', to: 'a' }]))
+  assert.equal(r.get('a'), 0)
+  assert.deepEqual(cyclic, [])
+})
+
+test('layout of a looped board returns boxes and paths instead of spinning', () => {
+  const tasks = [
+    task('a', { parents: [{ id: 'b' }], children: [{ id: 'b' }] }),
+    task('b', { parents: [{ id: 'a' }], children: [{ id: 'a' }] })
+  ]
+  const out = withinMs(1000, () => layoutGraph(tasks, graphEdges(tasks)))
+  assert.equal(out.nodes.length, 2)
+  assert.deepEqual(out.cyclic, ['a', 'b'])
+  assert.equal(out.edges.length, 2)
+})
+
+// ── transitive reduction ─────────────────────────────────────────────────────
+
+test('a diamond keeps two edges of three and counts the implied one', () => {
+  const nodes = ['a', 'b', 'c', 'd']
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'a', to: 'c' }]
+  const { edges: kept, implied } = reduceEdges(nodes, edges)
+  assert.equal(implied, 1)
+  assert.deepEqual(kept.map(e => `${e.from}>${e.to}`).sort(), ['a>b', 'b>c'])
+})
+
+test('reduction keeps a diamond join (both paths are direct, neither is implied)', () => {
+  const nodes = ['a', 'b', 'c', 'd']
+  const edges = [{ from: 'a', to: 'b' }, { from: 'a', to: 'c' }, { from: 'b', to: 'd' }, { from: 'c', to: 'd' }]
+  const { implied } = reduceEdges(nodes, edges)
+  assert.equal(implied, 0)
+})
+
+test('reduction on a cycle implies nothing and keeps every edge', () => {
+  const nodes = ['a', 'b', 'c']
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'a' }]
+  const { edges: kept, implied } = withinMs(1000, () => reduceEdges(nodes, edges))
+  assert.equal(implied, 0)
+  assert.equal(kept.length, 3)
+})
+
+// ── lineage ──────────────────────────────────────────────────────────────────
+
+test('lineage is transitive in both directions', () => {
+  const nodes = ['a', 'b', 'c', 'z']
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }]
+  const { upstream, downstream } = lineage(nodes, edges, 'b')
+  assert.deepEqual([...upstream].sort(), ['a'])
+  assert.deepEqual([...downstream].sort(), ['c'])
+  const all = lineage(nodes, edges, 'c')
+  assert.deepEqual([...all.upstream].sort(), ['a', 'b'])
+  assert.deepEqual([...all.downstream], [])
+})
+
+test('lineage does not loop on a cycle, and never includes the task itself', () => {
+  const nodes = ['a', 'b']
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'a' }]
+  const { upstream, downstream } = withinMs(1000, () => lineage(nodes, edges, 'a'))
+  assert.deepEqual([...upstream], ['b'])
+  assert.deepEqual([...downstream], ['b'])
+})
+
+// ── activity buckets (the sparkline) ────────────────────────────────────────
+
+test('a node with no events and no runs has NO series (empty axis, not a flat line)', () => {
+  assert.equal(activityBuckets(task('a'), NOW, 24 * H, 24), null)
+})
+
+test('events land in the bucket their timestamp falls in', () => {
+  // Bucket 0 is the OLDEST slice (the axis runs left→right in time), so an event ten
+  // minutes after the window opened belongs to bucket 0, and one now to the last.
+  const t = task('a', { events: [
+    { created_at: NOW - 30 },                 // now -> last bucket
+    { created_at: NOW - 24 * H + 600 },       // 10 min in -> first bucket
+    { created_at: NOW - 24 * H + 900 }        // same bucket, twice -> volume 2
+  ] })
+  const { buckets, max } = activityBuckets(t, NOW, 24 * H, 24)
+  assert.equal(buckets.length, 24)
+  assert.equal(buckets[0], 2)
+  assert.equal(buckets[23], 1)
+  assert.equal(max, 2)
+})
+
+test('"touched then silent" is bars on the left and zeros on the right', () => {
+  const t = task('a', { events: [{ created_at: NOW - 23.5 * H }] })
+  const { buckets } = activityBuckets(t, NOW, 24 * H, 24)
+  assert.ok(buckets[0] > 0)
+  assert.deepEqual(buckets.slice(12), new Array(12).fill(0))
+})
+
+test('run starts and run ends both count', () => {
+  const t = task('a', { runs: [{ started_at: NOW - 2 * H, ended_at: NOW - H }] })
+  const { buckets } = activityBuckets(t, NOW, 24 * H, 24)
+  assert.equal(buckets.reduce((s, v) => s + v, 0), 2)
+})
+
+test('events outside the window are ignored, and clock skew clamps into the last bucket', () => {
+  const t = task('a', { events: [
+    { created_at: NOW - 48 * H },  // outside
+    { created_at: NOW + 5 * H }    // gateway clock ahead of the desktop
+  ] })
+  const { buckets } = activityBuckets(t, NOW, 24 * H, 24)
+  assert.equal(buckets.reduce((s, v) => s + v, 0), 1)
+  assert.equal(buckets[23], 1)
+})
+
+test('activityMap omits untouched tasks instead of zeroing them', () => {
+  const nodes = [
+    { id: 'a', events: [{ created_at: NOW - 10 }] },
+    { id: 'b', events: [] }
+  ]
+  const map = activityMap(nodes, NOW, 24 * H, 24)
+  assert.ok(map.has('a'))
+  assert.ok(!map.has('b'))
+})
+
+// ── layout ───────────────────────────────────────────────────────────────────
+
+test('layout places one box per node, positive origin, edges between real boxes', () => {
+  const tasks = [task('a', { children: [{ id: 'b' }] }), task('b', { parents: [{ id: 'a' }] })]
+  const out = layoutGraph(tasks, graphEdges(tasks))
+  assert.equal(out.nodes.length, 2)
+  assert.equal(out.edges.length, 1)
+  for (const b of out.nodes) {
+    assert.ok(b.x >= 0 && b.y >= 0, `box ${b.id} off the origin`)
+    assert.equal(b.w, NODE_W)
+    assert.equal(b.h, NODE_H)
+  }
+  assert.ok(out.width > 0 && out.height > 0)
+})
+
+test('the sparkline band fits inside the node height (the node does not grow for it)', () => {
+  assert.ok(SPARK_BAND > 0 && SPARK_BAND < NODE_H / 2)
+})
+
+test('an empty board renders an empty layout, not a crash or a stray frame', () => {
+  const out = layoutGraph([], [])
+  assert.deepEqual(out.nodes, [])
+  assert.deepEqual(out.edges, [])
+  assert.equal(out.width, 0)
+  assert.equal(out.height, 0)
+})
+
+test('layout is deterministic: same snapshot, same coordinates', () => {
+  const tasks = [
+    task('a', { children: [{ id: 'b' }, { id: 'c' }] }),
+    task('b', { parents: [{ id: 'a' }], children: [{ id: 'd' }] }),
+    task('c', { parents: [{ id: 'a' }], children: [{ id: 'd' }] }),
+    task('d', { parents: [{ id: 'b' }, { id: 'c' }] })
+  ]
+  const edges = graphEdges(tasks)
+  const one = layoutGraph(tasks, edges)
+  const two = layoutGraph([...tasks].reverse(), edges)
+  const asMap = out => new Map(out.nodes.map(b => [b.id, `${b.x},${b.y}`]))
+  assert.deepEqual([...asMap(one)], [...asMap(two)])
+})
+
+test('a task hidden by a filter is simply absent; its edges are counted as dangling', () => {
+  const tasks = [task('a', { children: [{ id: 'b' }] }), task('b', { parents: [{ id: 'a' }] }),
+    task('c', { parents: [{ id: 'b' }] })]
+  // 'b' filtered out: a and c remain, connected to nobody.
+  const out = layoutGraph([tasks[0], tasks[2]], graphEdges(tasks))
+  assert.equal(out.nodes.length, 2)
+  assert.equal(out.dangling, 2)
+  assert.equal(out.edges.length, 0)
+})
+
+test('the FLOW arrangement puts ranks side by side instead of stacked', () => {
+  const tasks = [task('a', { children: [{ id: 'b' }] }), task('b', { parents: [{ id: 'a' }] })]
+  const down = layoutGraph(tasks, graphEdges(tasks), { arrangement: 'down' })
+  const flow = layoutGraph(tasks, graphEdges(tasks), { arrangement: 'flow' })
+  const ys = m => new Set(down.nodes.map(n => n.y)).size
+  const xs = m => new Set(flow.nodes.map(n => n.x)).size
+  assert.equal(ys(down), 2)
+  assert.equal(xs(flow), 2)
+})
+
+test('orderRanks follows the current sort inside a rank (so the views agree)', () => {
+  const nodes = [
+    { id: 'a', title: 'Zeta', status: 'running' },
+    { id: 'b', title: 'Alpha', status: 'todo' },
+    { id: 'c', title: 'Beta', status: 'blocked' }
+  ]
+  const { ranks: r } = ranks(nodes, [])
+  const byTitle = orderRanks(nodes, r, 'title')[0].map(n => n.id)
+  const byStatus = orderRanks(nodes, r, 'status')[0].map(n => n.id)
+  assert.deepEqual(byTitle, ['b', 'c', 'a'])
+  assert.deepEqual(byStatus, ['b', 'a', 'c'])
+  assert.equal(typeof rankComparator('assignee'), 'function')
+})
+
+// ── scale: measured, with a budget ──────────────────────────────────────────
+
+/** A wide board: `n` tasks in ~40 ranks, each with a couple of children. */
+function wideBoard(n) {
+  const tasks = []
+  for (let i = 0; i < n; i++) tasks.push(task(`t${i}`, { title: `task ${i}`, status: 'todo' }))
+  for (let i = 0; i < n - 40; i++) tasks[i].children.push({ id: `t${i + 40}` })
+  return tasks
+}
+
+test('500 nodes lay out in under 50 ms', () => {
+  const tasks = wideBoard(500)
+  const edges = graphEdges(tasks)
+  withinMs(50, () => layoutGraph(tasks, edges))
+})
+
+test('2000 nodes lay out in under 400 ms', () => {
+  const tasks = wideBoard(2000)
+  const edges = graphEdges(tasks)
+  withinMs(400, () => layoutGraph(tasks, edges))
+})
+
+test('a 500-deep chain does not blow the stack (no recursion anywhere)', () => {
+  const tasks = [task('t0')]
+  for (let i = 1; i < 500; i++) tasks.push(task(`t${i}`, { parents: [{ id: `t${i - 1}` }] }))
+  const out = withinMs(1000, () => layoutGraph(tasks, graphEdges(tasks)))
+  assert.equal(out.nodes.length, 500)
+  assert.equal(out.ranks, 500)
+  // The deepest node really is at the bottom.
+  const last = out.nodes.find(n => n.id === 't499')
+  assert.ok(last.y > out.nodes.find(n => n.id === 't0').y)
+})
+
+test('one node with 200 parents and another with 200 children still lays out', () => {
+  const tasks = [task('hub'), task('fan')]
+  for (let i = 0; i < 200; i++) {
+    tasks.push(task(`p${i}`, { children: [{ id: 'hub' }] }))
+    tasks.push(task(`c${i}`, { parents: [{ id: 'fan' }] }))
+  }
+  const out = withinMs(1000, () => layoutGraph(tasks, graphEdges(tasks)))
+  assert.equal(out.nodes.length, 402)
+})
+
+// ── quick scopes ────────────────────────────────────────────────────────────
+
+test('the scope list is exactly the three the segmented control offers', () => {
+  assert.deepEqual(SCOPES, ['all', 'open', 'running-lineage'])
+})
+
+test('Open drops done and archived; All keeps everything', () => {
+  const nodes = [
+    { id: 'a', status: 'todo' }, { id: 'b', status: 'done' },
+    { id: 'c', status: 'archived' }, { id: 'd', status: 'running' }
+  ]
+  assert.deepEqual([...scopeIds(nodes, [], 'all')].sort(), ['a', 'b', 'c', 'd'])
+  assert.deepEqual([...scopeIds(nodes, [], 'open')].sort(), ['a', 'd'])
+})
+
+test('Running + lineage keeps the running tasks AND their whole lineage', () => {
+  const nodes = [
+    { id: 'root', status: 'done' },
+    { id: 'mid', status: 'running' },
+    { id: 'leaf', status: 'todo' },
+    { id: 'other', status: 'todo' }
+  ]
+  const edges = [{ from: 'root', to: 'mid' }, { from: 'mid', to: 'leaf' }]
+  assert.deepEqual([...scopeIds(nodes, edges, 'running-lineage')].sort(), ['leaf', 'mid', 'root'])
+})
+
+test('Running + lineage on a board with nothing running keeps nothing (an honest empty state)', () => {
+  const nodes = [{ id: 'a', status: 'todo' }, { id: 'b', status: 'done' }]
+  assert.equal(scopeIds(nodes, [], 'running-lineage').size, 0)
+})

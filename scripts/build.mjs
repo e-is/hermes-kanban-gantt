@@ -52,6 +52,15 @@ await build({
 
 await build({
   ...common,
+  // Pure layout of the graph view (phase 1): built standalone so
+  // tests/graph-core.test.mjs exercises the shipped code, and so the view can import
+  // it without pulling React into the core.
+  entryPoints: [join(root, 'src', 'core', 'graph-core.ts')],
+  outfile: join(root, 'desktop', 'graph-core.js')
+})
+
+await build({
+  ...common,
   // Pure client logic of the websocket prototype (spike t_64075faf): built
   // standalone so tests/ws-core.test.mjs exercises the shipped decisions.
   entryPoints: [join(root, 'src', 'core', 'ws-core.ts')],
