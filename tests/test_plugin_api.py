@@ -43,10 +43,22 @@ from hermes_cli import kanban_db  # noqa: E402
 from hermes_cli import kanban_db_connect as kbc  # noqa: E402
 
 import plugin_api  # noqa: E402
+from hermes_cli import kanban_db_boards as board_registry  # noqa: E402
 
 # The dedicated test board slug — fixed so any stray leftover is identifiable
 # and cleanable by name (see purge_board_root()).
 TEST_SLUG = "kanban-gantt-test"
+
+
+def open_board(slug: str):
+    """Register the board, then open it.
+
+    Upstream refuses to open a board whose ``board.json`` is absent (that guard
+    exists so a deleted board's DB is never silently resurrected), so a test that
+    only creates a database gets a ValueError instead of a connection.
+    """
+    board_registry.create_board(slug)
+    return kbc.connect(board=slug)
 
 
 @pytest.fixture()
@@ -74,8 +86,11 @@ def board(tmp_path, monkeypatch):
         shutil.rmtree(stale, ignore_errors=True) if stale.is_dir() else (
             stale.unlink(missing_ok=True))
 
-    # init_db + create tasks through the domain layer (invariants included)
-    conn = kbc.connect(board=TEST_SLUG)
+    # init_db + create tasks through the domain layer (invariants included).
+    # The board must be REGISTERED first: connect() now refuses to open a board
+    # whose board.json is missing (it would resurrect a deleted board's DB), so
+    # writing the DB alone is no longer enough — open_board() does both.
+    conn = open_board(TEST_SLUG)
     parent = kanban_db.create_task(conn, title="[TEST] parent task", priority=1,
                                    created_by="test")
     child = kanban_db.create_task(conn, title="[TEST] child task", priority=2,
@@ -283,7 +298,7 @@ def _attach(board, task_id, name, data, content_type="text/markdown"):
     uses, with an ABSOLUTE stored_path, because that is the shape the content route
     has to validate.
     """
-    conn = kbc.connect(board=board["slug"])
+    conn = open_board(board["slug"])
     dest_dir = kanban_db.task_attachments_dir(task_id, board=board["slug"])
     dest_dir.mkdir(parents=True, exist_ok=True)
     path = dest_dir / name
@@ -380,7 +395,7 @@ def test_attachment_content_refuses_a_path_outside_the_board(client):
     http, board = client
     outside = Path(os.environ["HERMES_HOME"]) / "outside.md"
     outside.write_text("secret")
-    conn = kbc.connect(board=board["slug"])
+    conn = open_board(board["slug"])
     aid = kanban_db.add_attachment(conn, board["child"], filename="outside.md",
                                    stored_path=str(outside.resolve()),
                                    content_type="text/markdown", size=6, uploaded_by="test")
@@ -390,7 +405,7 @@ def test_attachment_content_refuses_a_path_outside_the_board(client):
     assert "secret" not in r.text
 
     # …and a traversal written into the column is refused for the same reason
-    conn = kbc.connect(board=board["slug"])
+    conn = open_board(board["slug"])
     root = kanban_db.attachments_root(board["slug"])
     traversal = str((root / ".." / ".." / "outside.md"))
     aid2 = kanban_db.add_attachment(conn, board["child"], filename="passwd",
@@ -419,7 +434,7 @@ def test_description_is_editable_and_recorded_as_an_edit(client):
     assert r.status_code == 200 and r.json()["ok"] is True
     assert http.get(f"/tasks/{tid}?board={board['slug']}").json()["task"]["body"] == new_body
 
-    conn = kbc.connect(board=TEST_SLUG)
+    conn = open_board(TEST_SLUG)
     try:
         kind = conn.execute(
             "SELECT kind FROM task_events WHERE task_id = ? ORDER BY rowid DESC LIMIT 1", (tid,)
@@ -456,7 +471,7 @@ def test_a_finished_parent_is_accepted_and_does_not_gate_the_child(client):
     assert http.get(f"/tasks/{done_id}?board={board['slug']}").json()["task"]["status"] in ("done", "archived")
 
     fresh = _mk(board["slug"], "[TEST] task dropped under a finished one")
-    conn = kbc.connect(board=TEST_SLUG)
+    conn = open_board(TEST_SLUG)
     try:                                   # ready, so a demotion would be visible
         conn.execute("UPDATE tasks SET status = 'ready' WHERE id = ?", (fresh,))
         conn.commit()
@@ -566,7 +581,7 @@ def test_status_ready_from_todo_and_triage(client):
     slug = board["slug"]
     tid = _mk(slug, "[TEST] promoted to ready")
 
-    conn = kbc.connect(board=TEST_SLUG)
+    conn = open_board(TEST_SLUG)
     try:
         conn.execute("UPDATE tasks SET status = 'todo' WHERE id = ?", (tid,))
         conn.commit()
@@ -580,7 +595,7 @@ def test_status_ready_from_todo_and_triage(client):
 
     # promote_task accepts todo and blocked only, so an older origin still lands through the
     # plugin's own direct write — the path that keeps a task from being stranded in triage.
-    conn = kbc.connect(board=TEST_SLUG)
+    conn = open_board(TEST_SLUG)
     try:
         conn.execute("UPDATE tasks SET status = 'triage' WHERE id = ?", (tid,))
         conn.commit()
@@ -732,7 +747,7 @@ def test_create_task_rejects_empty_title(client):
 
 def test_create_task_rejects_foreign_parent(client):
     http, board = client
-    other = kbc.connect(board="kanban-gantt-test-other")
+    other = open_board("kanban-gantt-test-other")
     try:
         foreign = kanban_db.create_task(other, title="[TEST] other board", created_by="test")
     finally:
@@ -746,7 +761,7 @@ def test_create_task_rejects_foreign_parent(client):
 # ---------------------------------------------------------------------------
 
 def _mk(slug, title, **kw):
-    conn = kbc.connect(board=slug)
+    conn = open_board(slug)
     try:
         return kanban_db.create_task(conn, title=title, created_by="test", **kw)
     finally:
@@ -786,7 +801,7 @@ def test_parent_link_gates_ready_child(client):
     """A `ready` child re-parented under a non-terminal parent goes back to todo."""
     http, board = client
     # `solo` is a fresh todo task -> non-terminal, so linking must gate.
-    conn = kbc.connect(board=board["slug"])
+    conn = open_board(board["slug"])
     conn.execute("UPDATE tasks SET status = 'ready' WHERE id = ?", (board["child"],))
     conn.commit()
     conn.close()
@@ -821,7 +836,7 @@ def test_parent_link_running_child_refused(client):
     # create_task refuses to leave a task 'running' without a run, so force the
     # state the domain's guard is about: status + a current run.
     running = _mk(board["slug"], "[TEST] running task")
-    conn = kbc.connect(board=board["slug"])
+    conn = open_board(board["slug"])
     conn.execute("UPDATE tasks SET status = 'running', current_run_id = 1 WHERE id = ?",
                  (running,))
     conn.commit()
@@ -963,7 +978,7 @@ def test_move_to_a_board_that_already_has_history(client):
     """
     http, board = client
     target = "kanban-gantt-move-target"
-    tconn = kbc.connect(board=target)
+    tconn = open_board(target)
     # Two residents make the target's event ids overlap the source's.
     kanban_db.create_task(tconn, title="[TEST] target resident", created_by="test")
     resident2 = kanban_db.create_task(tconn, title="[TEST] target resident 2", created_by="test")
@@ -971,7 +986,7 @@ def test_move_to_a_board_that_already_has_history(client):
     tconn.close()
 
     # what the source holds right now, so the target can be compared row for row
-    sconn = kbc.connect(board=board["slug"])
+    sconn = open_board(board["slug"])
     moved_ids = (board["parent"], board["child"])
     want = {
         table: sconn.execute(
@@ -989,12 +1004,12 @@ def test_move_to_a_board_that_already_has_history(client):
     assert r.json()["count"] == 2                # the parent and its child closure
 
     # the source is cleaned up, both tasks are gone from it
-    src = kbc.connect(board=board["slug"])
+    src = open_board(board["slug"])
     for tid in moved_ids:
         assert src.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (tid,)).fetchone()[0] == 0
     src.close()
 
-    tgt = kbc.connect(board=target)
+    tgt = open_board(target)
     for tid in moved_ids:
         assert tgt.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (tid,)).fetchone()[0] == 1
     # every row of the moved set arrived, in the same amount
@@ -1039,7 +1054,7 @@ def test_move_keeps_the_task_id_unless_the_target_already_uses_it(client):
     """
     http, board = client
     target = "kanban-gantt-move-idclash"
-    tconn = kbc.connect(board=target)
+    tconn = open_board(target)
     # A resident that squats the id we are about to move.
     tconn.execute(
         "INSERT INTO tasks (id, title, status, created_at) VALUES (?, ?, 'ready', ?)",
@@ -1056,7 +1071,7 @@ def test_move_keeps_the_task_id_unless_the_target_already_uses_it(client):
     assert new_id.startswith("t_"), "a fresh id keeps the kanban task-id shape"
     assert re.fullmatch(r"t_[0-9a-f]+", new_id), "prefix + hex, like every other task id"
 
-    tgt = kbc.connect(board=target)
+    tgt = open_board(target)
     # the squatter is still there, under its own id and title
     assert tgt.execute("SELECT title FROM tasks WHERE id = ?", (board["solo"],)).fetchone()[0] \
         == "[TEST] id squatter"
@@ -1065,6 +1080,6 @@ def test_move_keeps_the_task_id_unless_the_target_already_uses_it(client):
         == "no prefix task"
     tgt.close()
 
-    src = kbc.connect(board=board["slug"])
+    src = open_board(board["slug"])
     assert src.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (board["solo"],)).fetchone()[0] == 0
     src.close()

@@ -15,8 +15,10 @@ c = TestClient(create_app())
 H = 3600
 now = int(time.time())
 
-# two boards
+# two boards — both must be REGISTERED: an upstream guard now refuses to open a
+# board whose metadata is missing, so creating the DB alone no longer suffices.
 c.get('/meta')
+kb.create_board('src-board', name='Source board')
 kb.create_board('tgt-board', name='Target board')
 assert c.post('/tasks?board=src-board', json={'title': 'parent task'}).status_code == 200
 parent = c.get('/gantt?board=src-board').json()['tasks'][0]['id']
