@@ -208,6 +208,9 @@ var GANTT_LOCALES = {
     action: "Action:",
     copyTaskId: "Copy task id",
     copyTitle: "Copy title",
+    cli: "CLI",
+    copyCommand: "Copy command",
+    copied: "Copied",
     moveToShort: "Move to",
     unassignAction: "Unassign",
     bulkFailed: (n, why) => `${n} task${n > 1 ? "s" : ""} not updated: ${why}`,
@@ -430,6 +433,9 @@ var GANTT_LOCALES = {
     action: "Action :",
     copyTaskId: "Copier l’ID de tâche",
     copyTitle: "Copier le titre",
+    cli: "CLI",
+    copyCommand: "Copier la commande",
+    copied: "Copié",
     moveToShort: "Déplacer",
     unassignAction: "Désassigner",
     bulkFailed: (n, why) => `${n} tâche${n > 1 ? "s" : ""} non mise${n > 1 ? "s" : ""} à jour : ${why}`,
@@ -652,6 +658,9 @@ var GANTT_LOCALES = {
     action: "操作：",
     copyTaskId: "复制任务 ID",
     copyTitle: "复制标题",
+    cli: "CLI",
+    copyCommand: "复制命令",
+    copied: "已复制",
     moveToShort: "移动到",
     unassignAction: "取消指派",
     bulkFailed: (n, why) => `${n} 个任务未更新：${why}`,
@@ -3493,6 +3502,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const [comment, setComment] = useState4("");
   const [showAllComments, setShowAllComments] = useState4(false);
   const [feedTab, setFeedTab] = useState4("comments");
+  const [cliCopied, setCliCopied] = useState4(false);
   const [pendingUnlink, setPendingUnlink] = useState4(null);
   const relations = useMemo2(() => relationsOf(tasks, shownId), [tasks, shownId]);
   const statusMutation = useMutation({
@@ -3561,6 +3571,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const drawerTitle = splitTitlePrefix(data?.task?.title);
   const drawerName = drawerTitle.rest || titleText(data?.task?.title) || i18n.untitled;
   const showPrefixTags = useValue2($titlePrefixTags);
+  const cliBoard = data?.task?.board || board || "";
+  const cliCommand = cliBoard ? `hermes kanban --board ${cliBoard} show ${shownId}` : `hermes kanban show ${shownId}`;
   const inner = [
     jsx6(ResizeHandle, {
       get: () => $drawerW.get(),
@@ -4030,7 +4042,36 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       i18n,
       onClose: () => setMoveBoardOpen(false),
       onMove: (toBoard) => moveMutation.mutateAsync(toBoard)
-    })
+    }),
+    // No CLI block in the docked panel: a command has to stay readable, and that panel
+    // is narrow by design. The drawer (overlay) and the modal both have the room.
+    docked ? null : jsxs6("div", { className: "flex flex-col gap-1", children: [
+      jsx6("div", {
+        className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)",
+        children: i18n.cli
+      }),
+      jsx6("div", { className: "flex items-start gap-1.5", children: [
+        // `select-all` because a command is read by selecting it: the copy button is a
+        // convenience, not the only way, and a partial selection here is never what
+        // anyone wanted.
+        jsx6("code", {
+          className: "flex-1 min-w-0 select-all break-all rounded border border-(--ui-stroke-tertiary) bg-(--ui-bg-subtle, transparent) px-1.5 py-1 font-mono text-[10.5px] text-(--ui-text-secondary)",
+          children: cliCommand
+        }),
+        jsx6("button", {
+          type: "button",
+          className: "shrink-0 rounded border border-(--ui-stroke-tertiary) bg-transparent px-1.5 py-1 text-[10.5px] text-(--ui-text-secondary) cursor-pointer hover:bg-(--chrome-action-hover)",
+          title: i18n.copyCommand,
+          "aria-label": i18n.copyCommand,
+          onClick: () => {
+            void navigator.clipboard.writeText(cliCommand);
+            setCliCopied(true);
+            window.setTimeout(() => setCliCopied(false), 2e3);
+          },
+          children: cliCopied ? i18n.copied : "⧉"
+        })
+      ] })
+    ] })
   ];
   if (!detailModal) {
     return jsxs6("div", {

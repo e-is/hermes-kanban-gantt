@@ -386,6 +386,11 @@ if (pageNode) {
     'the feed offers Comments alone when a task has neither events nor runs')
   check(detailFlat.includes('"aria-selected":"true"'),
     'the feed opens on the first tab rather than on nothing')
+  // The CLI block: kanban-graph closes its detail with a copyable command, and it is the
+  // one thing a shell-first reader wants from a GUI. The board comes from the task (or
+  // the selected board), the id from the drawer.
+  check(detailFlat.includes('hermes kanban'), 'the detail offers the CLI command')
+  check(detailFlat.includes('--board sumaris-app'), 'the command names the board the task lives on')
   const modalFlat = JSON.stringify(page.render())
   check(modalFlat.includes('detailMeta'), 'the modal renders its right-hand information column')
   check(modalFlat.includes('metaPriority'), 'the modal column carries the priority row')

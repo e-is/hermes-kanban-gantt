@@ -1703,6 +1703,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   // where the first one gets written; the strip drops Activity and Runs when a task has neither, so
   // a tab never opens on an empty panel.
   const [feedTab, setFeedTab] = useState('comments')
+  // The CLI block's copy button confirms itself for a moment, then goes quiet.
+  const [cliCopied, setCliCopied] = useState(false)
   // Parent link awaiting confirmation (the click that asked to remove it).
   const [pendingUnlink, setPendingUnlink] = useState(null)
 
@@ -1789,6 +1791,14 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const drawerTitle = splitTitlePrefix(data?.task?.title)
   const drawerName = drawerTitle.rest || titleText(data?.task?.title) || i18n.untitled
   const showPrefixTags = useValue($titlePrefixTags)
+
+  // The same task, for a reader who would rather stay in a shell. Built from the task's
+  // OWN board: the selected board is not necessarily the one this task lives on (the
+  // all-boards view), and a command that opens the wrong board is worse than none.
+  const cliBoard = data?.task?.board || board || ''
+  const cliCommand = cliBoard
+    ? `hermes kanban --board ${cliBoard} show ${shownId}`
+    : `hermes kanban show ${shownId}`
 
   const inner = [
     jsx(ResizeHandle, {
@@ -2309,7 +2319,37 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
         i18n,
         onClose: () => setMoveBoardOpen(false),
         onMove: toBoard => moveMutation.mutateAsync(toBoard)
-      })
+      }),
+    // No CLI block in the docked panel: a command has to stay readable, and that panel
+    // is narrow by design. The drawer (overlay) and the modal both have the room.
+    docked ? null : jsxs('div', { className: 'flex flex-col gap-1', children: [
+      jsx('div', {
+        className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)',
+        children: i18n.cli
+      }),
+      jsx('div', { className: 'flex items-start gap-1.5', children: [
+        // `select-all` because a command is read by selecting it: the copy button is a
+        // convenience, not the only way, and a partial selection here is never what
+        // anyone wanted.
+        jsx('code', {
+          className: 'flex-1 min-w-0 select-all break-all rounded border border-(--ui-stroke-tertiary) bg-(--ui-bg-subtle, transparent) px-1.5 py-1 font-mono text-[10.5px] text-(--ui-text-secondary)',
+          children: cliCommand
+        }),
+        jsx('button', {
+          type: 'button',
+          className: 'shrink-0 rounded border border-(--ui-stroke-tertiary) bg-transparent px-1.5 py-1 text-[10.5px] text-(--ui-text-secondary) cursor-pointer hover:bg-(--chrome-action-hover)',
+          title: i18n.copyCommand,
+          'aria-label': i18n.copyCommand,
+          onClick: () => {
+            void navigator.clipboard.writeText(cliCommand)
+            setCliCopied(true)
+            // Self-disarming label: a "copied" that stays says nothing about the next copy.
+            window.setTimeout(() => setCliCopied(false), 2000)
+          },
+          children: cliCopied ? i18n.copied : '⧉'
+        })
+      ] })
+    ] })
   ]
 
   // The panel, as it has always been: docked beside the gantt or overlaying it.
