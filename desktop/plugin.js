@@ -3437,19 +3437,21 @@ function FilterDropdown({
     ]
   });
 }
-function Legend({ disabledStatuses, onToggleStatus }) {
+function Legend({ disabledStatuses, onToggleStatus, scope, onScopeChange }) {
   const i18n = useGanttI18n();
+  const scopeLabel = { "running-lineage": i18n.graphScopeRunning, open: i18n.graphScopeOpen, all: i18n.graphScopeAll };
   const item = (statusKey, color, txt) => {
-    const isExcluded = disabledStatuses ? disabledStatuses.has(statusKey) : false;
+    const byScope = scope === "open" && (statusKey === "done" || statusKey === "archived");
+    const isExcluded = byScope || (disabledStatuses ? disabledStatuses.has(statusKey) : false);
     const label = i18n.col?.[statusKey] || txt;
     return jsxs6("button", {
       type: "button",
-      onClick: onToggleStatus ? () => onToggleStatus(statusKey) : void 0,
+      onClick: byScope ? () => onScopeChange && onScopeChange("all") : onToggleStatus ? () => onToggleStatus(statusKey) : void 0,
       className: cn3(
         "inline-flex items-center gap-1.5 text-[10px] cursor-pointer bg-transparent border-0 p-0 select-none transition-opacity hover:opacity-100",
         isExcluded ? "opacity-40 line-through text-(--ui-text-quaternary)" : "text-(--ui-text-tertiary)"
       ),
-      title: isExcluded ? i18n.legendShow(label) : i18n.legendHide(label),
+      title: byScope ? i18n.scopeHides(scopeLabel[scope]) : isExcluded ? i18n.legendShow(label) : i18n.legendHide(label),
       children: [
         jsx6("div", {
           className: "h-2 w-3 rounded-xs shrink-0",
@@ -6963,7 +6965,12 @@ function KanbanGanttPage() {
           // The legend describes BAR TONES, so it has nothing to say about a board with no
           // rows — and an empty state reads better with only its message and the creation verb.
           derived && rows.length > 0 ? jsx6("div", {
-            children: jsx6(Legend, { disabledStatuses, onToggleStatus: handleToggleStatus })
+            children: jsx6(Legend, {
+              disabledStatuses,
+              onToggleStatus: handleToggleStatus,
+              scope: graphScope,
+              onScopeChange: handleGraphScope
+            })
           }) : null
         ]
       }),

@@ -927,19 +927,26 @@ function FilterDropdown({
   })
 }
 
-function Legend({ disabledStatuses, onToggleStatus }) {
+function Legend({ disabledStatuses, onToggleStatus, scope, onScopeChange }) {
   const i18n = useGanttI18n()
+  const scopeLabel = { 'running-lineage': i18n.graphScopeRunning, open: i18n.graphScopeOpen, all: i18n.graphScopeAll }
   const item = (statusKey, color, txt) => {
-    const isExcluded = disabledStatuses ? disabledStatuses.has(statusKey) : false
+    // Two ways a status can be out of the picture: the reader unchecked it, or the scope rules
+    // it out. Both must read the same at the bottom of the chart — a legend that keeps "Done"
+    // solid while no done task can appear is describing a view nobody is looking at.
+    const byScope = scope === 'open' && (statusKey === 'done' || statusKey === 'archived')
+    const isExcluded = byScope || (disabledStatuses ? disabledStatuses.has(statusKey) : false)
     const label = i18n.col?.[statusKey] || txt
     return jsxs('button', {
       type: 'button',
-      onClick: onToggleStatus ? () => onToggleStatus(statusKey) : undefined,
+      onClick: byScope
+        ? () => onScopeChange && onScopeChange('all')
+        : onToggleStatus ? () => onToggleStatus(statusKey) : undefined,
       className: cn(
         'inline-flex items-center gap-1.5 text-[10px] cursor-pointer bg-transparent border-0 p-0 select-none transition-opacity hover:opacity-100',
         isExcluded ? 'opacity-40 line-through text-(--ui-text-quaternary)' : 'text-(--ui-text-tertiary)'
       ),
-      title: isExcluded ? i18n.legendShow(label) : i18n.legendHide(label),
+      title: byScope ? i18n.scopeHides(scopeLabel[scope]) : isExcluded ? i18n.legendShow(label) : i18n.legendHide(label),
       children: [
         jsx('div', {
           className: 'h-2 w-3 rounded-xs shrink-0',
@@ -5088,7 +5095,12 @@ export function KanbanGanttPage() {
       // rows — and an empty state reads better with only its message and the creation verb.
       derived && rows.length > 0
         ? jsx('div', {
-            children: jsx(Legend, { disabledStatuses, onToggleStatus: handleToggleStatus })
+            children: jsx(Legend, {
+              disabledStatuses,
+              onToggleStatus: handleToggleStatus,
+              scope: graphScope,
+              onScopeChange: handleGraphScope
+            })
           })
         : null
         ]
