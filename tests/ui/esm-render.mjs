@@ -470,7 +470,7 @@ if (typeof pluginModule.GraphView === 'function') {
     'the graph draws one arrow per parent→child link (two links on a chain of three)')
   // Node anatomy: the status stripe, the paperclip with its count, and the profile initials
   // avatar are what our rows show and a kanban-graph card does not.
-  check(all.includes('3px solid'), 'each node carries its status stripe')
+  check(all.includes('5px solid'), 'each node carries its status stripe, in its status tone')
   check(all.includes('0.85rem') && all.includes('dev'), 'the node shows the assignee avatar (initials)')
   // No activity band on the cards: it was a 7 px strip that said nothing a reader could act on,
   // and removing it is what let the title grow a notch.

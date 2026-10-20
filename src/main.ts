@@ -1572,8 +1572,9 @@ export function GraphView({
                   borderColor: isSelected ? 'var(--ui-accent)' : undefined,
                   boxShadow: isSelected ? '0 0 0 1px var(--ui-accent)' : undefined,
                   // A left edge in the status tone: the stripe kanban-graph has, and the
-                  // cheapest way to read a board of 60 nodes at a glance.
-                  borderLeft: `3px solid ${tone}`
+                  // cheapest way to read a board of 60 nodes at a glance. 5 px, because at 3 it
+                  // read as a rendering artefact rather than as a colour code.
+                  borderLeft: `5px solid ${tone}`
                 },
                 draggable: Boolean(onDragStart),
                 title: `${node.title} (${node.id})${node.assignee ? ` — ${node.assignee}` : ''}`,
@@ -1631,8 +1632,12 @@ export function GraphView({
                       jsxs('span', {
                         className: cn(
                           'min-w-0 flex-1 leading-tight text-(--ui-text-primary)',
-                          tallCards ? 'text-[12px]' : 'text-[11.5px] truncate'
+                          tallCards ? 'text-[13px]' : 'text-[12.5px] truncate'
                         ),
+                        // Weight and size inline: this is the only text in the card that
+                        // matters, and a class the host bundle does not compile would leave it
+                        // exactly as small as it was.
+                        style: { fontWeight: 600 },
                         // Wrapping as inline styles: the host bundle does not ship Tailwind's
                         // line-clamp plugin, and a class that silently does nothing would let
                         // the text overflow the card instead of being cut at three lines.
