@@ -246,6 +246,7 @@ var GANTT_LOCALES = {
     graphDangling: (n) => `${n} link${n > 1 ? "s" : ""} to a task outside this view`,
     graphSparkline: (n) => `Activity over the last ${n} h`,
     graphNoActivity: "No activity in this window",
+    graphTally: (n) => `${n} task${n === 1 ? "" : "s"}`,
     graphFit: "Fit",
     graphFitOn: "Fit — the view keeps framing itself while the pane resizes",
     cardsTall: "Taller cards, full titles",
@@ -497,6 +498,7 @@ var GANTT_LOCALES = {
     graphDangling: (n) => `${n} lien${n > 1 ? "s" : ""} vers une tâche hors de cette vue`,
     graphSparkline: (n) => `Activité sur les ${n} dernières heures`,
     graphNoActivity: "Aucune activité dans cette fenêtre",
+    graphTally: (n) => `${n} tâche${n === 1 ? "" : "s"}`,
     graphFit: "Ajuster",
     graphFitOn: "Ajuster — la vue se recadre toute seule quand le panneau change de taille",
     cardsTall: "Cartes plus hautes, titres entiers",
@@ -747,6 +749,7 @@ var GANTT_LOCALES = {
     graphDangling: (n) => `${n} 条链接指向此视图外的任务`,
     graphSparkline: (n) => `最近 ${n} 小时的活动`,
     graphNoActivity: "此时间窗口内无活动",
+    graphTally: (n) => `${n} 个任务`,
     graphFit: "适应",
     graphFitOn: "适应 —— 面板尺寸变化时自动重新取景",
     cardsTall: "更高的卡片，完整标题",
@@ -2213,7 +2216,6 @@ function MoveUnderDialog({
 // src/core/graph-core.ts
 var NODE_W = 172;
 var NODE_H = 62;
-var SPARK_BAND = 7;
 var NODE_GAP = 14;
 var RANK_GAP = 52;
 var idOf = (ref) => ref && typeof ref === "object" ? ref.id : ref;
@@ -2423,43 +2425,6 @@ function lineage(nodes, edges, id) {
   };
   return { upstream: walk(id, up), downstream: walk(id, down) };
 }
-function activityBuckets(node, now, windowSec, count) {
-  if (Array.isArray(node?.activity) && node.activity.length) {
-    const buckets2 = node.activity.slice(-count).map((v) => Number(v) || 0);
-    const max2 = buckets2.reduce((m, v) => v > m ? v : m, 0);
-    return max2 > 0 ? { buckets: buckets2, max: max2 } : null;
-  }
-  const buckets = new Array(count).fill(0);
-  const start = now - windowSec;
-  const bucketSec = windowSec / count;
-  const stamp = (ts, weight) => {
-    const t = Number(ts);
-    if (!Number.isFinite(t) || t < start) return false;
-    const raw = Math.floor((t - start) / bucketSec);
-    const i = Math.max(0, Math.min(count - 1, raw));
-    buckets[i] += weight;
-    return true;
-  };
-  let touched = false;
-  for (const e of node?.events || []) {
-    if (stamp(e.created_at ?? e.ts, 1)) touched = true;
-  }
-  for (const r of node?.runs || []) {
-    if (stamp(r.started_at, 1)) touched = true;
-    if (r.ended_at && stamp(r.ended_at, 1)) touched = true;
-  }
-  if (!touched) return null;
-  const max = buckets.reduce((m, v) => v > m ? v : m, 0);
-  return { buckets, max };
-}
-function activityMap(nodes, now, windowSec, count) {
-  const out = /* @__PURE__ */ new Map();
-  for (const n of nodes || []) {
-    const series = activityBuckets(n, now, windowSec, count);
-    if (series) out.set(n.id, series);
-  }
-  return out;
-}
 function layoutGraph(nodes, edges, {
   arrangement = "down",
   sortBy = "status",
@@ -2468,7 +2433,7 @@ function layoutGraph(nodes, edges, {
   // interleaved with another board's and each card needing a badge to say where it belongs.
   groupBy = null,
   groupGap = 22,
-  groupHead = 20,
+  groupHead = 38,
   groupPad = 9,
   // `nodeH` exists so the reader can ask for taller cards (two lines of title) without the
   // layout lying about it: the height is a CONSTANT the equations use, not a CSS accident, and
@@ -3442,7 +3407,6 @@ function ViewToggle({ value, onChange }) {
 var GRAPH_ZOOM_MIN = 0.35;
 var GRAPH_ZOOM_MAX = 2.5;
 var GRAPH_MARGIN = 28;
-var GRAPH_BUCKETS = 24;
 function GraphView({
   tasks = [],
   i18n,
@@ -3467,8 +3431,7 @@ function GraphView({
   onClearSelection,
   /** Taller cards: the title wraps onto a second line instead of being cut. */
   tallCards = false,
-  sortBy = "status",
-  sparkWindow = 24 * 3600
+  sortBy = "status"
 }) {
   const [pan, setPan] = useState4({ x: 0, y: 0 });
   const [dragging, setDragging] = useState4(null);
@@ -3487,13 +3450,28 @@ function GraphView({
     () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, groupBy: grouping ? (n) => n.board || "" : null }),
     [shown, edges, sortBy, grouping, nodeH, nodeW]
   );
-  const series = useMemo2(() => activityMap(shown, now, sparkWindow, GRAPH_BUCKETS), [shown, now, sparkWindow]);
   const lin = useMemo2(() => {
     if (!selectedId || !shown.some((n) => n.id === selectedId)) return null;
     const { upstream, downstream } = lineage(shown, edges, selectedId);
     return { up: upstream, down: downstream };
   }, [shown, edges, selectedId]);
   const hiddenByScope = nodes.length - shown.length;
+  const groupTally = useMemo2(() => {
+    const out = /* @__PURE__ */ new Map();
+    const ORDER = ["triage", "todo", "scheduled", "ready", "running", "blocked", "review", "done", "archived"];
+    for (const n of shown) {
+      const key = n.board || "";
+      if (!out.has(key)) out.set(key, { total: 0, counts: /* @__PURE__ */ new Map() });
+      const entry = out.get(key);
+      entry.total++;
+      const st = n.status || "todo";
+      entry.counts.set(st, (entry.counts.get(st) || 0) + 1);
+    }
+    return new Map([...out].map(([key, e]) => [key, {
+      total: e.total,
+      parts: ORDER.filter((st) => e.counts.has(st)).map((st) => `${e.counts.get(st)} ${i18n.col && i18n.col[st] || st}`)
+    }]));
+  }, [shown, i18n]);
   const selectedBoard = useMemo2(() => {
     if (!selectedId) return null;
     const n = shown.find((x) => x.id === selectedId);
@@ -3634,25 +3612,6 @@ function GraphView({
       })
     });
   }
-  const sparkline = (node) => {
-    const s = series.get(node.id);
-    if (!s) return null;
-    const tone = statusTone(node.status);
-    return jsx6("div", {
-      className: "absolute inset-x-0 bottom-0 flex items-end gap-px px-0.5",
-      style: { height: `${SPARK_BAND}px`, borderTop: `1px solid ${tone}33` },
-      title: i18n.graphSparkline(Math.round(sparkWindow / 3600)),
-      children: s.buckets.map((v, i) => jsx6("span", {
-        key: i,
-        className: "flex-1 rounded-t-[1px]",
-        style: {
-          height: v > 0 ? `${Math.max(18, Math.round(v / s.max * 100))}%` : "0%",
-          background: tone,
-          opacity: node.status === "running" && i === s.buckets.length - 1 ? 1 : 0.65
-        }
-      }))
-    });
-  };
   const edgePath = (e) => {
     const mid = (e.y1 + e.y2) / 2;
     return `M ${e.x1} ${e.y1} C ${e.x1} ${mid}, ${e.x2} ${mid}, ${e.x2} ${e.y2}`;
@@ -3699,12 +3658,22 @@ function GraphView({
                 backgroundColor: g.key === selectedBoard ? "color-mix(in srgb, var(--ui-accent) 7%, transparent)" : "color-mix(in srgb, var(--ui-bg-elevated) 40%, transparent)"
               },
               children: [
-                jsx6("span", {
-                  className: cn3(
-                    "absolute left-1.5 top-0.5 text-[9.5px] uppercase tracking-wide",
-                    g.key === selectedBoard ? "text-(--ui-accent)" : "text-(--ui-text-quaternary)"
-                  ),
-                  children: groupLabel(g.key)
+                jsxs6("div", {
+                  className: "absolute inset-x-2 top-1 flex flex-col gap-0.5 min-w-0",
+                  children: [
+                    jsx6("span", {
+                      className: cn3(
+                        "truncate text-[12px] font-semibold leading-tight",
+                        g.key === selectedBoard ? "text-(--ui-accent)" : "text-(--ui-text-primary)"
+                      ),
+                      // The label as the board is NAMED — no case transform, ever.
+                      children: groupLabel(g.key)
+                    }),
+                    jsx6("span", {
+                      className: "truncate text-[10px] leading-tight text-(--ui-text-tertiary)",
+                      children: [g.key, i18n.graphTally(groupTally.get(g.key)?.total || 0)].concat(groupTally.get(g.key)?.parts || []).join(" · ")
+                    })
+                  ]
                 })
               ]
             })),
@@ -3808,7 +3777,7 @@ function GraphView({
                       jsxs6("span", {
                         className: cn3(
                           "min-w-0 flex-1 leading-tight text-(--ui-text-primary)",
-                          tallCards ? "text-[11px] line-clamp-3 whitespace-normal break-words" : "text-[10.5px] truncate"
+                          tallCards ? "text-[12px] line-clamp-3 whitespace-normal break-words" : "text-[11.5px] truncate"
                         ),
                         children: [
                           prefix ? jsx6("span", {
@@ -3838,10 +3807,7 @@ function GraphView({
                       }) : null,
                       node.assignee ? jsx6("span", { className: "shrink-0 inline-flex", title: node.assignee, children: jsx6(ProfileAvatar, { name: node.assignee, size: "0.85rem" }) }) : jsx6("span", { className: "shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60", style: { width: "0.7rem", height: "0.7rem" } })
                     ]
-                  }),
-                  // The band comes out of the node's own padding, so the node's height is
-                  // a constant in the layout (SPARK_BAND) and never grows for it.
-                  sparkline(node)
+                  })
                 ]
               });
             })
@@ -3858,9 +3824,6 @@ function GraphView({
           layout.cyclic.length ? jsx6("span", { className: "text-[#f87171]", children: i18n.graphCyclic(layout.cyclic.length) }) : null,
           layout.dangling ? jsx6("span", { children: i18n.graphDangling(layout.dangling) }) : null,
           hiddenByScope ? jsx6("span", { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
-          // Nothing in the window at all: say it once, in words, instead of leaving 40 empty
-          // axes that a reader would take for a broken feature.
-          series.size === 0 ? jsx6("span", { title: i18n.graphNoActivity, children: i18n.graphNoActivityWindow(Math.round(sparkWindow / 3600)) }) : null,
           jsx6("span", { className: "ml-auto tabular-nums", children: `${shown.length}/${nodes.length}` }),
           // The camera, where the counts are: Fit is the one camera action a clipped first
           // view makes necessary, and it is kanban-graph's `0`.
@@ -5873,12 +5836,10 @@ function KanbanGanttPage() {
                   jsx6(ViewToggle, { value: viewMode, onChange: handleViewMode }),
                   // In graph mode the period selector has nothing to say (there is no time
                   // axis), so its slot carries the scopes instead — same width, same place.
-                  // Both, in graph mode: the scopes say WHICH tasks, the period says over how
-                  // long the activity band looks back (there is no time axis to slice, but the
-                  // sparkline's window is exactly that). Hiding the period here left the band
-                  // stuck on 24 h.
-                  graphMode ? jsx6(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }) : null,
-                  listMode ? null : jsx6(PeriodSelector, {
+                  // Scopes in graph mode, the period selector in the timeline: a graph has no time
+                  // axis to slice, and since the activity band is gone there is nothing left for a
+                  // window to tune.
+                  graphMode ? jsx6(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }) : listMode ? null : jsx6(PeriodSelector, {
                     value: period,
                     onChange: handlePeriod,
                     disabled: false
@@ -6078,8 +6039,7 @@ function KanbanGanttPage() {
             onNewChild: (id) => $newTask.set({ parentId: id }),
             onClearSelection: () => $openTaskId.set(null),
             tallCards: cardsTall,
-            sortBy: "status",
-            sparkWindow: period || 24 * 3600
+            sortBy: "status"
           }) : rows.length === 0 ? jsxs6("div", {
             className: "py-10 flex flex-col items-center gap-3",
             children: [

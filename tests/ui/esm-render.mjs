@@ -472,8 +472,10 @@ if (typeof pluginModule.GraphView === 'function') {
   // avatar are what our rows show and a kanban-graph card does not.
   check(all.includes('3px solid'), 'each node carries its status stripe')
   check(all.includes('0.85rem') && all.includes('dev'), 'the node shows the assignee avatar (initials)')
-  check(all.includes('graphSparkline(24)'), 'the sparkline is drawn from the events, over the period window')
-  check(!all.includes('graphNoActivity'), 'a node with no activity draws no band at all (no empty axis)')
+  // No activity band on the cards: it was a 7 px strip that said nothing a reader could act on,
+  // and removing it is what let the title grow a notch.
+  check(!all.includes('graphSparkline') && !all.includes('graphNoActivity'),
+    'the cards no longer carry the mini activity timeline')
   // Taller cards: the title wraps (line-clamp-2) and the layout was told a taller nodeH, so the
   // boxes grow instead of the text overflowing.
   const tall = JSON.stringify(renderGraph({ tallCards: true }))

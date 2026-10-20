@@ -256,7 +256,7 @@ function layoutGraph(nodes, edges, {
   // interleaved with another board's and each card needing a badge to say where it belongs.
   groupBy = null,
   groupGap = 22,
-  groupHead = 20,
+  groupHead = 38,
   groupPad = 9,
   // `nodeH` exists so the reader can ask for taller cards (two lines of title) without the
   // layout lying about it: the height is a CONSTANT the equations use, not a CSS accident, and

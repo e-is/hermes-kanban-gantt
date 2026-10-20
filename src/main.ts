@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { graphNodes, graphEdges, layoutGraph, activityMap, lineage, scopeIds, SPARK_BAND, NODE_H, NODE_W } from './core/graph-core.ts'
+import { graphNodes, graphEdges, layoutGraph, lineage, scopeIds, NODE_H, NODE_W } from './core/graph-core.ts'
 import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -1110,10 +1110,6 @@ const GRAPH_ZOOM_MAX = 2.5
 /** Breathing room around the layout, so the first and last nodes are not flush with the
  *  canvas edge (and a selected node's ring is not clipped). */
 const GRAPH_MARGIN = 28
-/** The sparkline's resolution: 24 buckets is one per hour over a day, and stays legible
- *  at the ~7 px band the node reserves for it. */
-const GRAPH_BUCKETS = 24
-
 /**
  * The third view: the dependency structure, not the time.
  *
@@ -1153,8 +1149,7 @@ export function GraphView({
   onClearSelection,
   /** Taller cards: the title wraps onto a second line instead of being cut. */
   tallCards = false,
-  sortBy = 'status',
-  sparkWindow = 24 * 3600
+  sortBy = 'status'
 }) {
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(null)
@@ -1182,7 +1177,6 @@ export function GraphView({
     () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, groupBy: grouping ? n => n.board || '' : null }),
     [shown, edges, sortBy, grouping, nodeH, nodeW]
   )
-  const series = useMemo(() => activityMap(shown, now, sparkWindow, GRAPH_BUCKETS), [shown, now, sparkWindow])
   const lin = useMemo(() => {
     if (!selectedId || !shown.some(n => n.id === selectedId)) return null
     const { upstream, downstream } = lineage(shown, edges, selectedId)
@@ -1192,6 +1186,26 @@ export function GraphView({
   const hiddenByScope = nodes.length - shown.length
   // Which board the selected card belongs to: its frame is lit, so a reader in an all-boards
   // graph sees WHERE they are, not just which card.
+  // What each frame says under its name: the board's own tally, in the board's own vocabulary
+  // ("14 tasks · 5 todo · 1 blocked"), computed from the tasks actually in the graph — a
+  // summary of what is DRAWN, not of what the board holds.
+  const groupTally = useMemo(() => {
+    const out = new Map()
+    const ORDER = ['triage', 'todo', 'scheduled', 'ready', 'running', 'blocked', 'review', 'done', 'archived']
+    for (const n of shown) {
+      const key = n.board || ''
+      if (!out.has(key)) out.set(key, { total: 0, counts: new Map() })
+      const entry = out.get(key)
+      entry.total++
+      const st = n.status || 'todo'
+      entry.counts.set(st, (entry.counts.get(st) || 0) + 1)
+    }
+    return new Map([...out].map(([key, e]) => [key, {
+      total: e.total,
+      parts: ORDER.filter(st => e.counts.has(st)).map(st => `${e.counts.get(st)} ${(i18n.col && i18n.col[st]) || st}`)
+    }]))
+  }, [shown, i18n])
+
   const selectedBoard = useMemo(() => {
     if (!selectedId) return null
     const n = shown.find(x => x.id === selectedId)
@@ -1376,28 +1390,6 @@ export function GraphView({
     })
   }
 
-  const sparkline = node => {
-    const s = series.get(node.id)
-    // No activity, nothing drawn: an empty axis on every card of a quiet board was noise, and
-    // it competed with the border. "Touched, then silent" still shows its bars on the left.
-    if (!s) return null
-    const tone = statusTone(node.status)
-    return jsx('div', {
-      className: 'absolute inset-x-0 bottom-0 flex items-end gap-px px-0.5',
-      style: { height: `${SPARK_BAND}px`, borderTop: `1px solid ${tone}33` },
-      title: i18n.graphSparkline(Math.round(sparkWindow / 3600)),
-      children: s.buckets.map((v, i) => jsx('span', {
-        key: i,
-        className: 'flex-1 rounded-t-[1px]',
-        style: {
-          height: v > 0 ? `${Math.max(18, Math.round((v / s.max) * 100))}%` : '0%',
-          background: tone,
-          opacity: node.status === 'running' && i === s.buckets.length - 1 ? 1 : 0.65
-        }
-      }))
-    })
-  }
-
   const edgePath = e => {
     const mid = (e.y1 + e.y2) / 2
     return `M ${e.x1} ${e.y1} C ${e.x1} ${mid}, ${e.x2} ${mid}, ${e.x2} ${e.y2}`
@@ -1447,12 +1439,24 @@ export function GraphView({
                   : 'color-mix(in srgb, var(--ui-bg-elevated) 40%, transparent)'
               },
               children: [
-                jsx('span', {
-                  className: cn(
-                    'absolute left-1.5 top-0.5 text-[9.5px] uppercase tracking-wide',
-                    g.key === selectedBoard ? 'text-(--ui-accent)' : 'text-(--ui-text-quaternary)'
-                  ),
-                  children: groupLabel(g.key)
+                jsxs('div', {
+                  className: 'absolute inset-x-2 top-1 flex flex-col gap-0.5 min-w-0',
+                  children: [
+                    jsx('span', {
+                      className: cn(
+                        'truncate text-[12px] font-semibold leading-tight',
+                        g.key === selectedBoard ? 'text-(--ui-accent)' : 'text-(--ui-text-primary)'
+                      ),
+                      // The label as the board is NAMED — no case transform, ever.
+                      children: groupLabel(g.key)
+                    }),
+                    jsx('span', {
+                      className: 'truncate text-[10px] leading-tight text-(--ui-text-tertiary)',
+                      children: [g.key, i18n.graphTally(groupTally.get(g.key)?.total || 0)]
+                        .concat(groupTally.get(g.key)?.parts || [])
+                        .join(' · ')
+                    })
+                  ]
                 })
               ]
             })),
@@ -1554,8 +1558,8 @@ export function GraphView({
                         className: cn(
                           'min-w-0 flex-1 leading-tight text-(--ui-text-primary)',
                           tallCards
-                            ? 'text-[11px] line-clamp-3 whitespace-normal break-words'
-                            : 'text-[10.5px] truncate'
+                            ? 'text-[12px] line-clamp-3 whitespace-normal break-words'
+                            : 'text-[11.5px] truncate'
                         ),
                         children: [
                           prefix ? jsx('span', {
@@ -1596,9 +1600,6 @@ export function GraphView({
                         : jsx('span', { className: 'shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60', style: { width: '0.7rem', height: '0.7rem' } })
                     ]
                   }),
-                  // The band comes out of the node's own padding, so the node's height is
-                  // a constant in the layout (SPARK_BAND) and never grows for it.
-                  sparkline(node)
                 ]
               })
             })
@@ -1615,11 +1616,6 @@ export function GraphView({
           layout.cyclic.length ? jsx('span', { className: 'text-[#f87171]', children: i18n.graphCyclic(layout.cyclic.length) }) : null,
           layout.dangling ? jsx('span', { children: i18n.graphDangling(layout.dangling) }) : null,
           hiddenByScope ? jsx('span', { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
-          // Nothing in the window at all: say it once, in words, instead of leaving 40 empty
-          // axes that a reader would take for a broken feature.
-          series.size === 0
-            ? jsx('span', { title: i18n.graphNoActivity, children: i18n.graphNoActivityWindow(Math.round(sparkWindow / 3600)) })
-            : null,
           jsx('span', { className: 'ml-auto tabular-nums', children: `${shown.length}/${nodes.length}` }),
           // The camera, where the counts are: Fit is the one camera action a clipped first
           // view makes necessary, and it is kanban-graph's `0`.
@@ -4041,16 +4037,16 @@ export function KanbanGanttPage() {
               jsx(ViewToggle, { value: viewMode, onChange: handleViewMode }),
               // In graph mode the period selector has nothing to say (there is no time
               // axis), so its slot carries the scopes instead — same width, same place.
-              // Both, in graph mode: the scopes say WHICH tasks, the period says over how
-              // long the activity band looks back (there is no time axis to slice, but the
-              // sparkline's window is exactly that). Hiding the period here left the band
-              // stuck on 24 h.
-              graphMode ? jsx(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }) : null,
-              listMode ? null : jsx(PeriodSelector, {
-                value: period,
-                onChange: handlePeriod,
-                disabled: false
-              }),
+              // Scopes in graph mode, the period selector in the timeline: a graph has no time
+              // axis to slice, and since the activity band is gone there is nothing left for a
+              // window to tune.
+              graphMode
+                ? jsx(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope })
+                : listMode ? null : jsx(PeriodSelector, {
+                    value: period,
+                    onChange: handlePeriod,
+                    disabled: false
+                  }),
               listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {
                   type: 'range',
@@ -4260,8 +4256,7 @@ export function KanbanGanttPage() {
             onNewChild: id => $newTask.set({ parentId: id }),
             onClearSelection: () => $openTaskId.set(null),
             tallCards: cardsTall,
-            sortBy: 'status',
-            sparkWindow: period || 24 * 3600
+            sortBy: 'status'
           })
         : rows.length === 0
         ? jsxs('div', {
