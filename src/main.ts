@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { graphNodes, graphEdges, layoutGraph, activityMap, lineage, scopeIds, SPARK_BAND, NODE_H } from './core/graph-core.ts'
+import { graphNodes, graphEdges, layoutGraph, activityMap, lineage, scopeIds, SPARK_BAND, NODE_H, NODE_W } from './core/graph-core.ts'
 import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -1173,10 +1173,14 @@ export function GraphView({
   // framed, contiguous block with its name at the top-left — the shape kanban-graph uses, and
   // the only one where "where does this board end?" is answerable at a glance.
   const grouping = showBoardBadge
-  const nodeH = tallCards ? NODE_H + 20 : NODE_H
+  // Three wrapped lines need a taller AND wider card; 40 more pixels of width is roughly ten
+  // more characters per line, which is what turns "Draft the rollout with screenshot…" into
+  // the whole sentence.
+  const nodeH = tallCards ? NODE_H + 34 : NODE_H
+  const nodeW = tallCards ? NODE_W + 48 : NODE_W
   const layout = useMemo(
-    () => layoutGraph(shown, edges, { sortBy, nodeH, groupBy: grouping ? n => n.board || '' : null }),
-    [shown, edges, sortBy, grouping, nodeH]
+    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, groupBy: grouping ? n => n.board || '' : null }),
+    [shown, edges, sortBy, grouping, nodeH, nodeW]
   )
   const series = useMemo(() => activityMap(shown, now, sparkWindow, GRAPH_BUCKETS), [shown, now, sparkWindow])
   const lin = useMemo(() => {
@@ -1223,7 +1227,14 @@ export function GraphView({
       autoFitRef.current = true
     }
     if (onZoom) onZoom(pct)
-    setPan({ x: GRAPH_MARGIN / 2, y: GRAPH_MARGIN / 2 })
+    // Centre what is left of the pane: a fitted graph pinned to the top-left corner looks like
+    // it forgot to finish the job, and every reading gesture starts from the middle.
+    const w = (layout.width + GRAPH_MARGIN * 2) * pct
+    const h = (layout.height + GRAPH_MARGIN * 2) * pct
+    setPan({
+      x: Math.max(GRAPH_MARGIN / 2, (rect.width - w) / 2),
+      y: Math.max(GRAPH_MARGIN / 2, (rect.height - h) / 2)
+    })
   }
   // A zoom the view did not produce itself means the reader took the camera: leave the mode.
   useEffect(() => {
@@ -1543,7 +1554,7 @@ export function GraphView({
                         className: cn(
                           'min-w-0 flex-1 leading-tight text-(--ui-text-primary)',
                           tallCards
-                            ? 'text-[11px] line-clamp-2 whitespace-normal break-words'
+                            ? 'text-[11px] line-clamp-3 whitespace-normal break-words'
                             : 'text-[10.5px] truncate'
                         ),
                         children: [

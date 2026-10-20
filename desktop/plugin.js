@@ -2473,16 +2473,19 @@ function layoutGraph(nodes, edges, {
   // `nodeH` exists so the reader can ask for taller cards (two lines of title) without the
   // layout lying about it: the height is a CONSTANT the equations use, not a CSS accident, and
   // it has to travel through the rank spacing as well as the boxes.
-  nodeH = NODE_H
+  nodeH = NODE_H,
+  // Same reasoning as `nodeH` for the width: a caller that wants three lines of title needs a
+  // wider card, and the equations (rank centring, gaps) have to know it.
+  nodeW = NODE_W
 } = {}) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, title: n } : n);
   const keys = groupBy ? [...new Set(list.map((n) => groupBy(n)))].filter((k) => k != null && k !== "") : [];
   if (keys.length <= 1) {
-    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH), groups: [] };
+    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH, nodeW), groups: [] };
   }
   const blocks = keys.map((key) => ({
     key,
-    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy, nodeH)
+    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy, nodeH, nodeW)
   }));
   const inner = Math.max(...blocks.map((b) => b.block.width));
   const width = inner + groupPad * 2;
@@ -2515,7 +2518,7 @@ function layoutGraph(nodes, edges, {
     truncated: blocks.some((b) => b.block.truncated)
   };
 }
-function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H) {
+function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
   const reduced = reduceEdges(list, es);
@@ -2525,11 +2528,11 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H) {
   const placed = [];
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r];
-    const extent = row.length * (vertical ? NODE_W + NODE_GAP : nodeH + NODE_GAP) - NODE_GAP;
+    const extent = row.length * (vertical ? nodeW + NODE_GAP : nodeH + NODE_GAP) - NODE_GAP;
     let offset = -extent / 2;
     for (const node of row) {
-      const box = vertical ? { id: node.id, x: offset, y: r * (nodeH + RANK_GAP), w: NODE_W, h: nodeH, rank: r } : { id: node.id, x: r * (NODE_W + RANK_GAP), y: offset, w: NODE_W, h: nodeH, rank: r };
-      offset += vertical ? NODE_W + NODE_GAP : nodeH + NODE_GAP;
+      const box = vertical ? { id: node.id, x: offset, y: r * (nodeH + RANK_GAP), w: nodeW, h: nodeH, rank: r } : { id: node.id, x: r * (nodeW + RANK_GAP), y: offset, w: nodeW, h: nodeH, rank: r };
+      offset += vertical ? nodeW + NODE_GAP : nodeH + NODE_GAP;
       boxes.set(node.id, box);
       placed.push(box);
     }
@@ -3478,10 +3481,11 @@ function GraphView({
     return nodes.filter((n) => keep.has(n.id));
   }, [nodes, edges, scope]);
   const grouping = showBoardBadge;
-  const nodeH = tallCards ? NODE_H + 20 : NODE_H;
+  const nodeH = tallCards ? NODE_H + 34 : NODE_H;
+  const nodeW = tallCards ? NODE_W + 48 : NODE_W;
   const layout = useMemo2(
-    () => layoutGraph(shown, edges, { sortBy, nodeH, groupBy: grouping ? (n) => n.board || "" : null }),
-    [shown, edges, sortBy, grouping, nodeH]
+    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, groupBy: grouping ? (n) => n.board || "" : null }),
+    [shown, edges, sortBy, grouping, nodeH, nodeW]
   );
   const series = useMemo2(() => activityMap(shown, now, sparkWindow, GRAPH_BUCKETS), [shown, now, sparkWindow]);
   const lin = useMemo2(() => {
@@ -3518,7 +3522,12 @@ function GraphView({
       autoFitRef.current = true;
     }
     if (onZoom) onZoom(pct);
-    setPan({ x: GRAPH_MARGIN / 2, y: GRAPH_MARGIN / 2 });
+    const w = (layout.width + GRAPH_MARGIN * 2) * pct;
+    const h = (layout.height + GRAPH_MARGIN * 2) * pct;
+    setPan({
+      x: Math.max(GRAPH_MARGIN / 2, (rect.width - w) / 2),
+      y: Math.max(GRAPH_MARGIN / 2, (rect.height - h) / 2)
+    });
   };
   useEffect3(() => {
     if (fitPctRef.current == null) return;
@@ -3799,7 +3808,7 @@ function GraphView({
                       jsxs6("span", {
                         className: cn3(
                           "min-w-0 flex-1 leading-tight text-(--ui-text-primary)",
-                          tallCards ? "text-[11px] line-clamp-2 whitespace-normal break-words" : "text-[10.5px] truncate"
+                          tallCards ? "text-[11px] line-clamp-3 whitespace-normal break-words" : "text-[10.5px] truncate"
                         ),
                         children: [
                           prefix ? jsx6("span", {
