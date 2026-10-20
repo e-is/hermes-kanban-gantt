@@ -248,6 +248,22 @@ function activityMap(nodes, now, windowSec, count) {
   }
   return out;
 }
+function nearestInHalo(rects, x, y, radius, { exclude = null, allowed = null } = {}) {
+  let best = null;
+  let bestD = Infinity;
+  for (const [id, r] of rects) {
+    if (id === exclude) continue;
+    if (allowed && !allowed(id)) continue;
+    const dx = Math.max(r.left - x, 0, x - r.right);
+    const dy = Math.max(r.top - y, 0, y - r.bottom);
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < bestD) {
+      bestD = d;
+      best = id;
+    }
+  }
+  return bestD <= radius ? best : null;
+}
 function layoutGraph(nodes, edges, {
   arrangement = "down",
   sortBy = "status",
@@ -256,8 +272,8 @@ function layoutGraph(nodes, edges, {
   // interleaved with another board's and each card needing a badge to say where it belongs.
   groupBy = null,
   groupGap = 22,
-  groupHead = 38,
-  groupPad = 9,
+  groupHead = 52,
+  groupPad = 12,
   // `nodeH` exists so the reader can ask for taller cards (two lines of title) without the
   // layout lying about it: the height is a CONSTANT the equations use, not a CSS accident, and
   // it has to travel through the rank spacing as well as the boxes.
@@ -392,6 +408,7 @@ export {
   graphNodes,
   layoutGraph,
   lineage,
+  nearestInHalo,
   orderRanks,
   rankComparator,
   ranks,

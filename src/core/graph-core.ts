@@ -371,6 +371,34 @@ export function activityMap(nodes, now, windowSec, count) {
  *  The layout is returned as flat, plain objects: no closures, no per-node functions,
  *  so 2000 nodes cost a few MB and serialize cheaply in a test.
  */
+/**
+ * The nearest box to a point, within a halo.
+ *
+ * Dropping onto a 172 px card at 60 % zoom, with the pointer over the gap between two ranks, is
+ * a game of skill — and a release that misses reads as the feature being broken. So the target
+ * is the nearest card within `radius` of the pointer, measured to the box EDGES (a point inside
+ * a box is at distance 0) rather than to its centre, which would favour small cards.
+ *
+ * `rects` is an iterable of [id, {left, top, right, bottom}]; `allowed` filters the boxes the
+ * drop would refuse (self, descendant, other board, already a parent).
+ */
+export function nearestInHalo(rects, x, y, radius, { exclude = null, allowed = null } = {}) {
+  let best = null;
+  let bestD = Infinity;
+  for (const [id, r] of rects) {
+    if (id === exclude) continue;
+    if (allowed && !allowed(id)) continue;
+    const dx = Math.max(r.left - x, 0, x - r.right);
+    const dy = Math.max(r.top - y, 0, y - r.bottom);
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < bestD) {
+      bestD = d;
+      best = id;
+    }
+  }
+  return bestD <= radius ? best : null;
+}
+
 export function layoutGraph(nodes, edges, {
   arrangement = 'down',
   sortBy = 'status',
@@ -379,8 +407,8 @@ export function layoutGraph(nodes, edges, {
   // interleaved with another board's and each card needing a badge to say where it belongs.
   groupBy = null,
   groupGap = 22,
-  groupHead = 38,
-  groupPad = 9,
+  groupHead = 52,
+  groupPad = 12,
   // `nodeH` exists so the reader can ask for taller cards (two lines of title) without the
   // layout lying about it: the height is a CONSTANT the equations use, not a CSS accident, and
   // it has to travel through the rank spacing as well as the boxes.

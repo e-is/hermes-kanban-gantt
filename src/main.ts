@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { graphNodes, graphEdges, layoutGraph, lineage, scopeIds, NODE_H, NODE_W } from './core/graph-core.ts'
+import { graphNodes, graphEdges, layoutGraph, lineage, scopeIds, nearestInHalo, NODE_H, NODE_W } from './core/graph-core.ts'
 import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -1153,6 +1153,12 @@ export function GraphView({
 }) {
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(null)
+  // Proximity drop: while a card is being dragged, the NEAREST valid card within NEAR_PX is the
+  // target, not just the one under the pointer. Releasing anywhere in that halo links the two —
+  // aiming at a 172 px box, at 60 % zoom, with the pointer over a gap, was a game of skill.
+  const NEAR_PX = 64
+  const [nearTarget, setNearTarget] = useState(null)
+  const dragRects = useRef(new Map())
   const pressedAt = useRef(null)
   const canvasRef = useRef(null)
 
@@ -1413,6 +1419,31 @@ export function GraphView({
         title: i18n.graphHint,
         onKeyDown,
         onPointerDown: onCanvasPointerDown,
+        // Proximity drop lives on the CANVAS, not on the cards: a release that misses a card by
+        // 20 px used to be a release into the void, which read as the feature being broken.
+        onDragOver: event => {
+          if (!onDropOn || !dragId) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'move'
+          const pick = nearestInHalo(dragRects.current, event.clientX, event.clientY, NEAR_PX, {
+            exclude: dragId,
+            allowed: id => !dropMap || (dropMap.get(id) ? dropMap.get(id).allowed : true)
+          })
+          if (pick !== nearTarget) setNearTarget(pick)
+        },
+        onDragLeave: event => {
+          // Only when the pointer really leaves the canvas, not when it crosses a card.
+          if (event.currentTarget.contains(event.relatedTarget)) return
+          setNearTarget(null)
+        },
+        onDrop: event => {
+          if (!onDropOn) return
+          event.preventDefault()
+          const target = nearTarget
+          setNearTarget(null)
+          dragRects.current = new Map()
+          if (target) onDropOn(target)
+        },
         style: { cursor: dragging ? 'grabbing' : 'grab' },
         children: jsxs('div', {
           className: 'absolute origin-top-left',
@@ -1450,7 +1481,8 @@ export function GraphView({
               },
               children: [
                 jsxs('div', {
-                  className: 'absolute inset-x-2 top-1 flex flex-col gap-0.5 min-w-0',
+                  className: 'absolute flex flex-col gap-1 min-w-0',
+                  style: { left: '12px', right: '12px', top: '10px' },
                   children: [
                     jsx('span', {
                       className: cn(
@@ -1483,6 +1515,23 @@ export function GraphView({
                     children: jsx('path', { d: 'M 0 0 L 8 4 L 0 8 z', fill: 'currentColor' })
                   })
                 }),
+                // The link the release would create, drawn from the source card to the card
+                // the pointer is near: the gesture says what it is about to do before it does it.
+                nearTarget && dragId && boxes.get(dragId) && boxes.get(nearTarget)
+                  ? jsx('path', {
+                      d: (() => {
+                        const a = boxes.get(dragId), b = boxes.get(nearTarget)
+                        const m = GRAPH_MARGIN
+                        return `M ${a.x + a.w / 2 + m} ${a.y + a.h / 2 + m} C ${a.x + a.w / 2 + m} ${a.y + a.h + 30 + m}, ${b.x + b.w / 2 + m} ${b.y - 30 + m}, ${b.x + b.w / 2 + m} ${b.y + m}`
+                      })(),
+                      fill: 'none',
+                      stroke: 'var(--ui-accent)',
+                      strokeWidth: 1.6,
+                      strokeDasharray: '4 3',
+                      markerEnd: 'url(#kg-arrow)',
+                      style: { color: 'var(--ui-accent)' }
+                    })
+                  : null,
                 ...layout.edges.map(e => jsx('path', {
                   key: `${e.from}>${e.to}`,
                   d: edgePath({ ...e, x1: e.x1 + GRAPH_MARGIN, y1: e.y1 + GRAPH_MARGIN, x2: e.x2 + GRAPH_MARGIN, y2: e.y2 + GRAPH_MARGIN }),
@@ -1510,7 +1559,8 @@ export function GraphView({
                   'absolute flex flex-col rounded-md border bg-(--ui-bg-elevated) overflow-hidden select-none cursor-pointer',
                   isSelected ? 'border-(--ui-accent)' : 'border-(--ui-stroke-secondary)',
                   drop && drop.allowed ? 'ring-1 ring-(--ui-accent)' : '',
-                  drop && !drop.allowed ? 'ring-1 ring-red-500/60' : ''
+                  drop && !drop.allowed ? 'ring-1 ring-red-500/60' : '',
+                  node.id === nearTarget ? 'ring-2 ring-(--ui-accent)' : ''
                 ),
                 'data-graph-node': node.id,
                 style: {
@@ -1535,9 +1585,23 @@ export function GraphView({
                 onDragStart: event => {
                   event.dataTransfer.setData('text/plain', node.id)
                   event.dataTransfer.effectAllowed = 'move'
+                  // Snapshot the boxes ONCE: dragover fires continuously and reading a rect per
+                  // node per event turns a gesture into a layout storm.
+                  const rects = new Map()
+                  const el = canvasRef.current
+                  if (el) {
+                    for (const n of el.querySelectorAll('[data-graph-node]')) {
+                      rects.set(n.getAttribute('data-graph-node'), n.getBoundingClientRect())
+                    }
+                  }
+                  dragRects.current = rects
                   if (onDragStart) onDragStart(node.id)
                 },
-                onDragEnd: () => onDragEnd && onDragEnd(),
+                onDragEnd: () => {
+                  setNearTarget(null)
+                  dragRects.current = new Map()
+                  if (onDragEnd) onDragEnd()
+                },
                 onDragOver: event => {
                   if (!onDropOn) return
                   event.preventDefault()

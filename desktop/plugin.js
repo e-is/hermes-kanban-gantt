@@ -240,7 +240,7 @@ var GANTT_LOCALES = {
     graphScopeRunning: "Running + lineage",
     graphScopeAria: "Which tasks the graph shows",
     graphZoom: "Graph zoom",
-    graphHint: "Click to open · double-click to add a child · drag a task onto another to re-parent it",
+    graphHint: "Click to open · double-click to add a child · drag a task NEAR another to re-parent it (the nearest one is picked)",
     graphImplied: (n) => `${n} implied link${n > 1 ? "s" : ""} hidden`,
     graphCyclic: (n) => `${n} task${n > 1 ? "s" : ""} in a dependency loop`,
     graphDangling: (n) => `${n} link${n > 1 ? "s" : ""} to a task outside this view`,
@@ -492,7 +492,7 @@ var GANTT_LOCALES = {
     graphScopeRunning: "En cours + lignée",
     graphScopeAria: "Quelles tâches le graphe montre",
     graphZoom: "Zoom du graphe",
-    graphHint: "Clic pour ouvrir · double-clic pour ajouter un enfant · glisser une tâche sur une autre pour la re-parentaliser",
+    graphHint: "Clic pour ouvrir · double-clic pour ajouter un enfant · glisser une tâche À PROXIMITÉ d’une autre pour la re-parentaliser (la plus proche est retenue)",
     graphImplied: (n) => `${n} lien${n > 1 ? "s" : ""} implicite${n > 1 ? "s" : ""} masqué${n > 1 ? "s" : ""}`,
     graphCyclic: (n) => `${n} tâche${n > 1 ? "s" : ""} dans une boucle de dépendance`,
     graphDangling: (n) => `${n} lien${n > 1 ? "s" : ""} vers une tâche hors de cette vue`,
@@ -743,7 +743,7 @@ var GANTT_LOCALES = {
     graphScopeRunning: "进行中 + 血缘",
     graphScopeAria: "关系图显示哪些任务",
     graphZoom: "关系图缩放",
-    graphHint: "单击打开 · 双击添加子任务 · 将一个任务拖到另一个上以更改父任务",
+    graphHint: "单击打开 · 双击添加子任务 · 将任务拖到另一个任务附近即可更改父任务（自动选择最近的一个）",
     graphImplied: (n) => `已隐藏 ${n} 条隐含链接`,
     graphCyclic: (n) => `${n} 个任务处于依赖环中`,
     graphDangling: (n) => `${n} 条链接指向此视图外的任务`,
@@ -2425,6 +2425,22 @@ function lineage(nodes, edges, id) {
   };
   return { upstream: walk(id, up), downstream: walk(id, down) };
 }
+function nearestInHalo(rects, x, y, radius, { exclude = null, allowed = null } = {}) {
+  let best = null;
+  let bestD = Infinity;
+  for (const [id, r] of rects) {
+    if (id === exclude) continue;
+    if (allowed && !allowed(id)) continue;
+    const dx = Math.max(r.left - x, 0, x - r.right);
+    const dy = Math.max(r.top - y, 0, y - r.bottom);
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < bestD) {
+      bestD = d;
+      best = id;
+    }
+  }
+  return bestD <= radius ? best : null;
+}
 function layoutGraph(nodes, edges, {
   arrangement = "down",
   sortBy = "status",
@@ -2433,8 +2449,8 @@ function layoutGraph(nodes, edges, {
   // interleaved with another board's and each card needing a badge to say where it belongs.
   groupBy = null,
   groupGap = 22,
-  groupHead = 38,
-  groupPad = 9,
+  groupHead = 52,
+  groupPad = 12,
   // `nodeH` exists so the reader can ask for taller cards (two lines of title) without the
   // layout lying about it: the height is a CONSTANT the equations use, not a CSS accident, and
   // it has to travel through the rank spacing as well as the boxes.
@@ -3435,6 +3451,9 @@ function GraphView({
 }) {
   const [pan, setPan] = useState4({ x: 0, y: 0 });
   const [dragging, setDragging] = useState4(null);
+  const NEAR_PX = 64;
+  const [nearTarget, setNearTarget] = useState4(null);
+  const dragRects = useRef2(/* @__PURE__ */ new Map());
   const pressedAt = useRef2(null);
   const canvasRef = useRef2(null);
   const nodes = useMemo2(() => graphNodes(tasks), [tasks]);
@@ -3634,6 +3653,30 @@ function GraphView({
         title: i18n.graphHint,
         onKeyDown,
         onPointerDown: onCanvasPointerDown,
+        // Proximity drop lives on the CANVAS, not on the cards: a release that misses a card by
+        // 20 px used to be a release into the void, which read as the feature being broken.
+        onDragOver: (event) => {
+          if (!onDropOn || !dragId) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          const pick = nearestInHalo(dragRects.current, event.clientX, event.clientY, NEAR_PX, {
+            exclude: dragId,
+            allowed: (id) => !dropMap || (dropMap.get(id) ? dropMap.get(id).allowed : true)
+          });
+          if (pick !== nearTarget) setNearTarget(pick);
+        },
+        onDragLeave: (event) => {
+          if (event.currentTarget.contains(event.relatedTarget)) return;
+          setNearTarget(null);
+        },
+        onDrop: (event) => {
+          if (!onDropOn) return;
+          event.preventDefault();
+          const target = nearTarget;
+          setNearTarget(null);
+          dragRects.current = /* @__PURE__ */ new Map();
+          if (target) onDropOn(target);
+        },
         style: { cursor: dragging ? "grabbing" : "grab" },
         children: jsxs6("div", {
           className: "absolute origin-top-left",
@@ -3669,7 +3712,8 @@ function GraphView({
               },
               children: [
                 jsxs6("div", {
-                  className: "absolute inset-x-2 top-1 flex flex-col gap-0.5 min-w-0",
+                  className: "absolute flex flex-col gap-1 min-w-0",
+                  style: { left: "12px", right: "12px", top: "10px" },
                   children: [
                     jsx6("span", {
                       className: cn3(
@@ -3705,6 +3749,21 @@ function GraphView({
                     children: jsx6("path", { d: "M 0 0 L 8 4 L 0 8 z", fill: "currentColor" })
                   })
                 }),
+                // The link the release would create, drawn from the source card to the card
+                // the pointer is near: the gesture says what it is about to do before it does it.
+                nearTarget && dragId && boxes.get(dragId) && boxes.get(nearTarget) ? jsx6("path", {
+                  d: (() => {
+                    const a = boxes.get(dragId), b = boxes.get(nearTarget);
+                    const m = GRAPH_MARGIN;
+                    return `M ${a.x + a.w / 2 + m} ${a.y + a.h / 2 + m} C ${a.x + a.w / 2 + m} ${a.y + a.h + 30 + m}, ${b.x + b.w / 2 + m} ${b.y - 30 + m}, ${b.x + b.w / 2 + m} ${b.y + m}`;
+                  })(),
+                  fill: "none",
+                  stroke: "var(--ui-accent)",
+                  strokeWidth: 1.6,
+                  strokeDasharray: "4 3",
+                  markerEnd: "url(#kg-arrow)",
+                  style: { color: "var(--ui-accent)" }
+                }) : null,
                 ...layout.edges.map((e) => jsx6("path", {
                   key: `${e.from}>${e.to}`,
                   d: edgePath({ ...e, x1: e.x1 + GRAPH_MARGIN, y1: e.y1 + GRAPH_MARGIN, x2: e.x2 + GRAPH_MARGIN, y2: e.y2 + GRAPH_MARGIN }),
@@ -3732,7 +3791,8 @@ function GraphView({
                   "absolute flex flex-col rounded-md border bg-(--ui-bg-elevated) overflow-hidden select-none cursor-pointer",
                   isSelected ? "border-(--ui-accent)" : "border-(--ui-stroke-secondary)",
                   drop && drop.allowed ? "ring-1 ring-(--ui-accent)" : "",
-                  drop && !drop.allowed ? "ring-1 ring-red-500/60" : ""
+                  drop && !drop.allowed ? "ring-1 ring-red-500/60" : "",
+                  node.id === nearTarget ? "ring-2 ring-(--ui-accent)" : ""
                 ),
                 "data-graph-node": node.id,
                 style: {
@@ -3757,9 +3817,21 @@ function GraphView({
                 onDragStart: (event) => {
                   event.dataTransfer.setData("text/plain", node.id);
                   event.dataTransfer.effectAllowed = "move";
+                  const rects = /* @__PURE__ */ new Map();
+                  const el = canvasRef.current;
+                  if (el) {
+                    for (const n of el.querySelectorAll("[data-graph-node]")) {
+                      rects.set(n.getAttribute("data-graph-node"), n.getBoundingClientRect());
+                    }
+                  }
+                  dragRects.current = rects;
                   if (onDragStart) onDragStart(node.id);
                 },
-                onDragEnd: () => onDragEnd && onDragEnd(),
+                onDragEnd: () => {
+                  setNearTarget(null);
+                  dragRects.current = /* @__PURE__ */ new Map();
+                  if (onDragEnd) onDragEnd();
+                },
                 onDragOver: (event) => {
                   if (!onDropOn) return;
                   event.preventDefault();

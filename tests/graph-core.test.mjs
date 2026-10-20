@@ -23,7 +23,7 @@ const core = await import(join(HERE, '..', 'desktop', 'graph-core.js'))
 const {
   graphNodes, graphEdges, dedupeEdges, edgesWithin, ranks, orderRanks, rankComparator,
   reduceEdges, lineage, activityBuckets, activityMap, layoutGraph, scopeIds, SCOPES,
-  NODE_W, NODE_H, SPARK_BAND
+  nearestInHalo, NODE_W, NODE_H, SPARK_BAND
 } = core
 
 const H = 3600
@@ -486,4 +486,30 @@ test('Running + lineage keeps the running tasks AND their whole lineage', () => 
 test('Running + lineage on a board with nothing running keeps nothing (an honest empty state)', () => {
   const nodes = [{ id: 'a', status: 'todo' }, { id: 'b', status: 'done' }]
   assert.equal(scopeIds(nodes, [], 'running-lineage').size, 0)
+})
+
+test('nearestInHalo: the nearest card within the halo, measured to the edges', () => {
+  const rects = new Map([
+    ['a', { left: 0, top: 0, right: 100, bottom: 60 }],
+    ['b', { left: 300, top: 0, right: 400, bottom: 60 }]
+  ])
+  // A pointer inside a box is on it, whatever the distance to its centre.
+  assert.equal(nearestInHalo(rects, 90, 55, 40), 'a')
+  // 20 px past its right edge: still inside the halo.
+  assert.equal(nearestInHalo(rects, 120, 30, 40), 'a')
+  // Halfway between the two but beyond the halo: nothing, and the drop does nothing.
+  assert.equal(nearestInHalo(rects, 200, 30, 40), null)
+  // Inside the halo of both: the nearer one wins.
+  assert.equal(nearestInHalo(rects, 285, 30, 120), 'b')
+})
+
+test('nearestInHalo: the dragged card and the refused cards are not targets', () => {
+  const rects = new Map([
+    ['a', { left: 0, top: 0, right: 100, bottom: 60 }],
+    ['b', { left: 120, top: 0, right: 220, bottom: 60 }],
+    ['c', { left: 240, top: 0, right: 340, bottom: 60 }]
+  ])
+  assert.equal(nearestInHalo(rects, 110, 30, 400, { exclude: 'a' }), 'b')
+  assert.equal(nearestInHalo(rects, 110, 30, 400, { allowed: id => id !== 'b' }), 'a')
+  assert.equal(nearestInHalo(rects, 110, 30, 5), null)
 })
