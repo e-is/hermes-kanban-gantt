@@ -407,6 +407,14 @@ if (pageNode) {
 
   check(flat.includes('"area":"workspace.pageHeader"') || flat.includes('"area": "workspace.pageHeader"'), 'page projects its switcher into WORKSPACE_PAGE_HEADER_AREA')
 
+  // Board tabs: the strip is a tablist, and its "+" is the only way to open a second board
+  // without leaving the page (the harness's effects are no-ops, so the open set is empty and
+  // the strip shows the affordance alone — which is exactly the point: it is always there).
+  check(flat.includes('"role":"tablist"'), 'the page declares the board tab strip')
+  check(flat.includes('"aria-label":"openBoard"'), 'the strip carries the "open another board" affordance')
+  check(typeof pluginModule.KanbanGanttRoute === 'function',
+    'the route mounts one page instance per board (per-board preferences need the remount)')
+
   // -------------------------------------------------------------------------
   // The dedicated attachment column, in list view. The page reads its view mode through the
   // storage door, so flipping that door renders the other view — no need to reach into state.

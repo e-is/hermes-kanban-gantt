@@ -60,6 +60,7 @@ var LABEL_W_MIN = 160;
 var LABEL_W_MAX = 640;
 var DRAWER_W_MIN = 320;
 var DRAWER_W_MAX = 720;
+var $openBoards = atom([]);
 var $openTaskId = atom(null);
 var $newTask = atom(null);
 var $wsEnabled = atom(false);
@@ -246,6 +247,10 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `Activity over the last ${n} h`,
     graphNoActivity: "No activity in this window",
     graphFit: "Fit",
+    openBoard: "Open another board",
+    closeBoard: "Close this board tab",
+    noOtherBoards: "Every board is already open",
+    boardsTabs: "Open boards",
     graphNoActivityWindow: (n) => `No activity in the last ${n} h — the band lights up as soon as there is some`,
     graphHiddenByScope: (n) => `${n} task${n > 1 ? "s" : ""} hidden by this scope`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
@@ -490,6 +495,10 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `Activité sur les ${n} dernières heures`,
     graphNoActivity: "Aucune activité dans cette fenêtre",
     graphFit: "Ajuster",
+    openBoard: "Ouvrir un autre board",
+    closeBoard: "Fermer cet onglet de board",
+    noOtherBoards: "Tous les boards sont déjà ouverts",
+    boardsTabs: "Boards ouverts",
     graphNoActivityWindow: (n) => `Aucune activité sur les ${n} dernières heures — la bande s'allume dès qu'il y en a`,
     graphHiddenByScope: (n) => `${n} tâche${n > 1 ? "s" : ""} masquée${n > 1 ? "s" : ""} par ce filtre`,
     // Suffixes concaténés au nombre (« 5min », « 2 j »… l'espace est inclus).
@@ -733,6 +742,10 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `最近 ${n} 小时的活动`,
     graphNoActivity: "此时间窗口内无活动",
     graphFit: "适应",
+    openBoard: "打开另一个看板",
+    closeBoard: "关闭此看板标签页",
+    noOtherBoards: "所有看板均已打开",
+    boardsTabs: "已打开的看板",
     graphNoActivityWindow: (n) => `最近 ${n} 小时内无活动 —— 一旦有活动该条带就会亮起`,
     graphHiddenByScope: (n) => `此筛选隐藏了 ${n} 个任务`,
     relativeUnits: { now: "刚刚", m: "分", h: "小时", d: "天", w: "周", mo: "个月", y: "年" },
@@ -2544,6 +2557,10 @@ function connectionScope() {
 function boardStorageKey() {
   const scope = connectionScope();
   return scope ? `${BOARD_KEY}.${scope}` : BOARD_KEY;
+}
+function openBoardsKey() {
+  const scope = connectionScope();
+  return scope ? `openBoards.${scope}` : "openBoards";
 }
 function readStoredBoard(storage2) {
   if (!storage2) return "";
@@ -4956,6 +4973,10 @@ function modifierKeyLabel() {
   const platform = typeof navigator === "undefined" ? "" : String(navigator.platform || navigator.userAgent || "");
   return /mac/i.test(platform) ? "⌘" : "Ctrl";
 }
+function KanbanGanttRoute() {
+  const board = useValue2($boardSlug);
+  return jsx6(KanbanGanttPage, { key: board || "none" });
+}
 function KanbanGanttPage() {
   const i18n = useGanttI18n();
   const queryClient = useQueryClient2();
@@ -5060,14 +5081,25 @@ function KanbanGanttPage() {
   const [selectedIds, setSelectedIds] = useState4(() => /* @__PURE__ */ new Set());
   const [bulkAssignee, setBulkAssignee] = useState4("");
   const lastCheckedIdRef = useRef2(null);
+  const prefKey = (k) => board ? `${k}@${board}` : k;
+  const readPref = (k, fallback = null) => {
+    const s = getStorage();
+    if (!s) return fallback;
+    const scoped = s.get(prefKey(k), null);
+    return scoped == null ? s.get(k, fallback) : scoped;
+  };
+  const writePref = (k, v) => {
+    const s = getStorage();
+    if (s) s.set(prefKey(k), v);
+  };
   const [viewMode, setViewMode] = useState4(() => {
-    const saved = getStorage() ? getStorage().get("viewMode", null) : null;
+    const saved = readPref("viewMode");
     return saved === "list" || saved === "graph" ? saved : "timeline";
   });
   const graphMode = viewMode === "graph";
   const [graphZoomPct, setGraphZoomPct] = useState4(() => {
     const s = getStorage();
-    const saved = Number(s ? s.get("graphZoomPct", null) : null);
+    const saved = Number(readPref("graphZoomPct"));
     const lo = Math.round(GRAPH_ZOOM_MIN * 100);
     const hi = Math.round(GRAPH_ZOOM_MAX * 100);
     return Number.isFinite(saved) && saved >= lo && saved <= hi ? saved : 100;
@@ -5077,37 +5109,33 @@ function KanbanGanttPage() {
     const hi = Math.round(GRAPH_ZOOM_MAX * 100);
     const clamped = Math.min(hi, Math.max(lo, Math.round(next)));
     setGraphZoomPct(clamped);
-    const s = getStorage();
-    if (s) s.set("graphZoomPct", String(clamped));
+    writePref("graphZoomPct", String(clamped));
   };
   const [graphScope, setGraphScope] = useState4(() => {
-    const s = getStorage() ? getStorage().get("graphScope", null) : null;
+    const s = readPref("graphScope");
     return ["all", "open", "running-lineage"].includes(s) ? s : "all";
   });
   const handleGraphScope = (next) => {
     setGraphScope(next);
-    const s = getStorage();
-    if (s) s.set("graphScope", next);
+    writePref("graphScope", next);
   };
   const [period, setPeriod] = useState4(() => {
-    const s = getStorage();
-    if (!s) return null;
-    const span = Number(s.get("period", null));
+    const span = Number(readPref("period"));
     if (!(span > 0)) return null;
-    const zoom = Number(s.get("zoomPct", null));
-    const calibrated = Number(s.get("periodZoomPct", null));
+    const zoom = Number(readPref("zoomPct"));
+    const calibrated = Number(readPref("periodZoomPct"));
     if (!(zoom > 0) || !(calibrated > 0)) return null;
     return Math.abs(zoom - calibrated) / calibrated <= 0.25 ? span : null;
   });
   const listMode = viewMode === "list";
   const handleViewMode = (mode) => {
     setViewMode(mode);
-    if (getStorage()) getStorage().set("viewMode", mode);
+    writePref("viewMode", mode);
   };
   const [zoomPct, setZoomPct] = useState4(() => {
     const s = getStorage();
     if (!s) return ZOOM_PCT_MIN;
-    const pct = s.get("zoomPct", null);
+    const pct = readPref("zoomPct");
     if (pct != null) return clampZoomPct(pct);
     const legacy = Number(s.get("zoom", null));
     if (!Number.isFinite(legacy) || legacy <= 0) return ZOOM_PCT_MIN;
@@ -5316,7 +5344,7 @@ function KanbanGanttPage() {
   const handleZoomPct = (val) => {
     const next = clampZoomPct(val);
     setZoomPct(next);
-    if (getStorage()) getStorage().set("zoomPct", next);
+    writePref("zoomPct", next);
     if (zoomWatch.current && !calibrating.current) zoomWatch.current(next);
   };
   const titlePrefixTags = useValue2($titlePrefixTags);
@@ -5330,11 +5358,45 @@ function KanbanGanttPage() {
     const saved = s.get("titlePrefixTags", null);
     if (saved != null) $titlePrefixTags.set(saved === true || saved === "1");
   }, []);
+  const openTabs = useValue2($openBoards);
+  const persistTabs = (list) => {
+    $openBoards.set(list);
+    const s = getStorage();
+    if (s) s.set(openBoardsKey(), JSON.stringify(list));
+  };
+  const openBoardInTabs = (slug) => {
+    const list = $openBoards.get();
+    if (!slug || list.includes(slug)) return;
+    persistTabs([...list, slug]);
+  };
+  const closeBoardTab = (slug) => {
+    const list = $openBoards.get();
+    const next = list.filter((b) => b !== slug);
+    if (!next.length) return;
+    persistTabs(next);
+    if (slug === board) setBoard(next[next.length - 1]);
+  };
+  useEffect3(() => {
+    const s = getStorage();
+    let list = [];
+    if (s) {
+      const raw = s.get(openBoardsKey(), null);
+      try {
+        const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (Array.isArray(parsed)) list = parsed.filter((x) => typeof x === "string" && x);
+      } catch {
+        list = [];
+      }
+    }
+    if (board && !list.includes(board)) list = [...list, board];
+    if (list.join("|") !== $openBoards.get().join("|")) $openBoards.set(list);
+  }, []);
   const setBoard = (slug) => {
     $boardSlug.set(slug);
     if (getStorage()) getStorage().set(boardStorageKey(), slug);
     setSearch("");
     void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
+    if (slug) openBoardInTabs(slug);
   };
   useEffect3(() => {
     const list = boardsData?.boards;
@@ -5495,8 +5557,7 @@ function KanbanGanttPage() {
       handleZoomPct(next);
       calibrating.current = false;
     }
-    const s = getStorage();
-    if (s) s.set("periodZoomPct", next);
+    writePref("periodZoomPct", next);
   }, [period, labelW, trackW, basePerSec, zoomPct, zoomMax, zoomCeiling]);
   const evaluateZoom = (nextPct) => {
     const el = scrollerRef.current;
@@ -5541,8 +5602,7 @@ function KanbanGanttPage() {
   const handlePeriod = (span) => {
     const next = period === span ? null : span;
     setPeriod(next);
-    const s = getStorage();
-    if (next != null && s) s.set("period", next);
+    if (next != null) writePref("period", next);
   };
   const grid = rows.map((row, idx) => jsx6(TaskRow, {
     ...row,
@@ -5762,6 +5822,74 @@ function KanbanGanttPage() {
                       ]
                     })
                   ] })
+                ]
+              })
+            ]
+          }),
+          // Board tabs: one per open board, plus the "+" that opens another. Each tab is a full
+          // page instance of its own (the route remounts on board change), so a reader can keep
+          // board A in graph mode and board B in timeline, at their own zooms — the preferences
+          // are stored per board. The strip is always there: with one board it is where the "+"
+          // lives, and it names what you are looking at.
+          jsxs6("div", {
+            className: "mb-2 flex items-center gap-1 overflow-x-auto min-w-0",
+            role: "tablist",
+            "aria-label": i18n.boardsTabs,
+            children: [
+              ...openTabs.map((slug) => jsxs6("span", {
+                key: slug,
+                role: "tab",
+                "aria-selected": slug === board ? "true" : "false",
+                className: cn3(
+                  "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] whitespace-nowrap",
+                  slug === board ? "border-(--ui-accent) bg-(--ui-accent)/12 text-(--ui-accent) font-medium" : "border-(--ui-stroke-secondary) text-(--ui-text-tertiary)"
+                ),
+                children: [
+                  jsx6("button", {
+                    type: "button",
+                    onClick: () => setBoard(slug),
+                    className: "cursor-pointer border-0 bg-transparent p-0 text-inherit",
+                    title: boardLabel(slug),
+                    children: boardLabel(slug)
+                  }),
+                  openTabs.length > 1 ? jsx6("button", {
+                    type: "button",
+                    onClick: (event) => {
+                      event.stopPropagation();
+                      closeBoardTab(slug);
+                    },
+                    title: i18n.closeBoard,
+                    "aria-label": `${i18n.closeBoard} — ${boardLabel(slug)}`,
+                    className: "inline-flex cursor-pointer items-center border-0 bg-transparent p-0 text-inherit opacity-60 hover:opacity-100",
+                    children: jsx6(Codicon5, { name: "close", size: "0.7rem" })
+                  }) : null
+                ]
+              })),
+              jsxs6(DropdownMenu3, {
+                children: [
+                  jsx6(DropdownMenuTrigger3, {
+                    asChild: true,
+                    children: jsx6("button", {
+                      type: "button",
+                      title: i18n.openBoard,
+                      "aria-label": i18n.openBoard,
+                      className: "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-(--ui-stroke-secondary) p-0.5 text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)",
+                      children: jsx6(Codicon5, { name: "add", size: "0.75rem" })
+                    })
+                  }),
+                  jsxs6(DropdownMenuContent3, {
+                    align: "start",
+                    className: "max-h-72 overflow-auto p-1 text-xs",
+                    children: [
+                      ...boards.filter((b) => !openTabs.includes(b.slug)).map((b) => jsx6(DropdownMenuItem3, {
+                        key: b.slug,
+                        className: "px-3 py-1.5",
+                        onClick: () => setBoard(b.slug),
+                        children: b.label || b.slug
+                      })),
+                      boards.every((b) => openTabs.includes(b.slug)) || boards.length === 0 ? jsx6(DropdownMenuItem3, { disabled: true, className: "px-3 py-1.5 text-(--ui-text-quaternary)", children: i18n.noOtherBoards }) : null
+                    ]
+                  })
                 ]
               })
             ]
@@ -6121,7 +6249,7 @@ var plugin = {
         id: "page",
         area: ROUTES_AREA,
         data: { path: "/kanban-gantt" },
-        render: () => jsx6(KanbanGanttPage, {})
+        render: () => jsx6(KanbanGanttRoute, {})
       },
       {
         id: "nav",
@@ -6148,6 +6276,7 @@ export {
   $openTaskId,
   GraphView,
   KanbanGanttPage,
+  KanbanGanttRoute,
   main_default as default,
   modifierKeyLabel
 };

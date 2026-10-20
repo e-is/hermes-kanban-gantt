@@ -44,6 +44,10 @@ export const LABEL_W_MIN = 160
 export const LABEL_W_MAX = 640
 export const DRAWER_W_MIN = 320
 export const DRAWER_W_MAX = 720
+/** The boards open as tabs, in order. Empty until the page has read storage (the atom
+ *  cannot read it itself); `setBoard` keeps it in step so the switcher and the tabs agree. */
+export const $openBoards = atom([])
+
 /** Open task id in the drawer (null = closed). */
 export const $openTaskId = atom(null)
 

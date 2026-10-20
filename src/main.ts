@@ -63,7 +63,7 @@ import {
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
   $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $detailModal, $titlePrefixTags, $openTaskId,
   $openAttachment,
-  $newTask, $moveUnderId, $wsEnabled, $connectionScope,
+  $newTask, $moveUnderId, $wsEnabled, $connectionScope, $openBoards,
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
   createTask, fetchProjects, fetchProfiles,
   setParent, removeParent, applyBase
@@ -144,6 +144,11 @@ function connectionScope() {
 function boardStorageKey() {
   const scope = connectionScope()
   return scope ? `${BOARD_KEY}.${scope}` : BOARD_KEY
+}
+
+function openBoardsKey() {
+  const scope = connectionScope()
+  return scope ? `openBoards.${scope}` : 'openBoards'
 }
 
 function readStoredBoard(storage) {
@@ -2947,6 +2952,19 @@ export function modifierKeyLabel() {
   return /mac/i.test(platform) ? '⌘' : 'Ctrl'
 }
 
+/**
+ * One mounted page PER BOARD.
+ *
+ * Switching boards remounts the view, which is what makes the per-board preferences (view
+ * mode, both zooms, the period, the graph scope) apply at all: every one of them is read once,
+ * in a useState initialiser. It is also the shape two board tabs will need — each tab owns its
+ * component instance rather than sharing one through a global atom.
+ */
+export function KanbanGanttRoute() {
+  const board = useValue($boardSlug)
+  return jsx(KanbanGanttPage, { key: board || 'none' })
+}
+
 export function KanbanGanttPage() {
   const i18n = useGanttI18n()
   const queryClient = useQueryClient()
@@ -3086,8 +3104,24 @@ export function KanbanGanttPage() {
   const lastCheckedIdRef = useRef(null)
   // 'timeline' (default) or 'list'. The list drops the bars and gives the
   // width to the columns: task, assignee, status, last activity.
+  // Preferences are kept PER BOARD. Two boards open side by side must be able to show a list
+  // and a timeline without fighting over one key, and a reader who works board A in graph mode
+  // should not find board B in it tomorrow. The unscoped key stays as the fallback, so what an
+  // existing reader already chose keeps applying until they touch that setting on that board.
+  const prefKey = k => (board ? `${k}@${board}` : k)
+  const readPref = (k, fallback = null) => {
+    const s = getStorage()
+    if (!s) return fallback
+    const scoped = s.get(prefKey(k), null)
+    return scoped == null ? s.get(k, fallback) : scoped
+  }
+  const writePref = (k, v) => {
+    const s = getStorage()
+    if (s) s.set(prefKey(k), v)
+  }
+
   const [viewMode, setViewMode] = useState(() => {
-    const saved = getStorage() ? getStorage().get('viewMode', null) : null
+    const saved = readPref('viewMode')
     return saved === 'list' || saved === 'graph' ? saved : 'timeline'
   })
   const graphMode = viewMode === 'graph'
@@ -3097,7 +3131,7 @@ export function KanbanGanttPage() {
   // percentage is persisted on its own key so switching views never rescales the other.
   const [graphZoomPct, setGraphZoomPct] = useState(() => {
     const s = getStorage()
-    const saved = Number(s ? s.get('graphZoomPct', null) : null)
+    const saved = Number(readPref('graphZoomPct'))
     const lo = Math.round(GRAPH_ZOOM_MIN * 100)
     const hi = Math.round(GRAPH_ZOOM_MAX * 100)
     return Number.isFinite(saved) && saved >= lo && saved <= hi ? saved : 100
@@ -3107,20 +3141,18 @@ export function KanbanGanttPage() {
     const hi = Math.round(GRAPH_ZOOM_MAX * 100)
     const clamped = Math.min(hi, Math.max(lo, Math.round(next)))
     setGraphZoomPct(clamped)
-    const s = getStorage()
-    if (s) s.set('graphZoomPct', String(clamped))
+    writePref('graphZoomPct', String(clamped))
   }
 
   // Which tasks the graph shows, on top of every filter: all of them, the open ones, or
   // the running ones with their whole lineage (the question this view exists to answer).
   const [graphScope, setGraphScope] = useState(() => {
-    const s = getStorage() ? getStorage().get('graphScope', null) : null
+    const s = readPref('graphScope')
     return ['all', 'open', 'running-lineage'].includes(s) ? s : 'all'
   })
   const handleGraphScope = next => {
     setGraphScope(next)
-    const s = getStorage()
-    if (s) s.set('graphScope', next)
+    writePref('graphScope', next)
   }
   // The selected period shortcut, in seconds (null = the view is the reader's).
   // Decided from storage ALONE, in the initialiser: the stored period is only honoured
@@ -3128,24 +3160,22 @@ export function KanbanGanttPage() {
   // exactly the question "did the reader zoom away from it?" — and answering it here
   // avoids a restore effect that would set state on mount.
   const [period, setPeriod] = useState(() => {
-    const s = getStorage()
-    if (!s) return null
-    const span = Number(s.get('period', null))
+    const span = Number(readPref('period'))
     if (!(span > 0)) return null
-    const zoom = Number(s.get('zoomPct', null))
-    const calibrated = Number(s.get('periodZoomPct', null))
+    const zoom = Number(readPref('zoomPct'))
+    const calibrated = Number(readPref('periodZoomPct'))
     if (!(zoom > 0) || !(calibrated > 0)) return null
     return Math.abs(zoom - calibrated) / calibrated <= 0.25 ? span : null
   })
   const listMode = viewMode === 'list'
   const handleViewMode = mode => {
     setViewMode(mode)
-    if (getStorage()) getStorage().set('viewMode', mode)
+    writePref('viewMode', mode)
   }
   const [zoomPct, setZoomPct] = useState(() => {
     const s = getStorage()
     if (!s) return ZOOM_PCT_MIN
-    const pct = s.get('zoomPct', null)
+    const pct = readPref('zoomPct')
     if (pct != null) return clampZoomPct(pct)
     // Values stored before the scale was a percentage were FACTORS, and a factor and a
     // percentage are indistinguishable over 1..100 (a factor 7 looks like 7 %), so the old
@@ -3409,7 +3439,7 @@ export function KanbanGanttPage() {
   const handleZoomPct = val => {
     const next = clampZoomPct(val)
     setZoomPct(next)
-    if (getStorage()) getStorage().set('zoomPct', next)
+    writePref('zoomPct', next)
     // A zoom is the other way the view stops being the selected period, so the match is
     // re-evaluated at once — nothing fires a scroll when only the scale changes. Our own
     // calibration zooms too, and it must not clear what it is placing.
@@ -3431,11 +3461,58 @@ export function KanbanGanttPage() {
     if (saved != null) $titlePrefixTags.set(saved === true || saved === '1')
   }, [])
 
+  const openTabs = useValue($openBoards)
+
+  const persistTabs = list => {
+    $openBoards.set(list)
+    const s = getStorage()
+    if (s) s.set(openBoardsKey(), JSON.stringify(list))
+  }
+
+  /** Add a board to the open set (no-op when it is already there). */
+  const openBoardInTabs = slug => {
+    const list = $openBoards.get()
+    if (!slug || list.includes(slug)) return
+    persistTabs([...list, slug])
+  }
+
+  /** Close a tab: the neighbour takes over when it was the active one, and the LAST tab is
+   *  never closed — a page with no board would have nothing to show. */
+  const closeBoardTab = slug => {
+    const list = $openBoards.get()
+    const next = list.filter(b => b !== slug)
+    if (!next.length) return
+    persistTabs(next)
+    if (slug === board) setBoard(next[next.length - 1])
+  }
+
+  // The atom cannot read storage, so the open set is restored once, with the current board
+  // appended: a remembered set that lost the active board (a renamed board, another gateway)
+  // must not hide it.
+  useEffect(() => {
+    const s = getStorage()
+    let list = []
+    if (s) {
+      const raw = s.get(openBoardsKey(), null)
+      try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+        if (Array.isArray(parsed)) list = parsed.filter(x => typeof x === 'string' && x)
+      } catch {
+        list = []
+      }
+    }
+    if (board && !list.includes(board)) list = [...list, board]
+    if (list.join('|') !== $openBoards.get().join('|')) $openBoards.set(list)
+  }, [])
+
   const setBoard = slug => {
     $boardSlug.set(slug)
     if (getStorage()) getStorage().set(boardStorageKey(), slug)
     setSearch('')
     void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
+    // Whatever opened this board — a tab, the switcher, the "+" — it is now one of the open
+    // ones. Deciding that HERE is what keeps the tab strip and the switcher from disagreeing.
+    if (slug) openBoardInTabs(slug)
   }
 
   // Adopt a board when none is remembered, and drop one this gateway does not
@@ -3657,8 +3734,7 @@ export function KanbanGanttPage() {
     }
     // Remember the zoom this period calibrates to: that is the mark the next open
     // compares the reader's zoom against.
-    const s = getStorage()
-    if (s) s.set('periodZoomPct', next)
+    writePref('periodZoomPct', next)
   }, [period, labelW, trackW, basePerSec, zoomPct, zoomMax, zoomCeiling])
 
   // What the view would be at a new scale, with the scroll it has now.
@@ -3707,8 +3783,7 @@ export function KanbanGanttPage() {
     // Clicking the active value releases the view; the value stays remembered.
     const next = period === span ? null : span
     setPeriod(next)
-    const s = getStorage()
-    if (next != null && s) s.set('period', next)
+    if (next != null) writePref('period', next)
   }
 
   const grid = rows.map((row, idx) => jsx(TaskRow, {
@@ -3951,6 +4026,80 @@ export function KanbanGanttPage() {
                   ]
                 })
               ] })
+            ]
+          })
+        ]
+      }),
+
+      // Board tabs: one per open board, plus the "+" that opens another. Each tab is a full
+      // page instance of its own (the route remounts on board change), so a reader can keep
+      // board A in graph mode and board B in timeline, at their own zooms — the preferences
+      // are stored per board. The strip is always there: with one board it is where the "+"
+      // lives, and it names what you are looking at.
+      jsxs('div', {
+        className: 'mb-2 flex items-center gap-1 overflow-x-auto min-w-0',
+        role: 'tablist',
+        'aria-label': i18n.boardsTabs,
+        children: [
+          ...openTabs.map(slug => jsxs('span', {
+            key: slug,
+            role: 'tab',
+            'aria-selected': slug === board ? 'true' : 'false',
+            className: cn(
+              'inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] whitespace-nowrap',
+              slug === board
+                ? 'border-(--ui-accent) bg-(--ui-accent)/12 text-(--ui-accent) font-medium'
+                : 'border-(--ui-stroke-secondary) text-(--ui-text-tertiary)'
+            ),
+            children: [
+              jsx('button', {
+                type: 'button',
+                onClick: () => setBoard(slug),
+                className: 'cursor-pointer border-0 bg-transparent p-0 text-inherit',
+                title: boardLabel(slug),
+                children: boardLabel(slug)
+              }),
+              openTabs.length > 1
+                ? jsx('button', {
+                    type: 'button',
+                    onClick: event => { event.stopPropagation(); closeBoardTab(slug) },
+                    title: i18n.closeBoard,
+                    'aria-label': `${i18n.closeBoard} — ${boardLabel(slug)}`,
+                    className: 'inline-flex cursor-pointer items-center border-0 bg-transparent p-0 text-inherit opacity-60 hover:opacity-100',
+                    children: jsx(Codicon, { name: 'close', size: '0.7rem' })
+                  })
+                : null
+            ]
+          })),
+          jsxs(DropdownMenu, {
+            children: [
+              jsx(DropdownMenuTrigger, {
+                asChild: true,
+                children: jsx('button', {
+                  type: 'button',
+                  title: i18n.openBoard,
+                  'aria-label': i18n.openBoard,
+                  className: 'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-(--ui-stroke-secondary) p-0.5 text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)',
+                  children: jsx(Codicon, { name: 'add', size: '0.75rem' })
+                })
+              }),
+              jsxs(DropdownMenuContent, {
+                align: 'start',
+                className: 'max-h-72 overflow-auto p-1 text-xs',
+                children: [
+                  ...boards
+                    .filter(b => !openTabs.includes(b.slug))
+                    .map(b => jsx(DropdownMenuItem, {
+                      key: b.slug,
+                      className: 'px-3 py-1.5',
+                      onClick: () => setBoard(b.slug),
+                      children: b.label || b.slug
+                    })),
+                  boards.every(b => openTabs.includes(b.slug)) || boards.length === 0
+                    ? jsx(DropdownMenuItem, { disabled: true, className: 'px-3 py-1.5 text-(--ui-text-quaternary)', children: i18n.noOtherBoards })
+                    : null
+                ]
+              })
             ]
           })
         ]
@@ -4353,7 +4502,7 @@ const plugin = {
         id: 'page',
         area: ROUTES_AREA,
         data: { path: '/kanban-gantt' },
-        render: () => jsx(KanbanGanttPage, {})
+        render: () => jsx(KanbanGanttRoute, {})
       },
       {
         id: 'nav',
