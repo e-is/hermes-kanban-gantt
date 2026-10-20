@@ -148,6 +148,23 @@ export function ranks(nodes, edges, { depthCap = 4096 } = {}) {
     }
   }
 
+  // Reverse pass (Sugiyama, as dagre/ELK/kanban-graph do it): a task WITH children moves to
+  // sit just before its EARLIEST child. Without it a prerequisite stays at depth 0 while what
+  // needs it sits in column 5, the arrow spans the whole graph, and parent and child look
+  // unrelated — which is exactly what "we mix parents and children" means to a reader.
+  const topo = queue.slice()
+  for (let i = topo.length - 1; i >= 0; i--) {
+    const kids = (children.get(topo[i]) || []).filter(c => settled.has(c))
+    if (!kids.length) continue
+    // Unconditional, as upstream does: the point is to place a prerequisite NEXT TO its child,
+    // which can mean moving it later (a source whose child is fed by a longer path) as well as
+    // earlier. Guarding on "only if earlier" leaves exactly the stranding this pass removes.
+    out.set(topo[i], Math.min(...kids.map(c => out.get(c))) - 1)
+  }
+  // The pass can push a soon-to-be-parent below zero: ranks index arrays, so normalise.
+  const lo = Math.min(...ids.map(id => out.get(id)))
+  if (lo !== 0) for (const id of ids) out.set(id, out.get(id) - lo)
+
   const leftover = ids.filter(id => !settled.has(id));
   const cyclic = [];
   let truncated = false;
@@ -463,31 +480,144 @@ export function layoutGraph(nodes, edges, {
   };
 }
 
-/** One board's layout: ranks top-down (or left-right), each rank centred on the longest. */
+/**
+ * Cross-axis ordering and placement — the pass that makes a layered drawing readable.
+ *
+ * Upstream (`kanban-graph`) uses four barycentre sweeps then four placement sweeps; so does
+ * this. Ordering swaps neighbours whose mean position among their parents (then children, in
+ * alternating sweeps) disagrees with their own, which is what removes crossings. Placement then
+ * slides each task toward the mean of its neighbours, respecting a one-slot minimum and shifting
+ * the whole rank so it does not drift. The result is that a parent sits ABOVE the middle of its
+ * children instead of wherever its status put it.
+ *
+ * Returns `rows` (one array per rank, ordered) and `slots` (id -> fractional cross position,
+ * already normalised so the lowest is 0).
+ */
+export function arrangeRows(list, rankMap, edges, by = 'status', { orderSweeps = 4, placeSweeps = 4 } = {}) {
+  const cmp = rankComparator(by)
+  const buckets = [];
+  for (const n of list || []) {
+    const r = rankMap.get(n.id) ?? 0;
+    (buckets[r] = buckets[r] || []).push(n);
+  }
+  const rows = buckets.filter(Boolean);
+  for (const row of rows) row.sort(cmp);
+
+  const parents = new Map((list || []).map(n => [n.id, []]));
+  const children = new Map((list || []).map(n => [n.id, []]));
+  for (const e of edges || []) {
+    if (!parents.has(e.to) || !children.has(e.from)) continue;
+    parents.get(e.to).push(e.from);
+    children.get(e.from).push(e.to);
+  }
+  const mean = (xs, f, dflt) => (xs.length ? xs.reduce((sum, x) => sum + f(x), 0) / xs.length : dflt);
+  const at = new Map();
+  rows.forEach(row => row.forEach((n, i) => at.set(n.id, i)));
+
+  for (let s = 0; s < orderSweeps; s++) {
+    const nb = s % 2 ? children : parents;
+    const sweep = s % 2 ? [...rows].reverse() : rows;
+    for (const row of sweep) {
+      const key = new Map(row.map(n => [n.id, mean((nb.get(n.id) || []).map(id => at.get(id)), v => v, at.get(n.id))]));
+      row.sort((a, b) => key.get(a.id) - key.get(b.id) || at.get(a.id) - at.get(b.id));
+      row.forEach((n, i) => at.set(n.id, i));
+    }
+  }
+
+  const pos = new Map();
+  rows.forEach(row => row.forEach((n, i) => pos.set(n.id, i - (row.length - 1) / 2)));
+  for (let s = 0; s < placeSweeps; s++) {
+    const sweep = s % 2 ? [...rows].reverse() : rows;
+    for (const row of sweep) {
+      const wish = row.map(n => mean(
+        [...(parents.get(n.id) || []), ...(children.get(n.id) || [])].map(id => pos.get(id)).filter(v => v !== undefined),
+        v => v,
+        pos.get(n.id)
+      ));
+      const out = [];
+      wish.forEach((w, i) => out.push(i ? Math.max(w, out[i - 1] + 1) : w));
+      const shift = mean(wish.map((w, i) => w - out[i]), v => v, 0);
+      row.forEach((n, i) => pos.set(n.id, out[i] + shift));
+    }
+  }
+  const values = [...pos.values()];
+  const lo = values.length ? Math.min(...values) : 0;
+  return { rows, slots: new Map([...pos].map(([id, v]) => [id, v - lo])) };
+}
+
+/**
+ * One board's layout.
+ *
+ * Four arrangements, the same four upstream draws: `flow` (ranks left to right), `down` (ranks
+ * top to bottom), `status` (one column per status, dependency depth then age inside) and
+ * `compact` (a grid, where arrows would only be noise).
+ *
+ * `flow` and `down` share the Sugiyama pass (`arrangeRows`): layering by longest path with the
+ * reverse pass, barycentre ordering, monotone placement. `status` and `compact` are not layered
+ * drawings at all — they answer "what needs me?" and "what is there?", so they place by index.
+ */
 function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
   const reduced = reduceEdges(list, es);
-  const rows = orderRanks(list, rankMap, sortBy);
-  const vertical = arrangement !== 'flow';
+
+  let rows;
+  let slots;
+  let quiet = false;
+  if (arrangement === 'status') {
+    // One column per status, in workflow order; inside a column, dependency depth then title.
+    const cmp = rankComparator(sortBy);
+    const order = ['triage', 'todo', 'scheduled', 'ready', 'running', 'blocked', 'review', 'done', 'archived'];
+    const present = [...new Set((list || []).map(n => n.status || 'todo'))]
+      .sort((a, b) => {
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      });
+    rows = present.map(st => (list || [])
+      .filter(n => (n.status || 'todo') === st)
+      .sort((a, b) => (rankMap.get(a.id) ?? 0) - (rankMap.get(b.id) ?? 0) || cmp(a, b)));
+    slots = new Map();
+    for (const row of rows) row.forEach((n, i) => slots.set(n.id, i));
+  } else if (arrangement === 'compact') {
+    // A grid: pack by density, and say so, so the caller can hide the arrows.
+    quiet = true;
+    const cmp = rankComparator(sortBy);
+    const sorted = [...(list || [])].sort(cmp);
+    const cols = Math.max(1, Math.round(Math.sqrt(Math.max(1, sorted.length) * 1.8)));
+    rows = [];
+    slots = new Map();
+    sorted.forEach((n, i) => {
+      const r = Math.floor(i / cols);
+      if (!rows[r]) rows[r] = [];
+      rows[r].push(n);
+      slots.set(n.id, i % cols);
+    });
+  } else {
+    const arranged = arrangeRows(list, rankMap, es, sortBy);
+    rows = arranged.rows;
+    slots = arranged.slots;
+  }
+
+  // `flow` and `status` walk the ranks along X and spread a rank along Y; `down` and `compact`
+  // do the opposite.
+  const crossAlongY = arrangement === 'flow' || arrangement === 'status';
+  const rankStep = crossAlongY ? nodeW + RANK_GAP : nodeH + RANK_GAP;
+  const crossStep = crossAlongY ? nodeH + NODE_GAP : nodeW + NODE_GAP;
 
   const boxes = new Map();
   const placed = [];
-  for (let r = 0; r < rows.length; r++) {
-    const row = rows[r];
-    // Centre each rank on the longest one, so the graph reads as a tree rather than as
-    // a staircase of left-aligned blocks.
-    const extent = row.length * (vertical ? nodeW + NODE_GAP : nodeH + NODE_GAP) - NODE_GAP;
-    let offset = -extent / 2;
+  rows.forEach((row, r) => {
     for (const node of row) {
-      const box = vertical
-        ? { id: node.id, x: offset, y: r * (nodeH + RANK_GAP), w: nodeW, h: nodeH, rank: r }
-        : { id: node.id, x: r * (nodeW + RANK_GAP), y: offset, w: nodeW, h: nodeH, rank: r };
-      offset += (vertical ? nodeW + NODE_GAP : nodeH + NODE_GAP);
+      const cross = (slots.get(node.id) ?? 0) * crossStep;
+      // Compact is a grid: rows ARE the rank axis, columns the cross axis.
+      const along = r * rankStep;
+      const box = crossAlongY
+        ? { id: node.id, x: along, y: cross, w: nodeW, h: nodeH, rank: r }
+        : { id: node.id, x: cross, y: along, w: nodeW, h: nodeH, rank: r };
       boxes.set(node.id, box);
       placed.push(box);
     }
-  }
+  });
 
   // Normalise to a positive origin: SVG does not care, but hit tests and scroll maths do.
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -499,12 +629,14 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   for (const b of placed) { b.x -= minX; b.y -= minY; }
 
   const drawn = [];
-  for (const e of reduced.edges) {
-    const a = boxes.get(e.from), b = boxes.get(e.to);
-    if (!a || !b) continue;
-    drawn.push(vertical
-      ? { from: e.from, to: e.to, x1: a.x + a.w / 2, y1: a.y + a.h, x2: b.x + b.w / 2, y2: b.y }
-      : { from: e.from, to: e.to, x1: a.x + a.w, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2 });
+  if (!quiet) {
+    for (const e of reduced.edges) {
+      const a = boxes.get(e.from), b = boxes.get(e.to);
+      if (!a || !b) continue;
+      drawn.push(crossAlongY
+        ? { from: e.from, to: e.to, x1: a.x + a.w, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2 }
+        : { from: e.from, to: e.to, x1: a.x + a.w / 2, y1: a.y + a.h, x2: b.x + b.w / 2, y2: b.y });
+    }
   }
 
   return {
@@ -516,7 +648,8 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     implied: reduced.implied,
     dangling,
     cyclic,
-    truncated
+    truncated,
+    quiet
   };
 }
 

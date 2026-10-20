@@ -23,7 +23,7 @@ const core = await import(join(HERE, '..', 'desktop', 'graph-core.js'))
 const {
   graphNodes, graphEdges, dedupeEdges, edgesWithin, ranks, orderRanks, rankComparator,
   reduceEdges, lineage, activityBuckets, activityMap, layoutGraph, scopeIds, SCOPES,
-  nearestInHalo, NODE_W, NODE_H, SPARK_BAND
+  nearestInHalo, arrangeRows, NODE_W, NODE_H, SPARK_BAND
 } = core
 
 const H = 3600
@@ -512,4 +512,65 @@ test('nearestInHalo: the dragged card and the refused cards are not targets', ()
   assert.equal(nearestInHalo(rects, 110, 30, 400, { exclude: 'a' }), 'b')
   assert.equal(nearestInHalo(rects, 110, 30, 400, { allowed: id => id !== 'b' }), 'a')
   assert.equal(nearestInHalo(rects, 110, 30, 5), null)
+})
+
+// ── the Sugiyama pass: what makes parents and children line up ────────────────
+
+test('ranks: a prerequisite moves next to its earliest child, not back in column 0', () => {
+  // A is a source that also has a child fed by a longer path (P -> Q -> Z). Longest-path
+  // layering leaves A at depth 0 with an arrow spanning the whole graph; the reverse pass moves
+  // it to sit just before Z, which is what a reader means by "not mixing parents and children".
+  const nodes = ['A', 'P', 'Q', 'Z'].map(id => ({ id }))
+  const edges = [{ from: 'A', to: 'Z' }, { from: 'P', to: 'Q' }, { from: 'Q', to: 'Z' }]
+  const r = ranks(nodes, edges)
+  assert.equal(r.ranks.get('Q'), 1)
+  assert.equal(r.ranks.get('Z'), 2)
+  assert.equal(r.ranks.get('A'), 1, 'A sits beside Q, right before its child')
+})
+
+test('arrangeRows: a parent is centred over its children', () => {
+  const nodes = [{ id: 'p', status: 'todo' }, { id: 'a', status: 'todo' }, { id: 'b', status: 'todo' }]
+  const edges = [{ from: 'p', to: 'a' }, { from: 'p', to: 'b' }]
+  const r = ranks(nodes, edges)
+  const { rows, slots } = arrangeRows(nodes, r.ranks, edges)
+  assert.equal(rows.length, 2)
+  const [sa, sb] = [slots.get('a'), slots.get('b')].sort((x, y) => x - y)
+  assert.equal(slots.get('p'), (sa + sb) / 2, 'the parent sits between its two children')
+})
+
+test('arrangeRows: neighbouring ranks stay in order (no slot collisions)', () => {
+  const nodes = Array.from({ length: 8 }, (_, i) => ({ id: `n${i}`, status: 'todo' }))
+  const edges = [
+    { from: 'n0', to: 'n4' }, { from: 'n1', to: 'n5' },
+    { from: 'n2', to: 'n6' }, { from: 'n3', to: 'n7' }
+  ]
+  const { rows, slots } = arrangeRows(nodes, ranks(nodes, edges).ranks, edges)
+  for (const row of rows) {
+    // Within a rank the slots are strictly increasing in array order: the placement pass
+    // enforces a one-slot minimum, and a violation would draw two cards on top of each other.
+    const values = row.map(n => slots.get(n.id))
+    for (let i = 1; i < values.length; i++) assert.ok(values[i] > values[i - 1])
+  }
+})
+
+test('layout: the four arrangements put the ranks on the axis they claim', () => {
+  const nodes = [
+    { id: 'a', status: 'todo', title: 'A' },
+    { id: 'b', status: 'ready', title: 'B' },
+    { id: 'c', status: 'done', title: 'C' }
+  ]
+  const edges = [{ from: 'a', to: 'b' }]
+  const down = layoutGraph(nodes, edges, { arrangement: 'down' })
+  assert.ok(down.nodes.find(n => n.id === 'b').y > down.nodes.find(n => n.id === 'a').y,
+    'down: a child is lower than its parent')
+  const flow = layoutGraph(nodes, edges, { arrangement: 'flow' })
+  assert.ok(flow.nodes.find(n => n.id === 'b').x > flow.nodes.find(n => n.id === 'a').x,
+    'flow: a child is to the right of its parent')
+  const status = layoutGraph(nodes, edges, { arrangement: 'status' })
+  const xs = ['a', 'b', 'c'].map(id => status.nodes.find(n => n.id === id).x)
+  assert.equal(new Set(xs).size, xs.length, 'status: one column per status, so three distinct x')
+  const compact = layoutGraph(nodes, edges, { arrangement: 'compact' })
+  assert.equal(compact.quiet, true, 'compact: a grid, so the caller hides the arrows')
+  assert.equal(compact.edges.length, 0)
+  assert.ok(compact.nodes.every(n => Number.isFinite(n.x) && Number.isFinite(n.y)))
 })

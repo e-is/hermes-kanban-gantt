@@ -1157,6 +1157,8 @@ export function GraphView({
   linkAllowed,
   /** Taller cards: the title wraps onto a second line instead of being cut. */
   tallCards = false,
+  /** 'down' | 'flow' | 'status' | 'compact' — see `layoutGraph`. */
+  arrangement = 'down',
   sortBy = 'status'
 }) {
   const [pan, setPan] = useState({ x: 0, y: 0 })
@@ -1200,8 +1202,8 @@ export function GraphView({
   const nodeH = tallCards ? NODE_H + 34 : NODE_H
   const nodeW = tallCards ? NODE_W + 48 : NODE_W
   const layout = useMemo(
-    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, groupBy: grouping ? n => n.board || '' : null }),
-    [shown, edges, sortBy, grouping, nodeH, nodeW]
+    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, groupBy: grouping ? n => n.board || '' : null }),
+    [shown, edges, sortBy, grouping, nodeH, nodeW, arrangement]
   )
   const lin = useMemo(() => {
     if (!selectedId || !shown.some(n => n.id === selectedId)) return null
@@ -3510,6 +3512,16 @@ export function KanbanGanttPage() {
     setCardsTall(next)
     writePref('cardsTall', next ? '1' : '0')
   }
+  // How the cards are arranged — the four modes upstream has. 'down' by default: a dependency
+  // graph reads as a tree falling down the page, and a wide board is easier to scan by rank.
+  const [arrange, setArrange] = useState(() => {
+    const v = readPref('arrange')
+    return ['down', 'flow', 'status', 'compact'].includes(v) ? v : 'down'
+  })
+  const handleArrange = next => {
+    setArrange(next)
+    writePref('arrange', next)
+  }
   const [graphScope, setGraphScope] = useState(() => {
     const s = readPref('graphScope')
     return ['all', 'open', 'running-lineage'].includes(s) ? s : 'all'
@@ -4436,13 +4448,27 @@ export function KanbanGanttPage() {
                             }),
                             jsxs('span', { className: 'flex flex-col gap-0.5 min-w-0', children: [
                               jsx('span', { children: i18n.cardsTall }),
-                              jsx('span', {
+                                jsx('span', {
                                 className: 'text-[10px] text-(--ui-text-tertiary)',
                                 children: i18n.cardsTallHint
                               })
                             ] })
                           ]
                         })
+                      : null,
+                    // The four arrangements upstream draws: two layered (flow, down) and two that
+                    // are not layered drawings at all (status, grid). Only a graph has ranks.
+                    graphMode
+                      ? [['down', i18n.arrangeDown], ['flow', i18n.arrangeFlow], ['status', i18n.arrangeStatus], ['compact', i18n.arrangeCompact]]
+                          .map(([id, label]) => jsxs(DropdownMenuItem, {
+                            key: id,
+                            className: 'flex items-center gap-2 px-3 py-1.5',
+                            onClick: () => handleArrange(id),
+                            children: [
+                              jsx(Codicon, { name: arrange === id ? 'check' : 'blank', size: '0.85rem', className: 'shrink-0' }),
+                              jsx('span', { children: label })
+                            ]
+                          }))
                       : null
                   ]
                 })
@@ -4557,6 +4583,7 @@ export function KanbanGanttPage() {
             onLinkChild: handleLinkChild,
             linkAllowed,
             tallCards: cardsTall,
+            arrangement: arrange,
             sortBy: 'status'
           })
         : rows.length === 0

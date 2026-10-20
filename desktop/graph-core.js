@@ -89,6 +89,14 @@ function ranks(nodes, edges, { depthCap = 4096 } = {}) {
       }
     }
   }
+  const topo = queue.slice();
+  for (let i = topo.length - 1; i >= 0; i--) {
+    const kids = (children.get(topo[i]) || []).filter((c) => settled.has(c));
+    if (!kids.length) continue;
+    out.set(topo[i], Math.min(...kids.map((c) => out.get(c))) - 1);
+  }
+  const lo = Math.min(...ids.map((id) => out.get(id)));
+  if (lo !== 0) for (const id of ids) out.set(id, out.get(id) - lo);
   const leftover = ids.filter((id) => !settled.has(id));
   const cyclic = [];
   let truncated = false;
@@ -322,25 +330,103 @@ function layoutGraph(nodes, edges, {
     truncated: blocks.some((b) => b.block.truncated)
   };
 }
+function arrangeRows(list, rankMap, edges, by = "status", { orderSweeps = 4, placeSweeps = 4 } = {}) {
+  const cmp = rankComparator(by);
+  const buckets = [];
+  for (const n of list || []) {
+    const r = rankMap.get(n.id) ?? 0;
+    (buckets[r] = buckets[r] || []).push(n);
+  }
+  const rows = buckets.filter(Boolean);
+  for (const row of rows) row.sort(cmp);
+  const parents = new Map((list || []).map((n) => [n.id, []]));
+  const children = new Map((list || []).map((n) => [n.id, []]));
+  for (const e of edges || []) {
+    if (!parents.has(e.to) || !children.has(e.from)) continue;
+    parents.get(e.to).push(e.from);
+    children.get(e.from).push(e.to);
+  }
+  const mean = (xs, f, dflt) => xs.length ? xs.reduce((sum, x) => sum + f(x), 0) / xs.length : dflt;
+  const at = /* @__PURE__ */ new Map();
+  rows.forEach((row) => row.forEach((n, i) => at.set(n.id, i)));
+  for (let s = 0; s < orderSweeps; s++) {
+    const nb = s % 2 ? children : parents;
+    const sweep = s % 2 ? [...rows].reverse() : rows;
+    for (const row of sweep) {
+      const key = new Map(row.map((n) => [n.id, mean((nb.get(n.id) || []).map((id) => at.get(id)), (v) => v, at.get(n.id))]));
+      row.sort((a, b) => key.get(a.id) - key.get(b.id) || at.get(a.id) - at.get(b.id));
+      row.forEach((n, i) => at.set(n.id, i));
+    }
+  }
+  const pos = /* @__PURE__ */ new Map();
+  rows.forEach((row) => row.forEach((n, i) => pos.set(n.id, i - (row.length - 1) / 2)));
+  for (let s = 0; s < placeSweeps; s++) {
+    const sweep = s % 2 ? [...rows].reverse() : rows;
+    for (const row of sweep) {
+      const wish = row.map((n) => mean(
+        [...parents.get(n.id) || [], ...children.get(n.id) || []].map((id) => pos.get(id)).filter((v) => v !== void 0),
+        (v) => v,
+        pos.get(n.id)
+      ));
+      const out = [];
+      wish.forEach((w, i) => out.push(i ? Math.max(w, out[i - 1] + 1) : w));
+      const shift = mean(wish.map((w, i) => w - out[i]), (v) => v, 0);
+      row.forEach((n, i) => pos.set(n.id, out[i] + shift));
+    }
+  }
+  const values = [...pos.values()];
+  const lo = values.length ? Math.min(...values) : 0;
+  return { rows, slots: new Map([...pos].map(([id, v]) => [id, v - lo])) };
+}
 function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
   const reduced = reduceEdges(list, es);
-  const rows = orderRanks(list, rankMap, sortBy);
-  const vertical = arrangement !== "flow";
+  let rows;
+  let slots;
+  let quiet = false;
+  if (arrangement === "status") {
+    const cmp = rankComparator(sortBy);
+    const order = ["triage", "todo", "scheduled", "ready", "running", "blocked", "review", "done", "archived"];
+    const present = [...new Set((list || []).map((n) => n.status || "todo"))].sort((a, b) => {
+      const ia = order.indexOf(a), ib = order.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    rows = present.map((st) => (list || []).filter((n) => (n.status || "todo") === st).sort((a, b) => (rankMap.get(a.id) ?? 0) - (rankMap.get(b.id) ?? 0) || cmp(a, b)));
+    slots = /* @__PURE__ */ new Map();
+    for (const row of rows) row.forEach((n, i) => slots.set(n.id, i));
+  } else if (arrangement === "compact") {
+    quiet = true;
+    const cmp = rankComparator(sortBy);
+    const sorted = [...list || []].sort(cmp);
+    const cols = Math.max(1, Math.round(Math.sqrt(Math.max(1, sorted.length) * 1.8)));
+    rows = [];
+    slots = /* @__PURE__ */ new Map();
+    sorted.forEach((n, i) => {
+      const r = Math.floor(i / cols);
+      if (!rows[r]) rows[r] = [];
+      rows[r].push(n);
+      slots.set(n.id, i % cols);
+    });
+  } else {
+    const arranged = arrangeRows(list, rankMap, es, sortBy);
+    rows = arranged.rows;
+    slots = arranged.slots;
+  }
+  const crossAlongY = arrangement === "flow" || arrangement === "status";
+  const rankStep = crossAlongY ? nodeW + RANK_GAP : nodeH + RANK_GAP;
+  const crossStep = crossAlongY ? nodeH + NODE_GAP : nodeW + NODE_GAP;
   const boxes = /* @__PURE__ */ new Map();
   const placed = [];
-  for (let r = 0; r < rows.length; r++) {
-    const row = rows[r];
-    const extent = row.length * (vertical ? nodeW + NODE_GAP : nodeH + NODE_GAP) - NODE_GAP;
-    let offset = -extent / 2;
+  rows.forEach((row, r) => {
     for (const node of row) {
-      const box = vertical ? { id: node.id, x: offset, y: r * (nodeH + RANK_GAP), w: nodeW, h: nodeH, rank: r } : { id: node.id, x: r * (nodeW + RANK_GAP), y: offset, w: nodeW, h: nodeH, rank: r };
-      offset += vertical ? nodeW + NODE_GAP : nodeH + NODE_GAP;
+      const cross = (slots.get(node.id) ?? 0) * crossStep;
+      const along = r * rankStep;
+      const box = crossAlongY ? { id: node.id, x: along, y: cross, w: nodeW, h: nodeH, rank: r } : { id: node.id, x: cross, y: along, w: nodeW, h: nodeH, rank: r };
       boxes.set(node.id, box);
       placed.push(box);
     }
-  }
+  });
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const b of placed) {
     minX = Math.min(minX, b.x);
@@ -359,10 +445,12 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     b.y -= minY;
   }
   const drawn = [];
-  for (const e of reduced.edges) {
-    const a = boxes.get(e.from), b = boxes.get(e.to);
-    if (!a || !b) continue;
-    drawn.push(vertical ? { from: e.from, to: e.to, x1: a.x + a.w / 2, y1: a.y + a.h, x2: b.x + b.w / 2, y2: b.y } : { from: e.from, to: e.to, x1: a.x + a.w, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2 });
+  if (!quiet) {
+    for (const e of reduced.edges) {
+      const a = boxes.get(e.from), b = boxes.get(e.to);
+      if (!a || !b) continue;
+      drawn.push(crossAlongY ? { from: e.from, to: e.to, x1: a.x + a.w, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2 } : { from: e.from, to: e.to, x1: a.x + a.w / 2, y1: a.y + a.h, x2: b.x + b.w / 2, y2: b.y });
+    }
   }
   return {
     nodes: placed,
@@ -373,7 +461,8 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     implied: reduced.implied,
     dangling,
     cyclic,
-    truncated
+    truncated,
+    quiet
   };
 }
 var SCOPES = ["running-lineage", "open", "all"];
@@ -402,6 +491,7 @@ export {
   STATUS_ORDER,
   activityBuckets,
   activityMap,
+  arrangeRows,
   dedupeEdges,
   edgesWithin,
   graphEdges,
