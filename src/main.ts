@@ -1865,36 +1865,7 @@ export function GraphView({
                         strokeWidth: hot ? 3 : 1.2,
                         markerEnd: 'url(#kg-arrow)',
                         style: { color: tone }
-                      }),
-                      // Two grabs, one per end: the tail asks "who is the parent", the head asks
-                      // "who is the child". They only appear under the pointer, where the edge is
-                      // already the thing being looked at.
-                      ...(hot
-                        ? [
-                            jsx('circle', {
-                              key: 'grab-from',
-                              cx: geo.x1,
-                              cy: geo.y1 + 7,
-                              r: 5,
-                              fill: 'var(--ui-accent)',
-                              stroke: 'var(--ui-bg-elevated)',
-                              strokeWidth: 2,
-                              style: { pointerEvents: 'all', cursor: 'grab' },
-                              onPointerDown: event => startEdgeMove(event, e, 'from')
-                            }),
-                            jsx('circle', {
-                              key: 'grab-to',
-                              cx: geo.x2,
-                              cy: geo.y2 - 7,
-                              r: 5,
-                              fill: 'var(--ui-accent)',
-                              stroke: 'var(--ui-bg-elevated)',
-                              strokeWidth: 2,
-                              style: { pointerEvents: 'all', cursor: 'grab' },
-                              onPointerDown: event => startEdgeMove(event, e, 'to')
-                            })
-                          ]
-                        : [])
+                      })
                     ]
                   })
                 })
@@ -1931,6 +1902,42 @@ export function GraphView({
                     ]
                   })
                 })
+              : null,
+            // The handles live in their own layer ABOVE the cards: inside the drawing they were
+            // covered by whichever card sat on the border, and their presses were taken by the
+            // hit strokes of the neighbouring edges.
+            hotEdge && layout.edges.some(e => `${e.from}>${e.to}` === hotEdge)
+              ? (() => {
+                  const e = layout.edges.find(x => `${x.from}>${x.to}` === hotEdge)
+                  const x1 = e.x1 + GRAPH_MARGIN
+                  const y1 = e.y1 + GRAPH_MARGIN
+                  const x2 = e.x2 + GRAPH_MARGIN
+                  const y2 = e.y2 + GRAPH_MARGIN
+                  const dot = (key, cx, cy, mode, title) => jsx('circle', {
+                    key,
+                    'data-graph-grab': mode,
+                    cx,
+                    cy,
+                    r: 5.5,
+                    fill: 'var(--ui-accent)',
+                    stroke: 'var(--ui-bg-elevated)',
+                    strokeWidth: 2,
+                    style: { pointerEvents: 'all', cursor: 'grab' },
+                    onPointerDown: event => startEdgeMove(event, e, mode),
+                    children: jsx('title', { children: title })
+                  })
+                  return jsx('svg', {
+                    key: 'edge-handles',
+                    className: 'absolute inset-0 pointer-events-none',
+                    style: { zIndex: 35 },
+                    width: layout.width + GRAPH_MARGIN * 2,
+                    height: layout.height + GRAPH_MARGIN * 2,
+                    children: [
+                      dot('grab-from', x1, y1 + 7, 'from', i18n.graphEdgeFrom),
+                      dot('grab-to', x2, y2 - 7, 'to', i18n.graphEdgeTo)
+                    ]
+                  })
+                })()
               : null,
             ...shown.map(node => {
               const b = boxes.get(node.id)

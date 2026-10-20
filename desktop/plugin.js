@@ -248,6 +248,8 @@ var GANTT_LOCALES = {
     graphNoActivity: "No activity in this window",
     graphTally: (n) => `${n} task${n === 1 ? "" : "s"}`,
     graphUnlink: "Delete the link",
+    graphEdgeFrom: "Drag to change the parent",
+    graphEdgeTo: "Drag to change the child",
     graphLink: "Link a child: press and drag the arrow head onto the card that should become the child",
     arrangeAria: "How the cards are arranged",
     arrangeFlow: "Flow, left to right",
@@ -507,6 +509,8 @@ var GANTT_LOCALES = {
     graphNoActivity: "Aucune activité dans cette fenêtre",
     graphTally: (n) => `${n} tâche${n === 1 ? "" : "s"}`,
     graphUnlink: "Supprimer le lien",
+    graphEdgeFrom: "Glisser pour changer le parent",
+    graphEdgeTo: "Glisser pour changer l’enfant",
     graphLink: "Lier un enfant : appuyer et faire glisser la pointe de la flèche sur la carte qui doit devenir l’enfant",
     arrangeAria: "Disposition des cartes",
     arrangeFlow: "Flux, de gauche à droite",
@@ -765,6 +769,8 @@ var GANTT_LOCALES = {
     graphNoActivity: "此时间窗口内无活动",
     graphTally: (n) => `${n} 个任务`,
     graphUnlink: "删除链接",
+    graphEdgeFrom: "拖动以更改父任务",
+    graphEdgeTo: "拖动以更改子任务",
     graphLink: "链接子任务：按住并将箭头拖到要成为子任务的任务上",
     arrangeAria: "卡片排列方式",
     arrangeFlow: "流向：从左到右",
@@ -4224,34 +4230,7 @@ function GraphView({
                         strokeWidth: hot ? 3 : 1.2,
                         markerEnd: "url(#kg-arrow)",
                         style: { color: tone }
-                      }),
-                      // Two grabs, one per end: the tail asks "who is the parent", the head asks
-                      // "who is the child". They only appear under the pointer, where the edge is
-                      // already the thing being looked at.
-                      ...hot ? [
-                        jsx6("circle", {
-                          key: "grab-from",
-                          cx: geo.x1,
-                          cy: geo.y1 + 7,
-                          r: 5,
-                          fill: "var(--ui-accent)",
-                          stroke: "var(--ui-bg-elevated)",
-                          strokeWidth: 2,
-                          style: { pointerEvents: "all", cursor: "grab" },
-                          onPointerDown: (event) => startEdgeMove(event, e, "from")
-                        }),
-                        jsx6("circle", {
-                          key: "grab-to",
-                          cx: geo.x2,
-                          cy: geo.y2 - 7,
-                          r: 5,
-                          fill: "var(--ui-accent)",
-                          stroke: "var(--ui-bg-elevated)",
-                          strokeWidth: 2,
-                          style: { pointerEvents: "all", cursor: "grab" },
-                          onPointerDown: (event) => startEdgeMove(event, e, "to")
-                        })
-                      ] : []
+                      })
                     ]
                   });
                 })
@@ -4287,6 +4266,40 @@ function GraphView({
                 ]
               })
             }) : null,
+            // The handles live in their own layer ABOVE the cards: inside the drawing they were
+            // covered by whichever card sat on the border, and their presses were taken by the
+            // hit strokes of the neighbouring edges.
+            hotEdge && layout.edges.some((e) => `${e.from}>${e.to}` === hotEdge) ? (() => {
+              const e = layout.edges.find((x) => `${x.from}>${x.to}` === hotEdge);
+              const x1 = e.x1 + GRAPH_MARGIN;
+              const y1 = e.y1 + GRAPH_MARGIN;
+              const x2 = e.x2 + GRAPH_MARGIN;
+              const y2 = e.y2 + GRAPH_MARGIN;
+              const dot = (key, cx, cy, mode, title) => jsx6("circle", {
+                key,
+                "data-graph-grab": mode,
+                cx,
+                cy,
+                r: 5.5,
+                fill: "var(--ui-accent)",
+                stroke: "var(--ui-bg-elevated)",
+                strokeWidth: 2,
+                style: { pointerEvents: "all", cursor: "grab" },
+                onPointerDown: (event) => startEdgeMove(event, e, mode),
+                children: jsx6("title", { children: title })
+              });
+              return jsx6("svg", {
+                key: "edge-handles",
+                className: "absolute inset-0 pointer-events-none",
+                style: { zIndex: 35 },
+                width: layout.width + GRAPH_MARGIN * 2,
+                height: layout.height + GRAPH_MARGIN * 2,
+                children: [
+                  dot("grab-from", x1, y1 + 7, "from", i18n.graphEdgeFrom),
+                  dot("grab-to", x2, y2 - 7, "to", i18n.graphEdgeTo)
+                ]
+              });
+            })() : null,
             ...shown.map((node) => {
               const b = boxes.get(node.id);
               if (!b) return null;
