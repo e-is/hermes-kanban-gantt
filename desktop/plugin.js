@@ -248,6 +248,7 @@ var GANTT_LOCALES = {
     graphNoActivity: "No activity in this window",
     graphTally: (n) => `${n} task${n === 1 ? "" : "s"}`,
     graphLink: "Link a child: press and drag the arrow head onto the card that should become the child",
+    arrangeAria: "How the cards are arranged",
     arrangeFlow: "Flow, left to right",
     arrangeDown: "Flow, top down",
     arrangeStatus: "Columns by status",
@@ -505,6 +506,7 @@ var GANTT_LOCALES = {
     graphNoActivity: "Aucune activité dans cette fenêtre",
     graphTally: (n) => `${n} tâche${n === 1 ? "" : "s"}`,
     graphLink: "Lier un enfant : appuyer et faire glisser la pointe de la flèche sur la carte qui doit devenir l’enfant",
+    arrangeAria: "Disposition des cartes",
     arrangeFlow: "Flux, de gauche à droite",
     arrangeDown: "Flux, de haut en bas",
     arrangeStatus: "Colonnes par statut",
@@ -761,6 +763,7 @@ var GANTT_LOCALES = {
     graphNoActivity: "此时间窗口内无活动",
     graphTally: (n) => `${n} 个任务`,
     graphLink: "链接子任务：按住并将箭头拖到要成为子任务的任务上",
+    arrangeAria: "卡片排列方式",
     arrangeFlow: "流向：从左到右",
     arrangeDown: "流向：从上到下",
     arrangeStatus: "按状态分列",
@@ -4311,6 +4314,48 @@ function GraphScopeToggle({ value, onChange }) {
     ]
   });
 }
+function GraphArrangeSelect({ value, onChange }) {
+  const i18n = useGanttI18n();
+  const options = [
+    ["down", i18n.arrangeDown],
+    ["flow", i18n.arrangeFlow],
+    ["status", i18n.arrangeStatus],
+    ["compact", i18n.arrangeCompact]
+  ];
+  const current = (options.find(([id]) => id === value) || options[0])[1];
+  return jsxs6(DropdownMenu3, {
+    children: [
+      jsx6(DropdownMenuTrigger3, {
+        asChild: true,
+        children: jsxs6(Button5, {
+          size: "xs",
+          variant: "ghost",
+          className: "gap-1 text-[11px] whitespace-nowrap",
+          "aria-label": i18n.arrangeAria,
+          title: i18n.arrangeAria,
+          children: [
+            jsx6(Codicon5, { name: "layout", size: "0.85rem" }),
+            jsx6("span", { children: current }),
+            jsx6(Codicon5, { name: "chevron-down", size: "0.8rem" })
+          ]
+        })
+      }),
+      jsx6(DropdownMenuContent3, {
+        align: "start",
+        className: "min-w-[13rem] p-1",
+        children: options.map(([id, label]) => jsxs6(DropdownMenuItem3, {
+          key: id,
+          onClick: () => onChange(id),
+          className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
+          children: [
+            jsx6(Codicon5, { name: value === id ? "check" : "blank", size: "0.8rem" }),
+            jsx6("span", { children: label })
+          ]
+        }, id))
+      })
+    ]
+  });
+}
 function SelectionBar({
   selected,
   onClear,
@@ -6311,7 +6356,13 @@ function KanbanGanttPage() {
                   // Scopes in graph mode, the period selector in the timeline: a graph has no time
                   // axis to slice, and since the activity band is gone there is nothing left for a
                   // window to tune.
-                  graphMode ? jsx6(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }) : listMode ? null : jsx6(PeriodSelector, {
+                  graphMode ? jsxs6("span", {
+                    className: "inline-flex items-center gap-1.5",
+                    children: [
+                      jsx6(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }),
+                      jsx6(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
+                    ]
+                  }) : listMode ? null : jsx6(PeriodSelector, {
                     value: period,
                     onChange: handlePeriod,
                     disabled: false

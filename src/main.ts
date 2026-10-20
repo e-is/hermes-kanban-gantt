@@ -1956,6 +1956,56 @@ function GraphScopeToggle({ value, onChange }) {
   })
 }
 
+/**
+ * The arrangement, as a dropdown you can SEE.
+ *
+ * It started in the "…" menu, which is where nobody looks for a way to change the view — the
+ * complaint was not "it is broken" but "I cannot find it". A control that changes the shape of
+ * the whole drawing belongs in the toolbar, labelled with the mode it is on.
+ */
+function GraphArrangeSelect({ value, onChange }) {
+  const i18n = useGanttI18n()
+  const options = [
+    ['down', i18n.arrangeDown],
+    ['flow', i18n.arrangeFlow],
+    ['status', i18n.arrangeStatus],
+    ['compact', i18n.arrangeCompact]
+  ]
+  const current = (options.find(([id]) => id === value) || options[0])[1]
+  return jsxs(DropdownMenu, {
+    children: [
+      jsx(DropdownMenuTrigger, {
+        asChild: true,
+        children: jsxs(Button, {
+          size: 'xs',
+          variant: 'ghost',
+          className: 'gap-1 text-[11px] whitespace-nowrap',
+          'aria-label': i18n.arrangeAria,
+          title: i18n.arrangeAria,
+          children: [
+            jsx(Codicon, { name: 'layout', size: '0.85rem' }),
+            jsx('span', { children: current }),
+            jsx(Codicon, { name: 'chevron-down', size: '0.8rem' })
+          ]
+        })
+      }),
+      jsx(DropdownMenuContent, {
+        align: 'start',
+        className: 'min-w-[13rem] p-1',
+        children: options.map(([id, label]) => jsxs(DropdownMenuItem, {
+          key: id,
+          onClick: () => onChange(id),
+          className: 'flex items-center gap-2 cursor-pointer text-xs py-1.5',
+          children: [
+            jsx(Codicon, { name: value === id ? 'check' : 'blank', size: '0.8rem' }),
+            jsx('span', { children: label })
+          ]
+        }, id))
+      })
+    ]
+  })
+}
+
 function SelectionBar({
   selected,
   onClear,
@@ -4376,7 +4426,13 @@ export function KanbanGanttPage() {
               // axis to slice, and since the activity band is gone there is nothing left for a
               // window to tune.
               graphMode
-                ? jsx(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope })
+                ? jsxs('span', {
+                    className: 'inline-flex items-center gap-1.5',
+                    children: [
+                      jsx(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }),
+                      jsx(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
+                    ]
+                  })
                 : listMode ? null : jsx(PeriodSelector, {
                     value: period,
                     onChange: handlePeriod,
