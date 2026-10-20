@@ -1572,9 +1572,11 @@ export function GraphView({
                   borderColor: isSelected ? 'var(--ui-accent)' : undefined,
                   boxShadow: isSelected ? '0 0 0 1px var(--ui-accent)' : undefined,
                   // A left edge in the status tone: the stripe kanban-graph has, and the
-                  // cheapest way to read a board of 60 nodes at a glance. 5 px, because at 3 it
-                  // read as a rendering artefact rather than as a colour code.
-                  borderLeft: `5px solid ${tone}`
+                  // cheapest way to read a board of 60 nodes at a glance. 6 px, plus a 7 % wash
+                  // of the same tone across the card: at 3 px the stripe read as a rendering
+                  // artefact, and the wash is what makes the STATE legible before the words are.
+                  borderLeft: `6px solid ${tone}`,
+                  backgroundImage: `linear-gradient(color-mix(in srgb, ${tone} 7%, transparent), color-mix(in srgb, ${tone} 7%, transparent))`
                 },
                 draggable: Boolean(onDragStart),
                 title: `${node.title} (${node.id})${node.assignee ? ` — ${node.assignee}` : ''}`,
