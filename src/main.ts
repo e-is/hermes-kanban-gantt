@@ -1317,6 +1317,24 @@ export function GraphView({
     return { x: (event.clientX - r.left) / zoom, y: (event.clientY - r.top) / zoom }
   }
   /** The card whose SLOT (bottom border, centred) is under the pointer, within SLOT_HALO. */
+  // Where the slot hangs: halfway down the vertical gap between the card and the nearest card
+  // below it (horizontal overlap only), clamped so it never touches either, and never lower than
+  // 9 px so the dot clears its own border.
+  const slotAnchorFor = id => {
+    const b = boxes.get(id)
+    if (!b) return null
+    let below = Infinity
+    for (const o of boxes.values()) {
+      if (o.id === id) continue
+      if (o.y + o.h <= b.y + b.h) continue
+      if (o.x >= b.x + b.w || o.x + o.w <= b.x) continue
+      below = Math.min(below, o.y)
+    }
+    const gap = Number.isFinite(below) ? below - (b.y + b.h) : 52
+    const half = Math.max(9, Math.min(28, gap / 2))
+    return { x: b.x + b.w / 2 + GRAPH_MARGIN, y: b.y + b.h + GRAPH_MARGIN + half, half }
+  }
+
   const slotUnder = pt => {
     if (!pt) return null
     let best = null
@@ -1618,50 +1636,65 @@ export function GraphView({
                 })
               ]
             })),
-            // THE SLOT. A handle hanging just under the bottom border of the card the pointer
-            // is near. It grows when the pointer is on it, so it reads as something you can take
-            // hold of, and pressing it starts the arrow instead of dragging the card.
-            //
-            // Two details make it usable rather than merely visible: the whole 24 px box is the
-            // hit area (a 10 px dot is not a target), and it hangs BELOW the border so the card
-            // underneath cannot steal the press at the boundary pixel — which is exactly what
-            // `elementFromPoint` kept reporting.
-            slotFor && boxes.get(slotFor)
+            // THE SLOT. A handle hanging in the space UNDER the card the pointer is near — halfway
+            // to the card below, never touching it — tied to its card by a short stem. The stem is
+            // what makes the ownership unambiguous: a dot floating in the gap belongs to whoever
+            // is closer, and the reader should not have to measure.
+            slotFor && boxes.get(slotFor) && slotAnchorFor(slotFor)
               ? (() => {
-                  const b = boxes.get(slotFor)
-                  const dot = slotNear ? 14 : 9
+                  const anchor = slotAnchorFor(slotFor)
+                  const dot = slotNear ? 13 : 9
+                  const stemTop = boxes.get(slotFor).y + boxes.get(slotFor).h + GRAPH_MARGIN
+                  const stemH = Math.max(0, anchor.y - stemTop - dot / 2)
                   return jsxs('div', {
                     key: 'slot',
-                    className: 'absolute flex items-center justify-center',
-                    role: 'button',
-                    'data-graph-slot': slotFor,
-                    'aria-label': i18n.graphLink,
-                    title: i18n.graphLink,
-                    onPointerDown: event => startLink(event, slotFor),
-                    style: {
-                      // INSIDE the card, just above its bottom border: hanging below, the dot
-                      // read as belonging to the card underneath. 20 px box, entirely within
-                      // the card's footprint, so nothing overflows the border.
-                      left: `${b.x + b.w / 2 + GRAPH_MARGIN - 10}px`,
-                      top: `${b.y + b.h + GRAPH_MARGIN - 21}px`,
-                      width: '20px',
-                      height: '20px',
-                      zIndex: 30,
-                      cursor: 'crosshair',
-                      touchAction: 'none'
-                    },
-                    children: jsx('span', {
-                      className: 'rounded-full',
-                      style: {
-                        width: `${dot}px`,
-                        height: `${dot}px`,
-                        background: 'var(--ui-accent)',
-                        border: '2px solid var(--ui-bg-elevated)',
-                        boxShadow: '0 0 0 1px var(--ui-accent)',
-                        transition: 'width 120ms ease, height 120ms ease',
-                        pointerEvents: 'none'
-                      }
-                    })
+                    className: 'absolute',
+                    style: { left: '0px', top: '0px', zIndex: 30, pointerEvents: 'none' },
+                    children: [
+                      jsx('div', {
+                        key: 'stem',
+                        className: 'absolute',
+                        style: {
+                          left: `${anchor.x - 0.75}px`,
+                          top: `${stemTop}px`,
+                          width: '1.5px',
+                          height: `${stemH}px`,
+                          background: 'var(--ui-accent)',
+                          opacity: 0.55
+                        }
+                      }),
+                      jsxs('div', {
+                        key: 'dot',
+                        className: 'absolute flex items-center justify-center',
+                        role: 'button',
+                        'data-graph-slot': slotFor,
+                        'aria-label': i18n.graphLink,
+                        title: i18n.graphLink,
+                        onPointerDown: event => startLink(event, slotFor),
+                        style: {
+                          left: `${anchor.x - 11}px`,
+                          top: `${anchor.y - 11}px`,
+                          width: '22px',
+                          height: '22px',
+                          zIndex: 31,
+                          cursor: 'crosshair',
+                          touchAction: 'none',
+                          pointerEvents: 'auto'
+                        },
+                        children: jsx('span', {
+                          className: 'rounded-full',
+                          style: {
+                            width: `${dot}px`,
+                            height: `${dot}px`,
+                            background: 'var(--ui-accent)',
+                            border: '2px solid var(--ui-bg-elevated)',
+                            boxShadow: '0 0 0 1px var(--ui-accent)',
+                            transition: 'width 120ms ease, height 120ms ease',
+                            pointerEvents: 'none'
+                          }
+                        })
+                      })
+                    ]
                   })
                 })()
               : null,
@@ -1686,10 +1719,11 @@ export function GraphView({
                       d: (() => {
                         const b = boxes.get(link.from)
                         if (!b) return ''
-                        const x1 = b.x + b.w / 2 + GRAPH_MARGIN
-                        // The arrow leaves FROM the slot, not from the border below it: the
-                        // slot is the base, the pointer drives the head.
-                        const y1 = b.y + b.h + GRAPH_MARGIN - 11
+                        // The arrow leaves FROM the slot: the dot is the base, the pointer
+                        // drives the head.
+                        const anchor = slotAnchorFor(link.from) || { x: b.x + b.w / 2 + GRAPH_MARGIN, y: b.y + b.h + GRAPH_MARGIN }
+                        const x1 = anchor.x
+                        const y1 = anchor.y
                         let x2 = link.x
                         let y2 = link.y
                         // Over a legal child, the head SNAPS to the nearest point of its border:
