@@ -1173,7 +1173,7 @@ export function GraphView({
   // it, that starts an arrow whose head the pointer drives. Clicking the slot must not start a
   // card drag — the two gestures are inverses (drag = the card becomes the child; arrow = the
   // card the head lands on becomes the child).
-  const SLOT_HALO = 26
+  const SLOT_HALO = 34
   const [slotFor, setSlotFor] = useState(null)
   const [slotNear, setSlotNear] = useState(false)
   const [link, setLink] = useState(null)
@@ -1335,15 +1335,18 @@ export function GraphView({
     return { x: b.x + b.w / 2 + GRAPH_MARGIN, y: b.y + b.h + GRAPH_MARGIN + half, half }
   }
 
+  // Measured from the SLOT, not from the border: the handle now hangs halfway to the card below,
+  // and a halo around the border would drop the slot the moment the pointer reached the dot it
+  // is supposed to grab.
   const slotUnder = pt => {
     if (!pt) return null
     let best = null
     let bestD = SLOT_HALO
     for (const b of boxes.values()) {
-      const cx = b.x + b.w / 2 + GRAPH_MARGIN
-      const cy = b.y + b.h + GRAPH_MARGIN
-      if (Math.abs(pt.x - cx) > b.w / 2 + 10) continue
-      const d = Math.abs(pt.y - cy)
+      const anchor = slotAnchorFor(b.id)
+      if (!anchor) continue
+      if (Math.abs(pt.x - anchor.x) > b.w / 2 + 10) continue
+      const d = Math.abs(pt.y - anchor.y)
       if (d < bestD) { bestD = d; best = b.id }
     }
     return best

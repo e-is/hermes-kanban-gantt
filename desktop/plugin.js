@@ -3622,7 +3622,7 @@ function GraphView({
   const NEAR_PX = 64;
   const [nearTarget, setNearTarget] = useState4(null);
   const dragRects = useRef2(/* @__PURE__ */ new Map());
-  const SLOT_HALO = 26;
+  const SLOT_HALO = 34;
   const [slotFor, setSlotFor] = useState4(null);
   const [slotNear, setSlotNear] = useState4(false);
   const [link, setLink] = useState4(null);
@@ -3748,10 +3748,10 @@ function GraphView({
     let best = null;
     let bestD = SLOT_HALO;
     for (const b of boxes.values()) {
-      const cx = b.x + b.w / 2 + GRAPH_MARGIN;
-      const cy = b.y + b.h + GRAPH_MARGIN;
-      if (Math.abs(pt.x - cx) > b.w / 2 + 10) continue;
-      const d = Math.abs(pt.y - cy);
+      const anchor = slotAnchorFor(b.id);
+      if (!anchor) continue;
+      if (Math.abs(pt.x - anchor.x) > b.w / 2 + 10) continue;
+      const d = Math.abs(pt.y - anchor.y);
       if (d < bestD) {
         bestD = d;
         best = b.id;
