@@ -5674,7 +5674,12 @@ function KanbanGanttPage() {
                   jsx6(ViewToggle, { value: viewMode, onChange: handleViewMode }),
                   // In graph mode the period selector has nothing to say (there is no time
                   // axis), so its slot carries the scopes instead — same width, same place.
-                  graphMode ? jsx6(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }) : listMode ? null : jsx6(PeriodSelector, {
+                  // Both, in graph mode: the scopes say WHICH tasks, the period says over how
+                  // long the activity band looks back (there is no time axis to slice, but the
+                  // sparkline's window is exactly that). Hiding the period here left the band
+                  // stuck on 24 h.
+                  graphMode ? jsx6(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }) : null,
+                  listMode ? null : jsx6(PeriodSelector, {
                     value: period,
                     onChange: handlePeriod,
                     disabled: false
