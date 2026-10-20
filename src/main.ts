@@ -93,6 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
+import { graphNodes, graphEdges, layoutGraph, activityMap, lineage, scopeIds, SPARK_BAND } from './core/graph-core.ts'
 import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -1088,7 +1089,416 @@ function ViewToggle({ value, onChange }) {
   return jsxs('span', {
     className: 'inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5',
     role: 'group',
-    children: [item('list', 'list-flat', i18n.viewList), item('timeline', 'graph-line', i18n.viewTimeline)]
+    children: [
+      item('list', 'list-flat', i18n.viewList),
+      item('timeline', 'graph-line', i18n.viewTimeline),
+      // Third value, same persistence and same chrome as the other two. The icon is the
+      // hierarchy glyph because the view answers "what hangs off what", not "when".
+      item('graph', 'type-hierarchy', i18n.viewGraph)
+    ]
+  })
+}
+
+/** Spread and zoom limits of the graph, in multiples of the layout's own size. */
+const GRAPH_ZOOM_MIN = 0.35
+const GRAPH_ZOOM_MAX = 2.5
+/** Breathing room around the layout, so the first and last nodes are not flush with the
+ *  canvas edge (and a selected node's ring is not clipped). */
+const GRAPH_MARGIN = 28
+/** The sparkline's resolution: 24 buckets is one per hour over a day, and stays legible
+ *  at the ~7 px band the node reserves for it. */
+const GRAPH_BUCKETS = 24
+
+/**
+ * The third view: the dependency structure, not the time.
+ *
+ * Drawn as HTML nodes over an SVG edge layer, under one shared transform. That is a
+ * deliberate departure from "all-SVG": a node carries real components — the Codicon
+ * status glyph, the profile avatar with its initials, the paperclip's hover menu — and
+ * putting those inside `<foreignObject>` to satisfy a purity argument would cost layout
+ * bugs and print fidelity for nothing. Edges are paths, because paths are what SVG is
+ * for; the boxes are boxes.
+ *
+ * Everything the layout needs comes from `graph-core` (pure, unit-tested); this function
+ * only places what that returns and reports what the reader does. It deliberately reads
+ * NO atoms: the page owns selection, zoom, scope and the drag state, and passes them in,
+ * which is also what makes the whole view renderable in the test harness.
+ */
+export function GraphView({
+  tasks = [],
+  i18n,
+  now,
+  zoom = 1,
+  onZoom,
+  scope = 'all',
+  onScopeChange,
+  selectedId = null,
+  showBoardBadge = false,
+  board = '',
+  dragId = null,
+  dropMap = null,
+  onOpen,
+  onDragStart,
+  onDragEnd,
+  onDropOn,
+  onNewChild,
+  sortBy = 'status',
+  sparkWindow = 24 * 3600
+}) {
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [dragging, setDragging] = useState(null)
+  const canvasRef = useRef(null)
+
+  const nodes = useMemo(() => graphNodes(tasks), [tasks])
+  const edges = useMemo(() => graphEdges(tasks), [tasks])
+  // The scope is a filter ON TOP of the funnel: `tasks` is already what the funnel, the
+  // search and the status chips allow, and this narrows it further.
+  const shown = useMemo(() => {
+    const keep = scopeIds(nodes, edges, scope)
+    return nodes.filter(n => keep.has(n.id))
+  }, [nodes, edges, scope])
+  const layout = useMemo(() => layoutGraph(shown, edges, { sortBy }), [shown, edges, sortBy])
+  const series = useMemo(() => activityMap(shown, now, sparkWindow, GRAPH_BUCKETS), [shown, now, sparkWindow])
+  const lin = useMemo(() => {
+    if (!selectedId || !shown.some(n => n.id === selectedId)) return null
+    const { upstream, downstream } = lineage(shown, edges, selectedId)
+    return { up: upstream, down: downstream }
+  }, [shown, edges, selectedId])
+
+  const hiddenByScope = nodes.length - shown.length
+  // Box lookup by id: a linear find per node turns the render pass quadratic, which on a
+  // 500-task board is 250 000 comparisons on every pan.
+  const boxes = useMemo(() => new Map(layout.nodes.map(b => [b.id, b])), [layout])
+
+  // Ctrl/⌘+wheel zooms at the cursor (the same gesture as the timeline, so nobody has to
+  // learn a second one); plain wheel scrolls, Shift+wheel pans. The listener is native
+  // and non-passive because React's wheel listeners are passive and cannot cancel
+  // Chromium's page zoom.
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return undefined
+    const onWheel = event => {
+      const intent = wheelIntent(event)
+      event.preventDefault()
+      if (intent === 'zoom') {
+        const rect = el.getBoundingClientRect()
+        const cx = event.clientX - rect.left
+        const cy = event.clientY - rect.top
+        const next = Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, zoom * wheelZoomFactor(event.deltaY, event.deltaMode)))
+        if (next === zoom) return
+        // Keep the point under the cursor still: that is the whole difference between
+        // zooming and jumping.
+        setPan(p => ({ x: cx - (cx - p.x) * (next / zoom), y: cy - (cy - p.y) * (next / zoom) }))
+        if (onZoom) onZoom(next)
+        return
+      }
+      if (intent === 'pan') setPan(p => ({ x: p.x - event.deltaY, y: p.y }))
+      else setPan(p => ({ x: p.x - (event.deltaX || 0), y: p.y - event.deltaY }))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [zoom, onZoom])
+
+  // Dragging the empty canvas pans: the pointer leaves the surface as soon as the gesture
+  // starts, so the move/up listeners live on the window and are removed with it.
+  const onCanvasPointerDown = event => {
+    if (event.target !== event.currentTarget && event.target.tagName !== 'svg') return
+    const start = { x: event.clientX - pan.x, y: event.clientY - pan.y }
+    setDragging(start)
+  }
+  useEffect(() => {
+    if (!dragging) return undefined
+    const onMove = event => setPan({ x: event.clientX - dragging.x, y: event.clientY - dragging.y })
+    const onUp = () => setDragging(null)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [dragging])
+
+  // Keyboard: the arrow keys walk the nodes in the order they are DRAWN (rank by rank,
+  // left to right), which is what the eye does. Enter opens, and the page owns Esc.
+  const order = useMemo(() => [...layout.nodes].sort((a, b) => (a.y - b.y) || (a.x - b.x)).map(b => b.id), [layout])
+  const onKeyDown = event => {
+    if (!order.length) return
+    const at = order.indexOf(selectedId)
+    const step = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1
+      : event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 0
+    if (step) {
+      event.preventDefault()
+      const next = at < 0 ? (step > 0 ? 0 : order.length - 1) : Math.min(order.length - 1, Math.max(0, at + step))
+      if (onOpen) onOpen(order[next])
+      return
+    }
+    if (event.key === 'Enter' && at >= 0 && onOpen) {
+      event.preventDefault()
+      onOpen(order[at])
+    }
+  }
+
+  if (!shown.length) {
+    return jsx('div', {
+      className: 'py-10 flex flex-col items-center gap-3',
+      children: jsx(EmptyState, {
+        title: i18n.nothingToDisplay,
+        description: hiddenByScope > 0 ? i18n.graphHiddenByScope(hiddenByScope) : i18n.noTasksMatch
+      })
+    })
+  }
+
+  const sparkline = node => {
+    const s = series.get(node.id)
+    // "Never touched" and "touched then silent" must not look the same: the first draws
+    // the band's axis and nothing else, the second draws bars on the left.
+    if (!s) return jsx('div', {
+      className: 'absolute inset-x-0 bottom-0 border-t border-dashed border-(--ui-stroke-tertiary)',
+      style: { height: `${SPARK_BAND}px` },
+      title: i18n.graphNoActivity,
+      'aria-hidden': 'true'
+    })
+    const tone = statusTone(node.status)
+    return jsx('div', {
+      className: 'absolute inset-x-0 bottom-0 flex items-end gap-px px-0.5',
+      style: { height: `${SPARK_BAND}px`, borderTop: `1px solid ${tone}33` },
+      title: i18n.graphSparkline(Math.round(sparkWindow / 3600)),
+      children: s.buckets.map((v, i) => jsx('span', {
+        key: i,
+        className: 'flex-1 rounded-t-[1px]',
+        style: {
+          height: v > 0 ? `${Math.max(18, Math.round((v / s.max) * 100))}%` : '0%',
+          background: tone,
+          opacity: node.status === 'running' && i === s.buckets.length - 1 ? 1 : 0.65
+        }
+      }))
+    })
+  }
+
+  const edgePath = e => {
+    const mid = (e.y1 + e.y2) / 2
+    return `M ${e.x1} ${e.y1} C ${e.x1} ${mid}, ${e.x2} ${mid}, ${e.x2} ${e.y2}`
+  }
+  const edgeTone = (from, to) => {
+    if (!lin) return 'var(--ui-stroke-secondary)'
+    if (lin.down.has(from) && (lin.down.has(to) || to === selectedId)) return statusTone('running')
+    if (lin.up.has(to) && (lin.up.has(from) || from === selectedId)) return statusTone('scheduled')
+    return 'var(--ui-stroke-secondary)'
+  }
+
+  return jsxs('div', {
+    className: 'mt-2 border border-(--ui-stroke-tertiary) rounded-md flex-1 min-h-0 relative overflow-hidden',
+    children: [
+      jsx('div', {
+        ref: canvasRef,
+        className: 'absolute inset-0 overflow-hidden cursor-grab',
+        tabIndex: 0,
+        role: 'application',
+        'aria-label': i18n.viewGraph,
+        title: i18n.graphHint,
+        onKeyDown,
+        onPointerDown: onCanvasPointerDown,
+        style: { cursor: dragging ? 'grabbing' : 'grab' },
+        children: jsxs('div', {
+          className: 'absolute origin-top-left',
+          style: {
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            width: `${layout.width + GRAPH_MARGIN * 2}px`,
+            height: `${layout.height + GRAPH_MARGIN * 2}px`
+          },
+          children: [
+            jsx('svg', {
+              className: 'absolute inset-0 pointer-events-none',
+              width: layout.width + GRAPH_MARGIN * 2,
+              height: layout.height + GRAPH_MARGIN * 2,
+              'aria-hidden': 'true',
+              children: [
+                jsx('defs', {
+                  children: jsx('marker', {
+                    id: 'kg-arrow', viewBox: '0 0 8 8', refX: '7', refY: '4',
+                    markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse',
+                    children: jsx('path', { d: 'M 0 0 L 8 4 L 0 8 z', fill: 'currentColor' })
+                  })
+                }),
+                ...layout.edges.map(e => jsx('path', {
+                  key: `${e.from}>${e.to}`,
+                  d: edgePath({ ...e, x1: e.x1 + GRAPH_MARGIN, y1: e.y1 + GRAPH_MARGIN, x2: e.x2 + GRAPH_MARGIN, y2: e.y2 + GRAPH_MARGIN }),
+                  fill: 'none',
+                  stroke: edgeTone(e.from, e.to),
+                  strokeWidth: 1.2,
+                  markerEnd: 'url(#kg-arrow)',
+                  style: { color: edgeTone(e.from, e.to) }
+                }))
+              ]
+            }),
+            ...shown.map(node => {
+              const b = boxes.get(node.id)
+              if (!b) return null
+              const tone = statusTone(node.status)
+              const failed = (node.runs || []).some(r => ['crashed', 'failed', 'spawn_failed', 'gave_up'].includes(r.outcome || r.status))
+              const isSelected = node.id === selectedId
+              const inLineage = lin ? (lin.up.has(node.id) || lin.down.has(node.id)) : false
+              const faded = Boolean(lin) && !isSelected && !inLineage
+              const prefix = splitTitlePrefix(node.title).prefix
+              const drop = dropMap && node.id !== dragId ? dropMap.get(node.id) : null
+              return jsxs('div', {
+                key: node.id,
+                className: cn(
+                  'absolute flex flex-col rounded-md border bg-(--ui-bg-elevated) overflow-hidden select-none cursor-pointer',
+                  isSelected ? 'border-(--ui-accent)' : 'border-(--ui-stroke-secondary)',
+                  drop && drop.allowed ? 'ring-1 ring-(--ui-accent)' : '',
+                  drop && !drop.allowed ? 'ring-1 ring-red-500/60' : ''
+                ),
+                'data-graph-node': node.id,
+                style: {
+                  left: `${b.x + GRAPH_MARGIN}px`,
+                  top: `${b.y + GRAPH_MARGIN}px`,
+                  width: `${b.w}px`,
+                  height: `${b.h}px`,
+                  opacity: faded ? 0.45 : 1,
+                  borderColor: isSelected ? 'var(--ui-accent)' : undefined,
+                  boxShadow: isSelected ? '0 0 0 1px var(--ui-accent)' : undefined,
+                  // A left edge in the status tone: the stripe kanban-graph has, and the
+                  // cheapest way to read a board of 60 nodes at a glance.
+                  borderLeft: `3px solid ${tone}`
+                },
+                draggable: Boolean(onDragStart),
+                title: `${node.title} (${node.id})${node.assignee ? ` — ${node.assignee}` : ''}`,
+                onClick: () => onOpen && onOpen(node.id),
+                onDoubleClick: event => {
+                  event.preventDefault()
+                  if (onNewChild) onNewChild(node.id)
+                },
+                onDragStart: event => {
+                  event.dataTransfer.setData('text/plain', node.id)
+                  event.dataTransfer.effectAllowed = 'move'
+                  if (onDragStart) onDragStart(node.id)
+                },
+                onDragEnd: () => onDragEnd && onDragEnd(),
+                onDragOver: event => {
+                  if (!onDropOn) return
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = drop && drop.allowed ? 'move' : 'none'
+                },
+                onDrop: event => {
+                  if (!onDropOn) return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  onDropOn(node.id)
+                },
+                children: [
+                  jsxs('div', {
+                    className: 'flex items-start gap-1 px-1.5 pt-1 min-w-0',
+                    children: [
+                      jsx('span', {
+                        className: 'shrink-0 inline-flex items-center justify-center mt-[1px]',
+                        style: { color: tone },
+                        title: node.status,
+                        children: node.status === 'running'
+                          ? jsxs('span', { className: 'relative inline-flex items-center justify-center', children: [
+                              jsx('span', { className: 'kg-arc', style: { '--kanban-tone': tone } }),
+                              jsx(Codicon, { name: statusIcon(node.status), size: '0.8rem' })
+                            ] })
+                          : jsx(Codicon, { name: statusIcon(node.status), size: '0.8rem' })
+                      }),
+                      jsxs('span', {
+                        className: 'min-w-0 flex-1 text-[10.5px] leading-tight text-(--ui-text-primary) truncate',
+                        children: [
+                          prefix ? jsx('span', {
+                            className: 'mr-1 rounded-sm px-0.5 text-[8.5px] font-semibold text-(--ui-text-secondary)',
+                            style: { backgroundColor: 'var(--ui-bg-tertiary)', border: '1px solid var(--ui-stroke-tertiary)' },
+                            children: prefix
+                          }) : null,
+                          node.title || node.id
+                        ]
+                      }),
+                      failed
+                        ? jsx(Codicon, { name: 'warning', size: '0.75rem', className: 'shrink-0 text-[#f87171]', title: i18n.runs((node.runs || []).length) })
+                        : node.status === 'blocked'
+                          ? jsx(Codicon, { name: 'warning', size: '0.75rem', className: 'shrink-0', style: { color: statusTone('blocked') }, title: node.status })
+                          : null
+                    ]
+                  }),
+                  jsxs('div', {
+                    className: 'mt-auto flex items-center gap-1 px-1.5 pb-0.5 text-[9px] text-(--ui-text-quaternary) min-w-0',
+                    children: [
+                      showBoardBadge && node.board
+                        ? jsx('span', {
+                            className: 'shrink-0 max-w-[64px] truncate rounded px-1 font-mono text-[8.5px]',
+                            style: { backgroundColor: 'var(--ui-bg-tertiary)' },
+                            title: node.board,
+                            children: node.board
+                          })
+                        : null,
+                      node.priority != null
+                        ? jsx('span', { className: 'shrink-0 tabular-nums', children: `P${node.priority}` })
+                        : null,
+                      jsx('span', { className: 'flex-1' }),
+                      node.attachmentCount
+                        ? jsx(AttachmentMenu, {
+                            taskId: node.id,
+                            board: node.board || board,
+                            count: node.attachmentCount,
+                            i18n,
+                            onPreview: (att, siblings) => $openAttachment.set(
+                              attachmentPreviewState(node.id, node.board || board, att, siblings)
+                            )
+                          })
+                        : null,
+                      node.assignee
+                        ? jsx('span', { className: 'shrink-0 inline-flex', title: node.assignee, children: jsx(ProfileAvatar, { name: node.assignee, size: '0.85rem' }) })
+                        : jsx('span', { className: 'shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60', style: { width: '0.7rem', height: '0.7rem' } })
+                    ]
+                  }),
+                  // The band comes out of the node's own padding, so the node's height is
+                  // a constant in the layout (SPARK_BAND) and never grows for it.
+                  sparkline(node)
+                ]
+              })
+            })
+          ]
+        })
+      }),
+      // What the layout had to decide, said out loud instead of left to be noticed:
+      // implied edges hidden by the reduction, loops the ranks had to band, links that
+      // leave the view (a filtered-out parent), and what the scope is holding back.
+      jsxs('div', {
+        className: 'pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-3 px-2 py-1 text-[9.5px] text-(--ui-text-quaternary) bg-gradient-to-t from-(--ui-bg-elevated) to-transparent',
+        children: [
+          layout.implied ? jsx('span', { children: i18n.graphImplied(layout.implied) }) : null,
+          layout.cyclic.length ? jsx('span', { className: 'text-[#f87171]', children: i18n.graphCyclic(layout.cyclic.length) }) : null,
+          layout.dangling ? jsx('span', { children: i18n.graphDangling(layout.dangling) }) : null,
+          hiddenByScope ? jsx('span', { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
+          jsx('span', { className: 'ml-auto tabular-nums', children: `${shown.length}/${nodes.length}` })
+        ]
+      })
+    ]
+  })
+}
+
+/** The scopes of the graph, as a segmented control: All / Open / Running + lineage. */
+function GraphScopeToggle({ value, onChange }) {
+  const i18n = useGanttI18n()
+  const item = (id, label) => jsx('button', {
+    type: 'button',
+    onClick: () => onChange(id),
+    'aria-pressed': value === id,
+    title: label,
+    className: cn(
+      'px-2 py-0.5 text-[11px] rounded cursor-pointer border-0 whitespace-nowrap',
+      value === id ? 'bg-(--ui-accent)/15 text-(--ui-accent) font-medium' : 'bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)'
+    ),
+    children: label
+  }, id)
+  return jsxs('span', {
+    className: 'inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5',
+    role: 'group',
+    'aria-label': i18n.graphScopeAria,
+    children: [
+      item('all', i18n.graphScopeAll),
+      item('open', i18n.graphScopeOpen),
+      item('running-lineage', i18n.graphScopeRunning)
+    ]
   })
 }
 
@@ -2608,8 +3018,40 @@ export function KanbanGanttPage() {
   // width to the columns: task, assignee, status, last activity.
   const [viewMode, setViewMode] = useState(() => {
     const saved = getStorage() ? getStorage().get('viewMode', null) : null
-    return saved === 'list' ? 'list' : 'timeline'
+    return saved === 'list' || saved === 'graph' ? saved : 'timeline'
   })
+  const graphMode = viewMode === 'graph'
+
+  // The graph's own zoom: the SAME affordances as the timeline (Ctrl+wheel and the
+  // slider), a different scale — a graph is sized by its layout, not by a time base. Its
+  // percentage is persisted on its own key so switching views never rescales the other.
+  const [graphZoomPct, setGraphZoomPct] = useState(() => {
+    const s = getStorage()
+    const saved = Number(s ? s.get('graphZoomPct', null) : null)
+    const lo = Math.round(GRAPH_ZOOM_MIN * 100)
+    const hi = Math.round(GRAPH_ZOOM_MAX * 100)
+    return Number.isFinite(saved) && saved >= lo && saved <= hi ? saved : 100
+  })
+  const handleGraphZoomPct = next => {
+    const lo = Math.round(GRAPH_ZOOM_MIN * 100)
+    const hi = Math.round(GRAPH_ZOOM_MAX * 100)
+    const clamped = Math.min(hi, Math.max(lo, Math.round(next)))
+    setGraphZoomPct(clamped)
+    const s = getStorage()
+    if (s) s.set('graphZoomPct', String(clamped))
+  }
+
+  // Which tasks the graph shows, on top of every filter: all of them, the open ones, or
+  // the running ones with their whole lineage (the question this view exists to answer).
+  const [graphScope, setGraphScope] = useState(() => {
+    const s = getStorage() ? getStorage().get('graphScope', null) : null
+    return ['all', 'open', 'running-lineage'].includes(s) ? s : 'all'
+  })
+  const handleGraphScope = next => {
+    setGraphScope(next)
+    const s = getStorage()
+    if (s) s.set('graphScope', next)
+  }
   // The selected period shortcut, in seconds (null = the view is the reader's).
   // Decided from storage ALONE, in the initialiser: the stored period is only honoured
   // when the stored zoom is still the one that period last calibrated to, which is
@@ -3347,24 +3789,28 @@ export function KanbanGanttPage() {
             className: 'inline-flex items-center gap-3',
             children: [
               jsx(ViewToggle, { value: viewMode, onChange: handleViewMode }),
-              listMode ? null : jsx(PeriodSelector, {
-                value: period,
-                onChange: handlePeriod,
-                disabled: false
-              }),
+              // In graph mode the period selector has nothing to say (there is no time
+              // axis), so its slot carries the scopes instead — same width, same place.
+              graphMode
+                ? jsx(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope })
+                : listMode ? null : jsx(PeriodSelector, {
+                    value: period,
+                    onChange: handlePeriod,
+                    disabled: false
+                  }),
               listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {
                   type: 'range',
-                  min: String(ZOOM_PCT_MIN),
-                  max: String(ZOOM_PCT_MAX),
+                  min: String(graphMode ? Math.round(GRAPH_ZOOM_MIN * 100) : ZOOM_PCT_MIN),
+                  max: String(graphMode ? Math.round(GRAPH_ZOOM_MAX * 100) : ZOOM_PCT_MAX),
                   step: '1',
-                  value: String(zoomPct),
-                  onInput: event => handleZoomPct(Number(event.target.value)),
+                  value: String(graphMode ? graphZoomPct : zoomPct),
+                  onInput: event => (graphMode ? handleGraphZoomPct : handleZoomPct)(Number(event.target.value)),
                   className: 'w-24',
                   title: i18n.zoomWheelHint(modifierKeyLabel()),
-                  'aria-label': i18n.zoomTimeline
+                  'aria-label': graphMode ? i18n.graphZoom : i18n.zoomTimeline
                 }),
-                jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${zoomPct}%` })
+                jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${graphMode ? graphZoomPct : zoomPct}%` })
               ] }),
               // The Refresh button is back, but only when the page is KNOWINGLY on
               // the 60 s poll: the push is off (KANBAN_GANTT_WS=0 on the gateway, or
@@ -3439,6 +3885,33 @@ export function KanbanGanttPage() {
 
       !derived
         ? jsx('div', { className: 'py-10 grid place-items-center', children: jsx(Loader, {}) })
+        : graphMode
+        ? jsx(GraphView, {
+            tasks: derived.tasks || [],
+            i18n,
+            now,
+            zoom: graphZoomPct / 100,
+            onZoom: factor => handleGraphZoomPct(factor * 100),
+            scope: graphScope,
+            onScopeChange: handleGraphScope,
+            selectedId: openTaskId,
+            // The board name earns its place only when several boards share the view, the
+            // same rule the rows follow: with one board selected it is already on the
+            // switcher, and repeating it on every node is noise.
+            showBoardBadge: isAllBoards,
+            board,
+            dragId,
+            dropMap,
+            onOpen: id => $openTaskId.set(id),
+            onDragStart: handleDragStart,
+            onDragEnd: () => setDragId(null),
+            onDropOn: handleDropOn,
+            // New task FROM a node: the node is the parent, and the existing dialog does
+            // the rest (it is the same creation verb, reached from the graph).
+            onNewChild: id => $newTask.set({ parentId: id }),
+            sortBy: 'status',
+            sparkWindow: period || 24 * 3600
+          })
         : rows.length === 0
         ? jsxs('div', {
             className: 'py-10 flex flex-col items-center gap-3',

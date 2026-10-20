@@ -426,6 +426,72 @@ if (pageNode) {
   globalThis.__kgView = 'timeline'
 }
 
+// ---------------------------------------------------------------------------
+// 3b) the graph view, rendered DIRECTLY: the harness's REST stub answers `{}` for the
+// board snapshot, so the page itself has no tasks to lay out. The component takes no
+// atoms on purpose, which means a fixture board is enough to exercise the real layout,
+// the real node anatomy and the real scope filter.
+// ---------------------------------------------------------------------------
+
+if (typeof pluginModule.GraphView === 'function') {
+  const H = 3600
+  const now = 1_800_000_000
+  const mk = (id, extra = {}) => ({
+    id, title: extra.title || `task ${id}`, status: extra.status || 'todo',
+    priority: extra.priority ?? null, assignee: extra.assignee || '',
+    parents: extra.parents || [], children: extra.children || [], events: extra.events || [],
+    runs: extra.runs || [], attachment_count: extra.attachment_count || 0, board: 'sumaris-app'
+  })
+  const tasks = [
+    mk('a', { status: 'done', children: [{ id: 'b' }], events: [{ created_at: now - 23.5 * H }] }),
+    mk('b', { status: 'running', parents: [{ id: 'a' }], children: [{ id: 'c' }], assignee: 'dev', attachment_count: 2 }),
+    mk('c', { status: 'todo', parents: [{ id: 'b' }] })
+  ]
+  // i18n keys that are plain strings (the rest are the counting functions).
+  const PLAIN = new Set(['nothingToDisplay', 'noTasksMatch', 'viewGraph', 'graphNoActivity', 'graphScopeAria', 'graphScopeAll', 'graphScopeOpen', 'graphScopeRunning'])
+  const gi18n = new Proxy({}, {
+    get: (_t, key) => (PLAIN.has(String(key))
+      ? String(key)
+      : (...args) => `${String(key)}(${args.join(',')})`)
+  })
+  const renderGraph = props => pluginModule.GraphView({ tasks, i18n: gi18n, now, ...props })
+  const all = JSON.stringify(renderGraph({}))
+  const nodeCount = (all.match(/"data-graph-node"/g) || []).length
+  check(nodeCount === 3, `the graph draws one node per visible task (got ${nodeCount})`)
+  check((all.match(/"markerEnd":"url\(#kg-arrow\)"/g) || []).length === 2,
+    'the graph draws one arrow per parent→child link (two links on a chain of three)')
+  // Node anatomy: the status stripe, the paperclip with its count, and the profile initials
+  // avatar are what our rows show and a kanban-graph card does not.
+  check(all.includes('3px solid'), 'each node carries its status stripe')
+  check(all.includes('0.85rem') && all.includes('dev'), 'the node shows the assignee avatar (initials)')
+  check(all.includes('graphSparkline(24)'), 'the sparkline is drawn from the events, over the period window')
+  check(all.includes('graphNoActivity'), 'a node with no activity draws an empty axis instead of a flat line')
+  // The footer always reports how much of the board it is showing (nothing was implied or
+  // dangling on this chain, so the counts collapse to the ratio).
+  check(all.includes('"children":"3/3"'), 'the footer reports how many tasks the view shows')
+
+  // No board name on the node unless several boards are shown: the rule we keep from our
+  // rows and deliberately do NOT take from kanban-graph.
+  check(!all.includes('"children":"sumaris-app"'), 'a single-board graph carries no board name')
+  const withBadge = JSON.stringify(renderGraph({ showBoardBadge: true }))
+  check(withBadge.includes('"children":"sumaris-app"'), 'the all-boards graph names the board on the node')
+
+  // Scopes: Open drops the done task; Running + lineage keeps the running one AND its
+  // ancestry and descendants.
+  const open = JSON.stringify(renderGraph({ scope: 'open' }))
+  check((open.match(/"data-graph-node"/g) || []).length === 2, 'the Open scope drops the done task')
+  const running = JSON.stringify(renderGraph({ scope: 'running-lineage' }))
+  check((running.match(/"data-graph-node"/g) || []).length === 3,
+    'Running + lineage keeps the running task with its whole lineage')
+
+  // A board with nothing running says so honestly rather than drawing an empty frame.
+  const nothingRunning = JSON.stringify(pluginModule.GraphView({
+    tasks: [mk('x', { status: 'todo' })], i18n: gi18n, now, scope: 'running-lineage'
+  }))
+  check(nothingRunning.includes('nothingToDisplay'), 'an empty scope renders the empty state, not a bare canvas')
+}
+
+
 // 4) titlebar chrome: switcher contributed to titleBar.center
 const nav = contributions.find(c => c.area === 'sidebar.nav')
 check(nav && nav.data && nav.data.path === '/kanban-gantt', 'sidebar nav path')

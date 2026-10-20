@@ -232,6 +232,20 @@ var GANTT_LOCALES = {
     lastActivityColumn: "Updated",
     viewList: "List",
     viewTimeline: "Timeline",
+    // The third view: dependency structure rather than time.
+    viewGraph: "Graph",
+    graphScopeAll: "All",
+    graphScopeOpen: "Open",
+    graphScopeRunning: "Running + lineage",
+    graphScopeAria: "Which tasks the graph shows",
+    graphZoom: "Graph zoom",
+    graphHint: "Click to open · double-click to add a child · drag a task onto another to re-parent it",
+    graphImplied: (n) => `${n} implied link${n > 1 ? "s" : ""} hidden`,
+    graphCyclic: (n) => `${n} task${n > 1 ? "s" : ""} in a dependency loop`,
+    graphDangling: (n) => `${n} link${n > 1 ? "s" : ""} to a task outside this view`,
+    graphSparkline: (n) => `Activity over the last ${n} h`,
+    graphNoActivity: "No activity in this window",
+    graphHiddenByScope: (n) => `${n} task${n > 1 ? "s" : ""} hidden by this scope`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: "now", m: "m", h: "h", d: "d", w: "w", mo: "mo", y: "y" },
     clickForDetail: "click for details",
@@ -461,6 +475,19 @@ var GANTT_LOCALES = {
     lastActivityColumn: "Mis à jour",
     viewList: "Liste",
     viewTimeline: "Chronologie",
+    viewGraph: "Graphe",
+    graphScopeAll: "Tous",
+    graphScopeOpen: "Ouverts",
+    graphScopeRunning: "En cours + lignée",
+    graphScopeAria: "Quelles tâches le graphe montre",
+    graphZoom: "Zoom du graphe",
+    graphHint: "Clic pour ouvrir · double-clic pour ajouter un enfant · glisser une tâche sur une autre pour la re-parentaliser",
+    graphImplied: (n) => `${n} lien${n > 1 ? "s" : ""} implicite${n > 1 ? "s" : ""} masqué${n > 1 ? "s" : ""}`,
+    graphCyclic: (n) => `${n} tâche${n > 1 ? "s" : ""} dans une boucle de dépendance`,
+    graphDangling: (n) => `${n} lien${n > 1 ? "s" : ""} vers une tâche hors de cette vue`,
+    graphSparkline: (n) => `Activité sur les ${n} dernières heures`,
+    graphNoActivity: "Aucune activité dans cette fenêtre",
+    graphHiddenByScope: (n) => `${n} tâche${n > 1 ? "s" : ""} masquée${n > 1 ? "s" : ""} par ce filtre`,
     // Suffixes concaténés au nombre (« 5min », « 2 j »… l'espace est inclus).
     relativeUnits: { now: "à l'instant", m: "min", h: "h", d: " j", w: " sem", mo: " mois", y: " a" },
     clickForDetail: "cliquer pour le détail",
@@ -689,6 +716,19 @@ var GANTT_LOCALES = {
     lastActivityColumn: "已更新",
     viewList: "列表",
     viewTimeline: "时间线",
+    viewGraph: "关系图",
+    graphScopeAll: "全部",
+    graphScopeOpen: "未完成",
+    graphScopeRunning: "进行中 + 血缘",
+    graphScopeAria: "关系图显示哪些任务",
+    graphZoom: "关系图缩放",
+    graphHint: "单击打开 · 双击添加子任务 · 将一个任务拖到另一个上以更改父任务",
+    graphImplied: (n) => `已隐藏 ${n} 条隐含链接`,
+    graphCyclic: (n) => `${n} 个任务处于依赖环中`,
+    graphDangling: (n) => `${n} 条链接指向此视图外的任务`,
+    graphSparkline: (n) => `最近 ${n} 小时的活动`,
+    graphNoActivity: "此时间窗口内无活动",
+    graphHiddenByScope: (n) => `此筛选隐藏了 ${n} 个任务`,
     relativeUnits: { now: "刚刚", m: "分", h: "小时", d: "天", w: "周", mo: "个月", y: "年" },
     clickForDetail: "点击查看详情",
     legendShow: (label) => `点击显示 ${label}`,
@@ -2142,6 +2182,318 @@ function MoveUnderDialog({
   ] }) });
 }
 
+// src/core/graph-core.ts
+var NODE_W = 172;
+var NODE_H = 62;
+var SPARK_BAND = 7;
+var NODE_GAP = 14;
+var RANK_GAP = 52;
+var idOf = (ref) => ref && typeof ref === "object" ? ref.id : ref;
+function graphNodes(tasks) {
+  return (tasks || []).map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    priority: t.priority ?? null,
+    assignee: t.assignee || "",
+    board: t.board || "",
+    attachmentCount: t.attachment_count || 0,
+    // Kept whole: the sparkline needs them and a second fetch per node is not a thing.
+    events: t.events || [],
+    runs: t.runs || [],
+    startedAt: t.started_at || null,
+    completedAt: t.completed_at || null,
+    createdAt: t.created_at || null
+  }));
+}
+function dedupeEdges(edges, { keepSelf = false } = {}) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const e of edges || []) {
+    const from = idOf(e && e.from);
+    const to = idOf(e && e.to);
+    if (typeof from !== "string" || typeof to !== "string" || !from || !to) continue;
+    if (from === to && !keepSelf) continue;
+    const key = from + "\0" + to;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ from, to });
+  }
+  return out;
+}
+function graphEdges(tasks) {
+  const edges = [];
+  for (const t of tasks || []) {
+    for (const p of t.parents || []) {
+      const pid = idOf(p);
+      if (pid) edges.push({ from: pid, to: t.id });
+    }
+    for (const c of t.children || []) {
+      const cid = idOf(c);
+      if (cid) edges.push({ from: t.id, to: cid });
+    }
+  }
+  return dedupeEdges(edges);
+}
+function edgesWithin(nodes, edges) {
+  const known = new Set((nodes || []).map((n) => typeof n === "string" ? n : n.id));
+  const kept = [];
+  let dangling = 0;
+  for (const e of dedupeEdges(edges)) {
+    if (known.has(e.from) && known.has(e.to)) kept.push(e);
+    else dangling++;
+  }
+  return { edges: kept, dangling };
+}
+function ranks(nodes, edges, { depthCap = 4096 } = {}) {
+  const ids = (nodes || []).map((n) => typeof n === "string" ? n : n.id);
+  const out = new Map(ids.map((id) => [id, 0]));
+  const { edges: es } = edgesWithin(ids, edges);
+  const children = new Map(ids.map((id) => [id, []]));
+  const indegree = new Map(ids.map((id) => [id, 0]));
+  for (const e of es) {
+    children.get(e.from).push(e.to);
+    indegree.set(e.to, indegree.get(e.to) + 1);
+  }
+  const queue = ids.filter((id) => indegree.get(id) === 0).sort();
+  const settled = new Set(queue);
+  let head = 0;
+  while (head < queue.length) {
+    const id = queue[head++];
+    for (const child of children.get(id)) {
+      if (out.get(id) + 1 > out.get(child)) out.set(child, out.get(id) + 1);
+      indegree.set(child, indegree.get(child) - 1);
+      if (indegree.get(child) === 0 && !settled.has(child)) {
+        settled.add(child);
+        queue.push(child);
+      }
+    }
+  }
+  const leftover = ids.filter((id) => !settled.has(id));
+  const cyclic = [];
+  let truncated = false;
+  if (leftover.length) {
+    const inLeftover = new Set(leftover);
+    const onLoop = /* @__PURE__ */ new Set();
+    for (const id of leftover) {
+      const seen = /* @__PURE__ */ new Set();
+      const stack = (children.get(id) || []).filter((c) => inLeftover.has(c));
+      while (stack.length) {
+        const cur = stack.pop();
+        if (cur === id) {
+          onLoop.add(id);
+          break;
+        }
+        if (seen.has(cur)) continue;
+        seen.add(cur);
+        for (const next of children.get(cur) || []) if (inLeftover.has(next)) stack.push(next);
+      }
+    }
+    const band = Math.max(0, ...[...settled].map((id) => out.get(id))) + 1;
+    for (const id of onLoop) out.set(id, Math.min(band, depthCap));
+    cyclic.push(...[...onLoop].sort());
+    const rest2 = leftover.filter((id) => !onLoop.has(id));
+    const restSet = new Set(rest2);
+    const rounds = Math.min(rest2.length + 1, depthCap);
+    for (let round = 0; round < rounds && rest2.length; round++) {
+      let changed = false;
+      for (const e of es) {
+        if (!restSet.has(e.to) || !inLeftover.has(e.from)) continue;
+        const candidate = Math.min(out.get(e.from) + 1, depthCap);
+        if (candidate > out.get(e.to)) {
+          out.set(e.to, candidate);
+          changed = true;
+        }
+      }
+      if (!changed) break;
+      if (round === rounds - 1) truncated = true;
+    }
+  }
+  return { ranks: out, cyclic, truncated };
+}
+var STATUS_ORDER = ["triage", "todo", "scheduled", "ready", "running", "review", "blocked", "done", "archived"];
+var priorityValue = (p) => typeof p === "number" ? p : Number(p) || 0;
+function rankComparator(by) {
+  const title = (a, b) => String(a.title || "").localeCompare(String(b.title || ""), void 0, { numeric: true });
+  return (a, b) => {
+    let d = 0;
+    if (by === "status") {
+      const sa = STATUS_ORDER.indexOf(a.status), sb = STATUS_ORDER.indexOf(b.status);
+      d = (sa < 0 ? 99 : sa) - (sb < 0 ? 99 : sb);
+    } else if (by === "assignee") {
+      d = String(a.assignee || "￿").localeCompare(String(b.assignee || "￿"));
+    } else if (by === "priority") {
+      d = priorityValue(a.priority) - priorityValue(b.priority);
+    } else if (by === "updated") {
+      d = (b.startedAt || 0) - (a.startedAt || 0);
+    }
+    if (d !== 0) return d;
+    return title(a, b) || String(a.id).localeCompare(String(b.id));
+  };
+}
+function orderRanks(nodes, rankMap, by = "status") {
+  const cmp = rankComparator(by);
+  const rows = [];
+  for (const n of nodes || []) {
+    const r = rankMap.get(n.id) ?? 0;
+    (rows[r] = rows[r] || []).push(n);
+  }
+  return rows.filter(Boolean).map((row) => row.sort(cmp));
+}
+function reduceEdges(nodes, edges) {
+  const { edges: es } = edgesWithin(nodes, edges);
+  const children = /* @__PURE__ */ new Map();
+  for (const e of es) {
+    if (!children.has(e.from)) children.set(e.from, []);
+    children.get(e.from).push(e.to);
+  }
+  const kept = [];
+  let implied = 0;
+  for (const e of es) {
+    const seen = /* @__PURE__ */ new Set();
+    const stack = (children.get(e.from) || []).filter((c) => c !== e.to);
+    let bypass = false;
+    while (stack.length) {
+      const cur = stack.pop();
+      if (cur === e.to) {
+        bypass = true;
+        break;
+      }
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      for (const next of children.get(cur) || []) stack.push(next);
+    }
+    if (bypass) implied++;
+    else kept.push(e);
+  }
+  return { edges: kept, implied };
+}
+function lineage(nodes, edges, id) {
+  const { edges: es } = edgesWithin(nodes, edges);
+  const up = /* @__PURE__ */ new Map();
+  const down = /* @__PURE__ */ new Map();
+  for (const e of es) {
+    if (!up.has(e.to)) up.set(e.to, []);
+    up.get(e.to).push(e.from);
+    if (!down.has(e.from)) down.set(e.from, []);
+    down.get(e.from).push(e.to);
+  }
+  const walk = (start, adjacency) => {
+    const seen = /* @__PURE__ */ new Set();
+    const stack = [...adjacency.get(start) || []];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (seen.has(cur) || cur === start) continue;
+      seen.add(cur);
+      for (const next of adjacency.get(cur) || []) stack.push(next);
+    }
+    return seen;
+  };
+  return { upstream: walk(id, up), downstream: walk(id, down) };
+}
+function activityBuckets(node, now, windowSec, count) {
+  const buckets = new Array(count).fill(0);
+  const start = now - windowSec;
+  const bucketSec = windowSec / count;
+  const stamp = (ts, weight) => {
+    const t = Number(ts);
+    if (!Number.isFinite(t) || t < start) return false;
+    const raw = Math.floor((t - start) / bucketSec);
+    const i = Math.max(0, Math.min(count - 1, raw));
+    buckets[i] += weight;
+    return true;
+  };
+  let touched = false;
+  for (const e of node?.events || []) {
+    if (stamp(e.created_at ?? e.ts, 1)) touched = true;
+  }
+  for (const r of node?.runs || []) {
+    if (stamp(r.started_at, 1)) touched = true;
+    if (r.ended_at && stamp(r.ended_at, 1)) touched = true;
+  }
+  if (!touched) return null;
+  const max = buckets.reduce((m, v) => v > m ? v : m, 0);
+  return { buckets, max };
+}
+function activityMap(nodes, now, windowSec, count) {
+  const out = /* @__PURE__ */ new Map();
+  for (const n of nodes || []) {
+    const series = activityBuckets(n, now, windowSec, count);
+    if (series) out.set(n.id, series);
+  }
+  return out;
+}
+function layoutGraph(nodes, edges, { arrangement = "down", sortBy = "status" } = {}) {
+  const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, title: n } : n);
+  const { edges: es, dangling } = edgesWithin(list, edges);
+  const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
+  const reduced = reduceEdges(list, es);
+  const rows = orderRanks(list, rankMap, sortBy);
+  const vertical = arrangement !== "flow";
+  const boxes = /* @__PURE__ */ new Map();
+  const placed = [];
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    const extent = row.length * (vertical ? NODE_W + NODE_GAP : NODE_H + NODE_GAP) - NODE_GAP;
+    let offset = -extent / 2;
+    for (const node of row) {
+      const box = vertical ? { id: node.id, x: offset, y: r * (NODE_H + RANK_GAP), w: NODE_W, h: NODE_H, rank: r } : { id: node.id, x: r * (NODE_W + RANK_GAP), y: offset, w: NODE_W, h: NODE_H, rank: r };
+      offset += vertical ? NODE_W + NODE_GAP : NODE_H + NODE_GAP;
+      boxes.set(node.id, box);
+      placed.push(box);
+    }
+  }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const b of placed) {
+    minX = Math.min(minX, b.x);
+    minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.w);
+    maxY = Math.max(maxY, b.y + b.h);
+  }
+  if (!placed.length) {
+    minX = 0;
+    minY = 0;
+    maxX = 0;
+    maxY = 0;
+  }
+  for (const b of placed) {
+    b.x -= minX;
+    b.y -= minY;
+  }
+  const drawn = [];
+  for (const e of reduced.edges) {
+    const a = boxes.get(e.from), b = boxes.get(e.to);
+    if (!a || !b) continue;
+    drawn.push(vertical ? { from: e.from, to: e.to, x1: a.x + a.w / 2, y1: a.y + a.h, x2: b.x + b.w / 2, y2: b.y } : { from: e.from, to: e.to, x1: a.x + a.w, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2 });
+  }
+  return {
+    nodes: placed,
+    edges: drawn,
+    width: maxX - minX,
+    height: maxY - minY,
+    ranks: rows.length,
+    implied: reduced.implied,
+    dangling,
+    cyclic,
+    truncated
+  };
+}
+function scopeIds(nodes, edges, scope) {
+  const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, status: void 0 } : n);
+  if (scope === "open") {
+    return new Set(list.filter((n) => n.status !== "done" && n.status !== "archived").map((n) => n.id));
+  }
+  if (scope !== "running-lineage") return new Set(list.map((n) => n.id));
+  const running = list.filter((n) => n.status === "running").map((n) => n.id);
+  const keep = new Set(running);
+  for (const id of running) {
+    const { upstream, downstream } = lineage(list, edges, id);
+    for (const u of upstream) keep.add(u);
+    for (const d of downstream) keep.add(d);
+  }
+  return keep;
+}
+
 // src/main.ts
 var ID2 = "kanban-gantt";
 var ROW_H = 28;
@@ -2882,7 +3234,7 @@ var STATUS_META = {
   done: { tone: "var(--ui-text-tertiary)", label: "Done" },
   archived: { tone: "var(--ui-text-quaternary)", label: "Archived" }
 };
-var STATUS_ORDER = ["triage", "todo", "ready", "blocked", "running", "review", "done"];
+var STATUS_ORDER2 = ["triage", "todo", "ready", "blocked", "running", "review", "done"];
 var ACTION_MATRIX = {
   triage: { primary: ["todo"], more: ["blocked", "archive"] },
   todo: { primary: ["ready"], more: ["blocked", "review", "archive"] },
@@ -2980,7 +3332,357 @@ function ViewToggle({ value, onChange }) {
   return jsxs6("span", {
     className: "inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5",
     role: "group",
-    children: [item("list", "list-flat", i18n.viewList), item("timeline", "graph-line", i18n.viewTimeline)]
+    children: [
+      item("list", "list-flat", i18n.viewList),
+      item("timeline", "graph-line", i18n.viewTimeline),
+      // Third value, same persistence and same chrome as the other two. The icon is the
+      // hierarchy glyph because the view answers "what hangs off what", not "when".
+      item("graph", "type-hierarchy", i18n.viewGraph)
+    ]
+  });
+}
+var GRAPH_ZOOM_MIN = 0.35;
+var GRAPH_ZOOM_MAX = 2.5;
+var GRAPH_MARGIN = 28;
+var GRAPH_BUCKETS = 24;
+function GraphView({
+  tasks = [],
+  i18n,
+  now,
+  zoom = 1,
+  onZoom,
+  scope = "all",
+  onScopeChange,
+  selectedId = null,
+  showBoardBadge = false,
+  board = "",
+  dragId = null,
+  dropMap = null,
+  onOpen,
+  onDragStart,
+  onDragEnd,
+  onDropOn,
+  onNewChild,
+  sortBy = "status",
+  sparkWindow = 24 * 3600
+}) {
+  const [pan, setPan] = useState4({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState4(null);
+  const canvasRef = useRef2(null);
+  const nodes = useMemo2(() => graphNodes(tasks), [tasks]);
+  const edges = useMemo2(() => graphEdges(tasks), [tasks]);
+  const shown = useMemo2(() => {
+    const keep = scopeIds(nodes, edges, scope);
+    return nodes.filter((n) => keep.has(n.id));
+  }, [nodes, edges, scope]);
+  const layout = useMemo2(() => layoutGraph(shown, edges, { sortBy }), [shown, edges, sortBy]);
+  const series = useMemo2(() => activityMap(shown, now, sparkWindow, GRAPH_BUCKETS), [shown, now, sparkWindow]);
+  const lin = useMemo2(() => {
+    if (!selectedId || !shown.some((n) => n.id === selectedId)) return null;
+    const { upstream, downstream } = lineage(shown, edges, selectedId);
+    return { up: upstream, down: downstream };
+  }, [shown, edges, selectedId]);
+  const hiddenByScope = nodes.length - shown.length;
+  const boxes = useMemo2(() => new Map(layout.nodes.map((b) => [b.id, b])), [layout]);
+  useEffect3(() => {
+    const el = canvasRef.current;
+    if (!el) return void 0;
+    const onWheel = (event) => {
+      const intent = wheelIntent(event);
+      event.preventDefault();
+      if (intent === "zoom") {
+        const rect = el.getBoundingClientRect();
+        const cx = event.clientX - rect.left;
+        const cy = event.clientY - rect.top;
+        const next = Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, zoom * wheelZoomFactor(event.deltaY, event.deltaMode)));
+        if (next === zoom) return;
+        setPan((p) => ({ x: cx - (cx - p.x) * (next / zoom), y: cy - (cy - p.y) * (next / zoom) }));
+        if (onZoom) onZoom(next);
+        return;
+      }
+      if (intent === "pan") setPan((p) => ({ x: p.x - event.deltaY, y: p.y }));
+      else setPan((p) => ({ x: p.x - (event.deltaX || 0), y: p.y - event.deltaY }));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoom, onZoom]);
+  const onCanvasPointerDown = (event) => {
+    if (event.target !== event.currentTarget && event.target.tagName !== "svg") return;
+    const start = { x: event.clientX - pan.x, y: event.clientY - pan.y };
+    setDragging(start);
+  };
+  useEffect3(() => {
+    if (!dragging) return void 0;
+    const onMove = (event) => setPan({ x: event.clientX - dragging.x, y: event.clientY - dragging.y });
+    const onUp = () => setDragging(null);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [dragging]);
+  const order = useMemo2(() => [...layout.nodes].sort((a, b) => a.y - b.y || a.x - b.x).map((b) => b.id), [layout]);
+  const onKeyDown = (event) => {
+    if (!order.length) return;
+    const at = order.indexOf(selectedId);
+    const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 0;
+    if (step) {
+      event.preventDefault();
+      const next = at < 0 ? step > 0 ? 0 : order.length - 1 : Math.min(order.length - 1, Math.max(0, at + step));
+      if (onOpen) onOpen(order[next]);
+      return;
+    }
+    if (event.key === "Enter" && at >= 0 && onOpen) {
+      event.preventDefault();
+      onOpen(order[at]);
+    }
+  };
+  if (!shown.length) {
+    return jsx6("div", {
+      className: "py-10 flex flex-col items-center gap-3",
+      children: jsx6(EmptyState, {
+        title: i18n.nothingToDisplay,
+        description: hiddenByScope > 0 ? i18n.graphHiddenByScope(hiddenByScope) : i18n.noTasksMatch
+      })
+    });
+  }
+  const sparkline = (node) => {
+    const s = series.get(node.id);
+    if (!s) return jsx6("div", {
+      className: "absolute inset-x-0 bottom-0 border-t border-dashed border-(--ui-stroke-tertiary)",
+      style: { height: `${SPARK_BAND}px` },
+      title: i18n.graphNoActivity,
+      "aria-hidden": "true"
+    });
+    const tone = statusTone(node.status);
+    return jsx6("div", {
+      className: "absolute inset-x-0 bottom-0 flex items-end gap-px px-0.5",
+      style: { height: `${SPARK_BAND}px`, borderTop: `1px solid ${tone}33` },
+      title: i18n.graphSparkline(Math.round(sparkWindow / 3600)),
+      children: s.buckets.map((v, i) => jsx6("span", {
+        key: i,
+        className: "flex-1 rounded-t-[1px]",
+        style: {
+          height: v > 0 ? `${Math.max(18, Math.round(v / s.max * 100))}%` : "0%",
+          background: tone,
+          opacity: node.status === "running" && i === s.buckets.length - 1 ? 1 : 0.65
+        }
+      }))
+    });
+  };
+  const edgePath = (e) => {
+    const mid = (e.y1 + e.y2) / 2;
+    return `M ${e.x1} ${e.y1} C ${e.x1} ${mid}, ${e.x2} ${mid}, ${e.x2} ${e.y2}`;
+  };
+  const edgeTone = (from, to) => {
+    if (!lin) return "var(--ui-stroke-secondary)";
+    if (lin.down.has(from) && (lin.down.has(to) || to === selectedId)) return statusTone("running");
+    if (lin.up.has(to) && (lin.up.has(from) || from === selectedId)) return statusTone("scheduled");
+    return "var(--ui-stroke-secondary)";
+  };
+  return jsxs6("div", {
+    className: "mt-2 border border-(--ui-stroke-tertiary) rounded-md flex-1 min-h-0 relative overflow-hidden",
+    children: [
+      jsx6("div", {
+        ref: canvasRef,
+        className: "absolute inset-0 overflow-hidden cursor-grab",
+        tabIndex: 0,
+        role: "application",
+        "aria-label": i18n.viewGraph,
+        title: i18n.graphHint,
+        onKeyDown,
+        onPointerDown: onCanvasPointerDown,
+        style: { cursor: dragging ? "grabbing" : "grab" },
+        children: jsxs6("div", {
+          className: "absolute origin-top-left",
+          style: {
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            width: `${layout.width + GRAPH_MARGIN * 2}px`,
+            height: `${layout.height + GRAPH_MARGIN * 2}px`
+          },
+          children: [
+            jsx6("svg", {
+              className: "absolute inset-0 pointer-events-none",
+              width: layout.width + GRAPH_MARGIN * 2,
+              height: layout.height + GRAPH_MARGIN * 2,
+              "aria-hidden": "true",
+              children: [
+                jsx6("defs", {
+                  children: jsx6("marker", {
+                    id: "kg-arrow",
+                    viewBox: "0 0 8 8",
+                    refX: "7",
+                    refY: "4",
+                    markerWidth: "6",
+                    markerHeight: "6",
+                    orient: "auto-start-reverse",
+                    children: jsx6("path", { d: "M 0 0 L 8 4 L 0 8 z", fill: "currentColor" })
+                  })
+                }),
+                ...layout.edges.map((e) => jsx6("path", {
+                  key: `${e.from}>${e.to}`,
+                  d: edgePath({ ...e, x1: e.x1 + GRAPH_MARGIN, y1: e.y1 + GRAPH_MARGIN, x2: e.x2 + GRAPH_MARGIN, y2: e.y2 + GRAPH_MARGIN }),
+                  fill: "none",
+                  stroke: edgeTone(e.from, e.to),
+                  strokeWidth: 1.2,
+                  markerEnd: "url(#kg-arrow)",
+                  style: { color: edgeTone(e.from, e.to) }
+                }))
+              ]
+            }),
+            ...shown.map((node) => {
+              const b = boxes.get(node.id);
+              if (!b) return null;
+              const tone = statusTone(node.status);
+              const failed = (node.runs || []).some((r) => ["crashed", "failed", "spawn_failed", "gave_up"].includes(r.outcome || r.status));
+              const isSelected = node.id === selectedId;
+              const inLineage = lin ? lin.up.has(node.id) || lin.down.has(node.id) : false;
+              const faded = Boolean(lin) && !isSelected && !inLineage;
+              const prefix = splitTitlePrefix(node.title).prefix;
+              const drop = dropMap && node.id !== dragId ? dropMap.get(node.id) : null;
+              return jsxs6("div", {
+                key: node.id,
+                className: cn3(
+                  "absolute flex flex-col rounded-md border bg-(--ui-bg-elevated) overflow-hidden select-none cursor-pointer",
+                  isSelected ? "border-(--ui-accent)" : "border-(--ui-stroke-secondary)",
+                  drop && drop.allowed ? "ring-1 ring-(--ui-accent)" : "",
+                  drop && !drop.allowed ? "ring-1 ring-red-500/60" : ""
+                ),
+                "data-graph-node": node.id,
+                style: {
+                  left: `${b.x + GRAPH_MARGIN}px`,
+                  top: `${b.y + GRAPH_MARGIN}px`,
+                  width: `${b.w}px`,
+                  height: `${b.h}px`,
+                  opacity: faded ? 0.45 : 1,
+                  borderColor: isSelected ? "var(--ui-accent)" : void 0,
+                  boxShadow: isSelected ? "0 0 0 1px var(--ui-accent)" : void 0,
+                  // A left edge in the status tone: the stripe kanban-graph has, and the
+                  // cheapest way to read a board of 60 nodes at a glance.
+                  borderLeft: `3px solid ${tone}`
+                },
+                draggable: Boolean(onDragStart),
+                title: `${node.title} (${node.id})${node.assignee ? ` — ${node.assignee}` : ""}`,
+                onClick: () => onOpen && onOpen(node.id),
+                onDoubleClick: (event) => {
+                  event.preventDefault();
+                  if (onNewChild) onNewChild(node.id);
+                },
+                onDragStart: (event) => {
+                  event.dataTransfer.setData("text/plain", node.id);
+                  event.dataTransfer.effectAllowed = "move";
+                  if (onDragStart) onDragStart(node.id);
+                },
+                onDragEnd: () => onDragEnd && onDragEnd(),
+                onDragOver: (event) => {
+                  if (!onDropOn) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = drop && drop.allowed ? "move" : "none";
+                },
+                onDrop: (event) => {
+                  if (!onDropOn) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onDropOn(node.id);
+                },
+                children: [
+                  jsxs6("div", {
+                    className: "flex items-start gap-1 px-1.5 pt-1 min-w-0",
+                    children: [
+                      jsx6("span", {
+                        className: "shrink-0 inline-flex items-center justify-center mt-[1px]",
+                        style: { color: tone },
+                        title: node.status,
+                        children: node.status === "running" ? jsxs6("span", { className: "relative inline-flex items-center justify-center", children: [
+                          jsx6("span", { className: "kg-arc", style: { "--kanban-tone": tone } }),
+                          jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
+                        ] }) : jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
+                      }),
+                      jsxs6("span", {
+                        className: "min-w-0 flex-1 text-[10.5px] leading-tight text-(--ui-text-primary) truncate",
+                        children: [
+                          prefix ? jsx6("span", {
+                            className: "mr-1 rounded-sm px-0.5 text-[8.5px] font-semibold text-(--ui-text-secondary)",
+                            style: { backgroundColor: "var(--ui-bg-tertiary)", border: "1px solid var(--ui-stroke-tertiary)" },
+                            children: prefix
+                          }) : null,
+                          node.title || node.id
+                        ]
+                      }),
+                      failed ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0 text-[#f87171]", title: i18n.runs((node.runs || []).length) }) : node.status === "blocked" ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0", style: { color: statusTone("blocked") }, title: node.status }) : null
+                    ]
+                  }),
+                  jsxs6("div", {
+                    className: "mt-auto flex items-center gap-1 px-1.5 pb-0.5 text-[9px] text-(--ui-text-quaternary) min-w-0",
+                    children: [
+                      showBoardBadge && node.board ? jsx6("span", {
+                        className: "shrink-0 max-w-[64px] truncate rounded px-1 font-mono text-[8.5px]",
+                        style: { backgroundColor: "var(--ui-bg-tertiary)" },
+                        title: node.board,
+                        children: node.board
+                      }) : null,
+                      node.priority != null ? jsx6("span", { className: "shrink-0 tabular-nums", children: `P${node.priority}` }) : null,
+                      jsx6("span", { className: "flex-1" }),
+                      node.attachmentCount ? jsx6(AttachmentMenu, {
+                        taskId: node.id,
+                        board: node.board || board,
+                        count: node.attachmentCount,
+                        i18n,
+                        onPreview: (att, siblings) => $openAttachment.set(
+                          attachmentPreviewState(node.id, node.board || board, att, siblings)
+                        )
+                      }) : null,
+                      node.assignee ? jsx6("span", { className: "shrink-0 inline-flex", title: node.assignee, children: jsx6(ProfileAvatar, { name: node.assignee, size: "0.85rem" }) }) : jsx6("span", { className: "shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60", style: { width: "0.7rem", height: "0.7rem" } })
+                    ]
+                  }),
+                  // The band comes out of the node's own padding, so the node's height is
+                  // a constant in the layout (SPARK_BAND) and never grows for it.
+                  sparkline(node)
+                ]
+              });
+            })
+          ]
+        })
+      }),
+      // What the layout had to decide, said out loud instead of left to be noticed:
+      // implied edges hidden by the reduction, loops the ranks had to band, links that
+      // leave the view (a filtered-out parent), and what the scope is holding back.
+      jsxs6("div", {
+        className: "pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-3 px-2 py-1 text-[9.5px] text-(--ui-text-quaternary) bg-gradient-to-t from-(--ui-bg-elevated) to-transparent",
+        children: [
+          layout.implied ? jsx6("span", { children: i18n.graphImplied(layout.implied) }) : null,
+          layout.cyclic.length ? jsx6("span", { className: "text-[#f87171]", children: i18n.graphCyclic(layout.cyclic.length) }) : null,
+          layout.dangling ? jsx6("span", { children: i18n.graphDangling(layout.dangling) }) : null,
+          hiddenByScope ? jsx6("span", { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
+          jsx6("span", { className: "ml-auto tabular-nums", children: `${shown.length}/${nodes.length}` })
+        ]
+      })
+    ]
+  });
+}
+function GraphScopeToggle({ value, onChange }) {
+  const i18n = useGanttI18n();
+  const item = (id, label) => jsx6("button", {
+    type: "button",
+    onClick: () => onChange(id),
+    "aria-pressed": value === id,
+    title: label,
+    className: cn3(
+      "px-2 py-0.5 text-[11px] rounded cursor-pointer border-0 whitespace-nowrap",
+      value === id ? "bg-(--ui-accent)/15 text-(--ui-accent) font-medium" : "bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)"
+    ),
+    children: label
+  }, id);
+  return jsxs6("span", {
+    className: "inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5",
+    role: "group",
+    "aria-label": i18n.graphScopeAria,
+    children: [
+      item("all", i18n.graphScopeAll),
+      item("open", i18n.graphScopeOpen),
+      item("running-lineage", i18n.graphScopeRunning)
+    ]
   });
 }
 function SelectionBar({
@@ -3024,7 +3726,7 @@ function SelectionBar({
             jsx6(DropdownMenuContent3, {
               align: "center",
               className: "min-w-[9rem] p-1",
-              children: STATUS_ORDER.map((s) => {
+              children: STATUS_ORDER2.map((s) => {
                 const meta = STATUS_META[s] || { tone: "var(--ui-text-secondary)", label: s };
                 const label = i18n.col?.[s] || meta.label;
                 return jsxs6(DropdownMenuItem3, {
@@ -3145,7 +3847,7 @@ function StatusBadge({ status, onPick, disabled }) {
     jsxs6(DropdownMenuContent3, {
       align: "start",
       className: "min-w-[9rem] p-1",
-      children: STATUS_ORDER.map((s) => {
+      children: STATUS_ORDER2.map((s) => {
         const m = STATUS_META[s];
         const current = s === status;
         const l = i18n.col?.[s] || m.label;
@@ -4285,8 +4987,33 @@ function KanbanGanttPage() {
   const lastCheckedIdRef = useRef2(null);
   const [viewMode, setViewMode] = useState4(() => {
     const saved = getStorage() ? getStorage().get("viewMode", null) : null;
-    return saved === "list" ? "list" : "timeline";
+    return saved === "list" || saved === "graph" ? saved : "timeline";
   });
+  const graphMode = viewMode === "graph";
+  const [graphZoomPct, setGraphZoomPct] = useState4(() => {
+    const s = getStorage();
+    const saved = Number(s ? s.get("graphZoomPct", null) : null);
+    const lo = Math.round(GRAPH_ZOOM_MIN * 100);
+    const hi = Math.round(GRAPH_ZOOM_MAX * 100);
+    return Number.isFinite(saved) && saved >= lo && saved <= hi ? saved : 100;
+  });
+  const handleGraphZoomPct = (next) => {
+    const lo = Math.round(GRAPH_ZOOM_MIN * 100);
+    const hi = Math.round(GRAPH_ZOOM_MAX * 100);
+    const clamped = Math.min(hi, Math.max(lo, Math.round(next)));
+    setGraphZoomPct(clamped);
+    const s = getStorage();
+    if (s) s.set("graphZoomPct", String(clamped));
+  };
+  const [graphScope, setGraphScope] = useState4(() => {
+    const s = getStorage() ? getStorage().get("graphScope", null) : null;
+    return ["all", "open", "running-lineage"].includes(s) ? s : "all";
+  });
+  const handleGraphScope = (next) => {
+    setGraphScope(next);
+    const s = getStorage();
+    if (s) s.set("graphScope", next);
+  };
   const [period, setPeriod] = useState4(() => {
     const s = getStorage();
     if (!s) return null;
@@ -4870,7 +5597,9 @@ function KanbanGanttPage() {
                 className: "inline-flex items-center gap-3",
                 children: [
                   jsx6(ViewToggle, { value: viewMode, onChange: handleViewMode }),
-                  listMode ? null : jsx6(PeriodSelector, {
+                  // In graph mode the period selector has nothing to say (there is no time
+                  // axis), so its slot carries the scopes instead — same width, same place.
+                  graphMode ? jsx6(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }) : listMode ? null : jsx6(PeriodSelector, {
                     value: period,
                     onChange: handlePeriod,
                     disabled: false
@@ -4878,16 +5607,16 @@ function KanbanGanttPage() {
                   listMode ? null : jsxs6("span", { className: "inline-flex items-center gap-1.5", children: [
                     jsx6("input", {
                       type: "range",
-                      min: String(ZOOM_PCT_MIN),
-                      max: String(ZOOM_PCT_MAX),
+                      min: String(graphMode ? Math.round(GRAPH_ZOOM_MIN * 100) : ZOOM_PCT_MIN),
+                      max: String(graphMode ? Math.round(GRAPH_ZOOM_MAX * 100) : ZOOM_PCT_MAX),
                       step: "1",
-                      value: String(zoomPct),
-                      onInput: (event) => handleZoomPct(Number(event.target.value)),
+                      value: String(graphMode ? graphZoomPct : zoomPct),
+                      onInput: (event) => (graphMode ? handleGraphZoomPct : handleZoomPct)(Number(event.target.value)),
                       className: "w-24",
                       title: i18n.zoomWheelHint(modifierKeyLabel()),
-                      "aria-label": i18n.zoomTimeline
+                      "aria-label": graphMode ? i18n.graphZoom : i18n.zoomTimeline
                     }),
-                    jsx6("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${zoomPct}%` })
+                    jsx6("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${graphMode ? graphZoomPct : zoomPct}%` })
                   ] }),
                   // The Refresh button is back, but only when the page is KNOWINGLY on
                   // the 60 s poll: the push is off (KANBAN_GANTT_WS=0 on the gateway, or
@@ -4957,7 +5686,32 @@ function KanbanGanttPage() {
               })
             ]
           }),
-          !derived ? jsx6("div", { className: "py-10 grid place-items-center", children: jsx6(Loader, {}) }) : rows.length === 0 ? jsxs6("div", {
+          !derived ? jsx6("div", { className: "py-10 grid place-items-center", children: jsx6(Loader, {}) }) : graphMode ? jsx6(GraphView, {
+            tasks: derived.tasks || [],
+            i18n,
+            now,
+            zoom: graphZoomPct / 100,
+            onZoom: (factor) => handleGraphZoomPct(factor * 100),
+            scope: graphScope,
+            onScopeChange: handleGraphScope,
+            selectedId: openTaskId,
+            // The board name earns its place only when several boards share the view, the
+            // same rule the rows follow: with one board selected it is already on the
+            // switcher, and repeating it on every node is noise.
+            showBoardBadge: isAllBoards,
+            board,
+            dragId,
+            dropMap,
+            onOpen: (id) => $openTaskId.set(id),
+            onDragStart: handleDragStart,
+            onDragEnd: () => setDragId(null),
+            onDropOn: handleDropOn,
+            // New task FROM a node: the node is the parent, and the existing dialog does
+            // the rest (it is the same creation verb, reached from the graph).
+            onNewChild: (id) => $newTask.set({ parentId: id }),
+            sortBy: "status",
+            sparkWindow: period || 24 * 3600
+          }) : rows.length === 0 ? jsxs6("div", {
             className: "py-10 flex flex-col items-center gap-3",
             children: [
               jsx6(EmptyState, { title: i18n.nothingToDisplay, description: i18n.noTasksMatch }),
@@ -5312,6 +6066,7 @@ var main_default = plugin;
 export {
   $detailModal,
   $openTaskId,
+  GraphView,
   KanbanGanttPage,
   main_default as default,
   modifierKeyLabel
