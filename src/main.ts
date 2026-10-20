@@ -1185,6 +1185,18 @@ export function GraphView({
   // delete it. Both states live here rather than in the DOM, so a re-render keeps them.
   const [hotEdge, setHotEdge] = useState(null)
   const [edgeMenu, setEdgeMenu] = useState(null)
+  // Reaching a grab dot means LEAVING the 1.2 px line, which used to unlight the edge — and
+  // unmount the dot — before the press could land on it. The highlight is released on a short
+  // delay instead, and caught again by the dot itself.
+  const hotTimer = useRef(null)
+  const armHotEdge = key => {
+    if (hotTimer.current) clearTimeout(hotTimer.current)
+    setHotEdge(key)
+  }
+  const releaseHotEdge = () => {
+    if (hotTimer.current) clearTimeout(hotTimer.current)
+    hotTimer.current = setTimeout(() => setHotEdge(null), 260)
+  }
   const linkRef = useRef(null)
   linkRef.current = link
   const wrapperRef = useRef(null)
@@ -1360,6 +1372,7 @@ export function GraphView({
     event.stopPropagation()
     const pt = toLayout(event)
     if (!pt) return
+    if (hotTimer.current) clearTimeout(hotTimer.current)
     setHotEdge(null)
     setEdgeMenu(null)
     if (mode === 'from') {
@@ -1847,8 +1860,8 @@ export function GraphView({
                         strokeWidth: 14,
                         strokeLinecap: 'round',
                         style: { pointerEvents: 'stroke', cursor: 'context-menu' },
-                        onPointerEnter: () => setHotEdge(key),
-                        onPointerLeave: () => setHotEdge(current => (current === key ? null : current)),
+                        onPointerEnter: () => armHotEdge(key),
+                        onPointerLeave: () => releaseHotEdge(),
                         onContextMenu: event => {
                           event.preventDefault()
                           event.stopPropagation()
@@ -1923,6 +1936,8 @@ export function GraphView({
                     stroke: 'var(--ui-bg-elevated)',
                     strokeWidth: 2,
                     style: { pointerEvents: 'all', cursor: 'grab' },
+                    onPointerEnter: () => armHotEdge(`${e.from}>${e.to}`),
+                    onPointerLeave: () => releaseHotEdge(),
                     onPointerDown: event => startEdgeMove(event, e, mode),
                     children: jsx('title', { children: title })
                   })

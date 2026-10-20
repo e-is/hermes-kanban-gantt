@@ -3641,6 +3641,15 @@ function GraphView({
   const [link, setLink] = useState4(null);
   const [hotEdge, setHotEdge] = useState4(null);
   const [edgeMenu, setEdgeMenu] = useState4(null);
+  const hotTimer = useRef2(null);
+  const armHotEdge = (key) => {
+    if (hotTimer.current) clearTimeout(hotTimer.current);
+    setHotEdge(key);
+  };
+  const releaseHotEdge = () => {
+    if (hotTimer.current) clearTimeout(hotTimer.current);
+    hotTimer.current = setTimeout(() => setHotEdge(null), 260);
+  };
   const linkRef = useRef2(null);
   linkRef.current = link;
   const wrapperRef = useRef2(null);
@@ -3767,6 +3776,7 @@ function GraphView({
     event.stopPropagation();
     const pt = toLayout(event);
     if (!pt) return;
+    if (hotTimer.current) clearTimeout(hotTimer.current);
     setHotEdge(null);
     setEdgeMenu(null);
     if (mode === "from") {
@@ -4212,8 +4222,8 @@ function GraphView({
                         strokeWidth: 14,
                         strokeLinecap: "round",
                         style: { pointerEvents: "stroke", cursor: "context-menu" },
-                        onPointerEnter: () => setHotEdge(key),
-                        onPointerLeave: () => setHotEdge((current) => current === key ? null : current),
+                        onPointerEnter: () => armHotEdge(key),
+                        onPointerLeave: () => releaseHotEdge(),
                         onContextMenu: (event) => {
                           event.preventDefault();
                           event.stopPropagation();
@@ -4285,6 +4295,8 @@ function GraphView({
                 stroke: "var(--ui-bg-elevated)",
                 strokeWidth: 2,
                 style: { pointerEvents: "all", cursor: "grab" },
+                onPointerEnter: () => armHotEdge(`${e.from}>${e.to}`),
+                onPointerLeave: () => releaseHotEdge(),
                 onPointerDown: (event) => startEdgeMove(event, e, mode),
                 children: jsx6("title", { children: title })
               });
