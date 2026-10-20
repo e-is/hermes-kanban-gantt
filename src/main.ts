@@ -1837,6 +1837,7 @@ export function GraphView({
                   const tone = hot ? 'var(--ui-accent)' : edgeTone(e.from, e.to)
                   return jsxs('g', {
                     key,
+                    'data-graph-edge': key,
                     children: [
                       jsx('path', {
                         key: 'hit',
