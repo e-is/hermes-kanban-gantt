@@ -3844,7 +3844,7 @@ export function KanbanGanttPage() {
 
   // Linking from a card's slot: the arrow starts at the PARENT and lands on the CHILD, which is
   // the inverse of a card drop — there the dragged card is the one that becomes a child. Same
-  // refusals, same dialog when the child already has parents: only the roles are swapped.
+  // refusals; but never the replace-or-add dialog (see below).
   const handleLinkChild = (parentId, childId) => {
     if (!parentId || !childId || parentId === childId) return
     const candidate = dropCandidates(allTasks, childId, boardOf(childId)).find(c => c.task.id === parentId)
@@ -3852,11 +3852,10 @@ export function KanbanGanttPage() {
       toast('error', reasonLabel(candidate.reason, i18n))
       return
     }
-    const child = allTasks.find(t => t.id === childId)
-    if (((child && child.parents) || []).length > 0) {
-      setPendingReparent({ childId, parentId })
-      return
-    }
+    // ALWAYS add. A drawn arrow says "this task is the child of that one" — never "move it",
+    // which is what dragging a card between parents means in list and timeline. Asking
+    // replace-or-add here made the reader decide something they had not asked for, and the
+    // wrong answer silently detached an existing parent.
     reparentMutation.mutate({ childId, parentId, mode: 'add' })
   }
 

@@ -5901,11 +5901,6 @@ function KanbanGanttPage() {
       toast("error", reasonLabel(candidate.reason, i18n));
       return;
     }
-    const child = allTasks.find((t) => t.id === childId);
-    if ((child && child.parents || []).length > 0) {
-      setPendingReparent({ childId, parentId });
-      return;
-    }
     reparentMutation.mutate({ childId, parentId, mode: "add" });
   };
   const linkAllowed = useMemo2(() => {
