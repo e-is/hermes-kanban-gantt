@@ -1423,6 +1423,10 @@ export function GraphView({
             // every pan/fit number was off by the same amount.
             left: '0px',
             top: '0px',
+            // Inline, not a class: the host's stylesheet does not compile `origin-top-left`
+            // for us, and without it the scale grows the surface from its CENTRE — the pan
+            // then means something else than what it says, and the fit hangs off the edge.
+            transformOrigin: 'top left',
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             width: `${layout.width + GRAPH_MARGIN * 2}px`,
             height: `${layout.height + GRAPH_MARGIN * 2}px`
@@ -1563,10 +1567,21 @@ export function GraphView({
                       jsxs('span', {
                         className: cn(
                           'min-w-0 flex-1 leading-tight text-(--ui-text-primary)',
-                          tallCards
-                            ? 'text-[12px] line-clamp-3 whitespace-normal break-words'
-                            : 'text-[11.5px] truncate'
+                          tallCards ? 'text-[12px]' : 'text-[11.5px] truncate'
                         ),
+                        // Wrapping as inline styles: the host bundle does not ship Tailwind's
+                        // line-clamp plugin, and a class that silently does nothing would let
+                        // the text overflow the card instead of being cut at three lines.
+                        style: tallCards
+                          ? {
+                              whiteSpace: 'normal',
+                              overflowWrap: 'anywhere',
+                              display: '-webkit-box',
+                              WebkitLineClamp: '3',
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden'
+                            }
+                          : undefined,
                         children: [
                           prefix ? jsx('span', {
                             className: 'mr-1 rounded-sm px-0.5 text-[8.5px] font-semibold text-(--ui-text-secondary)',

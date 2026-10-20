@@ -479,7 +479,7 @@ if (typeof pluginModule.GraphView === 'function') {
   // Taller cards: the title wraps (line-clamp-2) and the layout was told a taller nodeH, so the
   // boxes grow instead of the text overflowing.
   const tall = JSON.stringify(renderGraph({ tallCards: true }))
-  check(tall.includes('line-clamp-3') && tall.includes('whitespace-normal'),
+  check(tall.includes('WebkitLineClamp') && tall.includes('whiteSpace'),
     'tall cards wrap the title onto three lines instead of truncating it')
   // The footer always reports how much of the board it is showing (nothing was implied or
   // dangling on this chain, so the counts collapse to the ratio).
