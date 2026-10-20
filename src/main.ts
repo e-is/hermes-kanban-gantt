@@ -2147,8 +2147,10 @@ export function GraphView({
   })
 }
 
-/** The scopes of the graph, as a segmented control: All / Open / Running + lineage. */
-function GraphScopeToggle({ value, onChange }) {
+/** The quick scopes, as a segmented control: Running + lineage / Open / All. Named after the
+ *  graph because it was born there, but it is a filter over the same tasks in every mode —
+ *  "what is in flight, and what it holds up or waits on" reads the same in a list. */
+function ScopeToggle({ value, onChange }) {
   const i18n = useGanttI18n()
   const item = (id, label) => jsx('button', {
     type: 'button',
@@ -3912,6 +3914,14 @@ export function KanbanGanttPage() {
       visible = visible.filter(t => t.assignee && selectedAssignees.has(t.assignee))
     }
     visible = visible.filter(t => matchesSearch(t, search))
+    // The quick scope, in the modes that are not the graph: the graph narrows its own nodes
+    // (it needs the unfiltered set to say what the scope is holding back), so doing it here
+    // as well would make that count read zero. Same function in both places, so the three
+    // views cannot disagree about what "in flight" means.
+    if (viewMode !== 'graph' && graphScope !== 'all') {
+      const keep = scopeIds(graphNodes(visible), graphEdges(visible), graphScope)
+      visible = visible.filter(t => keep.has(t.id))
+    }
     // The fold state is applied HERE, after every filter: `buildRows` stays the
     // flat projection the tests know, `treeRows` adds the explorer grammar (which
     // levels continue, who has children, what is collapsed).
@@ -3923,7 +3933,7 @@ export function KanbanGanttPage() {
     const domain = computeDomain(visible)
     const allAssignees = Array.from(new Set(data.tasks.map(t => t.assignee).filter(Boolean))).sort()
     return { rows, domain, total: visible.length, tasks: visible, allAssignees }
-  }, [data, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId])
+  }, [data, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope])
 
   // The header toggle: if anything the user can collapse is open, collapse it all;
   // otherwise open everything. It walks the rows, so it acts on exactly the set
@@ -4666,14 +4676,20 @@ export function KanbanGanttPage() {
                 ? jsxs('span', {
                     className: 'inline-flex items-center gap-1.5',
                     children: [
-                      jsx(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }),
+                      jsx(ScopeToggle, { value: graphScope, onChange: handleGraphScope }),
                       jsx(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
                     ]
                   })
-                : listMode ? null : jsx(PeriodSelector, {
-                    value: period,
-                    onChange: handlePeriod,
-                    disabled: false
+                : jsxs('span', {
+                    className: 'inline-flex items-center gap-1.5',
+                    children: [
+                      listMode ? null : jsx(PeriodSelector, {
+                        value: period,
+                        onChange: handlePeriod,
+                        disabled: false
+                      }),
+                      jsx(ScopeToggle, { value: graphScope, onChange: handleGraphScope })
+                    ]
                   }),
               listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {

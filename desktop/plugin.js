@@ -4488,7 +4488,7 @@ function GraphView({
     ]
   });
 }
-function GraphScopeToggle({ value, onChange }) {
+function ScopeToggle({ value, onChange }) {
   const i18n = useGanttI18n();
   const item = (id, label) => jsx6("button", {
     type: "button",
@@ -5979,6 +5979,10 @@ function KanbanGanttPage() {
       visible = visible.filter((t) => t.assignee && selectedAssignees.has(t.assignee));
     }
     visible = visible.filter((t) => matchesSearch(t, search));
+    if (viewMode !== "graph" && graphScope !== "all") {
+      const keep = scopeIds(graphNodes(visible), graphEdges(visible), graphScope);
+      visible = visible.filter((t) => keep.has(t.id));
+    }
     const rows2 = treeRows(visible, {
       fold,
       search,
@@ -5987,7 +5991,7 @@ function KanbanGanttPage() {
     const domain2 = computeDomain(visible);
     const allAssignees = Array.from(new Set(data.tasks.map((t) => t.assignee).filter(Boolean))).sort();
     return { rows: rows2, domain: domain2, total: visible.length, tasks: visible, allAssignees };
-  }, [data, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId]);
+  }, [data, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope]);
   const handleToggleAll = () => {
     const parents = (derived?.rows || []).filter((r) => r.hasChildren);
     if (!parents.length) return;
@@ -6565,13 +6569,19 @@ function KanbanGanttPage() {
                   graphMode ? jsxs6("span", {
                     className: "inline-flex items-center gap-1.5",
                     children: [
-                      jsx6(GraphScopeToggle, { value: graphScope, onChange: handleGraphScope }),
+                      jsx6(ScopeToggle, { value: graphScope, onChange: handleGraphScope }),
                       jsx6(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
                     ]
-                  }) : listMode ? null : jsx6(PeriodSelector, {
-                    value: period,
-                    onChange: handlePeriod,
-                    disabled: false
+                  }) : jsxs6("span", {
+                    className: "inline-flex items-center gap-1.5",
+                    children: [
+                      listMode ? null : jsx6(PeriodSelector, {
+                        value: period,
+                        onChange: handlePeriod,
+                        disabled: false
+                      }),
+                      jsx6(ScopeToggle, { value: graphScope, onChange: handleGraphScope })
+                    ]
                   }),
                   listMode ? null : jsxs6("span", { className: "inline-flex items-center gap-1.5", children: [
                     jsx6("input", {

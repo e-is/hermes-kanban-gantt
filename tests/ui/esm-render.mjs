@@ -431,7 +431,14 @@ if (pageNode) {
   check(listFlat.includes('minmax(0, 1fr) 150px 96px 64px 40px'),
     'list view declares five tracks, the last 40 px wide, for the attachment column')
   check(listFlat.includes('attachments-header'), 'the attachment column has a header cell of its own')
+  // The quick scopes are not the graph's private vocabulary: a list can answer "what is in
+  // flight, and what does it wait on" just as well, so the control is in the toolbar there too.
+  check(listFlat.includes('"aria-label":"graphScopeAria"'), 'list view carries the quick scopes')
+  check(['graphScopeRunning', 'graphScopeOpen', 'graphScopeAll'].every(k => listFlat.includes(k)),
+    'all three scopes are offered in list view')
   globalThis.__kgView = 'timeline'
+  const timelineFlat = JSON.stringify(page.render())
+  check(timelineFlat.includes('"aria-label":"graphScopeAria"'), 'timeline view carries the quick scopes too')
 }
 
 // ---------------------------------------------------------------------------
