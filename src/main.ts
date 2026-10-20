@@ -1188,7 +1188,14 @@ export function GraphView({
   const linkRef = useRef(null)
   linkRef.current = link
   const wrapperRef = useRef(null)
-  const allowedFor = useMemo(() => (link && linkAllowed ? linkAllowed(link.from) : null), [link, linkAllowed])
+  // Which cards the gesture may land on. Drawing a NEW arrow asks what may become the CHILD of
+  // the card it started from; dragging the tail of an existing edge asks what may become the
+  // PARENT of the card it already points at. Same question, other end.
+  const allowedFor = useMemo(() => {
+    if (!link) return null
+    if (link.mode === 'from') return parentsAllowed ? parentsAllowed(link.to) : null
+    return linkAllowed ? linkAllowed(link.from) : null
+  }, [link && link.from, link && link.to, link && link.mode, linkAllowed, parentsAllowed])
   const pressedAt = useRef(null)
   const canvasRef = useRef(null)
 
@@ -1346,6 +1353,22 @@ export function GraphView({
   // Measured from the SLOT, not from the border: the handle now hangs halfway to the card below,
   // and a halo around the border would drop the slot the moment the pointer reached the dot it
   // is supposed to grab.
+  // Grabbing one end of an existing edge: the same gesture as drawing a new one, so there is
+  // nothing new to learn — only the drop does more (it also drops the link that was there).
+  const startEdgeMove = (event, edge, mode) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const pt = toLayout(event)
+    if (!pt) return
+    setHotEdge(null)
+    setEdgeMenu(null)
+    if (mode === 'from') {
+      setLink({ from: edge.from, to: edge.to, mode, x: pt.x, y: pt.y, target: null })
+      return
+    }
+    const anchor = slotAnchorFor(edge.from) || { x: pt.x, y: pt.y }
+    setLink({ from: edge.from, to: edge.to, mode, x: anchor.x, y: anchor.y, target: null })
+  }
   const slotUnder = pt => {
     if (!pt) return null
     let best = null
@@ -1405,7 +1428,8 @@ export function GraphView({
     const move = event => {
       const pt = toLayout(event)
       if (!pt) return
-      const raw = cardUnder(pt, linkFrom)
+      const me = linkRef.current
+      const raw = cardUnder(pt, me && me.mode === 'from' ? me.to : me && me.from)
       const allowed = allowedRef.current
       const target = raw && (!allowed || allowed.has(raw)) ? raw : null
       setLink(current => (current ? { ...current, x: pt.x, y: pt.y, target } : current))
@@ -1413,7 +1437,24 @@ export function GraphView({
     const up = () => {
       const current = linkRef.current
       setLink(null)
-      if (current && current.target && onLinkChild) onLinkChild(current.from, current.target)
+      if (!current || !current.target) return
+      if (current.mode === 'to') {
+        // The head moved: same parent, a different child.
+        if (current.target !== current.to) {
+          if (onLinkChild) onLinkChild(current.from, current.target)
+          if (onUnlink) onUnlink(current.from, current.to)
+        }
+        return
+      }
+      if (current.mode === 'from') {
+        // The tail moved: same child, a different parent.
+        if (current.target !== current.from) {
+          if (onLinkChild) onLinkChild(current.target, current.to)
+          if (onUnlink) onUnlink(current.from, current.to)
+        }
+        return
+      }
+      if (onLinkChild) onLinkChild(current.from, current.target)
     }
     const key = event => {
       if (event.key === 'Escape') setLink(null)
@@ -1426,7 +1467,7 @@ export function GraphView({
       window.removeEventListener('pointerup', up)
       window.removeEventListener('keydown', key)
     }
-  }, [linkFrom, zoom, onLinkChild])
+  }, [linkFrom, zoom, onLinkChild, onUnlink])
 
   // Ctrl/⌘+wheel zooms at the cursor (the same gesture as the timeline, so nobody has to
   // learn a second one); plain wheel scrolls, Shift+wheel pans. The listener is native
@@ -1729,6 +1770,16 @@ export function GraphView({
                   ? jsx('path', {
                       key: 'link-arrow',
                       d: (() => {
+                        // Dragging the TAIL of an existing edge: the head stays on the child and
+                        // the base follows the pointer, because the card under the pointer is the
+                        // one becoming the parent.
+                        if (link.mode === 'from') {
+                          const child = boxes.get(link.to)
+                          if (!child) return ''
+                          const cx = child.x + child.w / 2 + GRAPH_MARGIN
+                          const cy = child.y + GRAPH_MARGIN
+                          return `M ${link.x} ${link.y} C ${link.x} ${link.y + 46}, ${cx} ${cy - 46}, ${cx} ${cy}`
+                        }
                         const b = boxes.get(link.from)
                         if (!b) return ''
                         // The arrow leaves FROM the slot: the dot is the base, the pointer
@@ -1813,7 +1864,36 @@ export function GraphView({
                         strokeWidth: hot ? 3 : 1.2,
                         markerEnd: 'url(#kg-arrow)',
                         style: { color: tone }
-                      })
+                      }),
+                      // Two grabs, one per end: the tail asks "who is the parent", the head asks
+                      // "who is the child". They only appear under the pointer, where the edge is
+                      // already the thing being looked at.
+                      ...(hot
+                        ? [
+                            jsx('circle', {
+                              key: 'grab-from',
+                              cx: geo.x1,
+                              cy: geo.y1 + 7,
+                              r: 5,
+                              fill: 'var(--ui-accent)',
+                              stroke: 'var(--ui-bg-elevated)',
+                              strokeWidth: 2,
+                              style: { pointerEvents: 'all', cursor: 'grab' },
+                              onPointerDown: event => startEdgeMove(event, e, 'from')
+                            }),
+                            jsx('circle', {
+                              key: 'grab-to',
+                              cx: geo.x2,
+                              cy: geo.y2 - 7,
+                              r: 5,
+                              fill: 'var(--ui-accent)',
+                              stroke: 'var(--ui-bg-elevated)',
+                              strokeWidth: 2,
+                              style: { pointerEvents: 'all', cursor: 'grab' },
+                              onPointerDown: event => startEdgeMove(event, e, 'to')
+                            })
+                          ]
+                        : [])
                     ]
                   })
                 })
@@ -3948,6 +4028,19 @@ export function KanbanGanttPage() {
     }
   }, [allTasks, board])
 
+  // The same question at the other end: which cards may become the PARENT of `childId`. Dragging
+  // the tail of an edge needs exactly this, and it is the same refusal path as a card drop.
+  const parentsAllowed = useMemo(() => {
+    return childId => {
+      const out = new Set()
+      if (!childId) return out
+      for (const candidate of dropCandidates(allTasks, childId, boardOf(childId))) {
+        if (candidate.allowed) out.add(candidate.task.id)
+      }
+      return out
+    }
+  }, [allTasks, board])
+
   // Same decision path as a drop, reached from the drawer's "move under…" item.
   const handlePickParent = parentId => {
     const childId = moveUnderId
@@ -4778,6 +4871,7 @@ export function KanbanGanttPage() {
             onLinkChild: handleLinkChild,
             linkAllowed,
             onUnlink: (parentId, childId) => unlinkMutation.mutate({ childId, parentId }),
+            parentsAllowed,
             tallCards: cardsTall,
             arrangement: arrange,
             sortBy: 'status'

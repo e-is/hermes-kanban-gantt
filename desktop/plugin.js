@@ -3638,7 +3638,11 @@ function GraphView({
   const linkRef = useRef2(null);
   linkRef.current = link;
   const wrapperRef = useRef2(null);
-  const allowedFor = useMemo2(() => link && linkAllowed ? linkAllowed(link.from) : null, [link, linkAllowed]);
+  const allowedFor = useMemo2(() => {
+    if (!link) return null;
+    if (link.mode === "from") return parentsAllowed ? parentsAllowed(link.to) : null;
+    return linkAllowed ? linkAllowed(link.from) : null;
+  }, [link && link.from, link && link.to, link && link.mode, linkAllowed, parentsAllowed]);
   const pressedAt = useRef2(null);
   const canvasRef = useRef2(null);
   const nodes = useMemo2(() => graphNodes(tasks), [tasks]);
@@ -3752,6 +3756,20 @@ function GraphView({
     const half = Math.max(9, Math.min(28, gap / 2));
     return { x: b.x + b.w / 2 + GRAPH_MARGIN, y: b.y + b.h + GRAPH_MARGIN + half, half };
   };
+  const startEdgeMove = (event, edge, mode) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const pt = toLayout(event);
+    if (!pt) return;
+    setHotEdge(null);
+    setEdgeMenu(null);
+    if (mode === "from") {
+      setLink({ from: edge.from, to: edge.to, mode, x: pt.x, y: pt.y, target: null });
+      return;
+    }
+    const anchor = slotAnchorFor(edge.from) || { x: pt.x, y: pt.y };
+    setLink({ from: edge.from, to: edge.to, mode, x: anchor.x, y: anchor.y, target: null });
+  };
   const slotUnder = (pt) => {
     if (!pt) return null;
     let best = null;
@@ -3814,7 +3832,8 @@ function GraphView({
     const move = (event) => {
       const pt = toLayout(event);
       if (!pt) return;
-      const raw = cardUnder(pt, linkFrom);
+      const me = linkRef.current;
+      const raw = cardUnder(pt, me && me.mode === "from" ? me.to : me && me.from);
       const allowed = allowedRef.current;
       const target = raw && (!allowed || allowed.has(raw)) ? raw : null;
       setLink((current) => current ? { ...current, x: pt.x, y: pt.y, target } : current);
@@ -3822,7 +3841,22 @@ function GraphView({
     const up = () => {
       const current = linkRef.current;
       setLink(null);
-      if (current && current.target && onLinkChild) onLinkChild(current.from, current.target);
+      if (!current || !current.target) return;
+      if (current.mode === "to") {
+        if (current.target !== current.to) {
+          if (onLinkChild) onLinkChild(current.from, current.target);
+          if (onUnlink) onUnlink(current.from, current.to);
+        }
+        return;
+      }
+      if (current.mode === "from") {
+        if (current.target !== current.from) {
+          if (onLinkChild) onLinkChild(current.target, current.to);
+          if (onUnlink) onUnlink(current.from, current.to);
+        }
+        return;
+      }
+      if (onLinkChild) onLinkChild(current.from, current.target);
     };
     const key = (event) => {
       if (event.key === "Escape") setLink(null);
@@ -3835,7 +3869,7 @@ function GraphView({
       window.removeEventListener("pointerup", up);
       window.removeEventListener("keydown", key);
     };
-  }, [linkFrom, zoom, onLinkChild]);
+  }, [linkFrom, zoom, onLinkChild, onUnlink]);
   useEffect3(() => {
     const el = canvasRef.current;
     if (!el) return void 0;
@@ -4106,6 +4140,13 @@ function GraphView({
                 link ? jsx6("path", {
                   key: "link-arrow",
                   d: (() => {
+                    if (link.mode === "from") {
+                      const child = boxes.get(link.to);
+                      if (!child) return "";
+                      const cx = child.x + child.w / 2 + GRAPH_MARGIN;
+                      const cy = child.y + GRAPH_MARGIN;
+                      return `M ${link.x} ${link.y} C ${link.x} ${link.y + 46}, ${cx} ${cy - 46}, ${cx} ${cy}`;
+                    }
                     const b = boxes.get(link.from);
                     if (!b) return "";
                     const anchor = slotAnchorFor(link.from) || { x: b.x + b.w / 2 + GRAPH_MARGIN, y: b.y + b.h + GRAPH_MARGIN };
@@ -4182,7 +4223,34 @@ function GraphView({
                         strokeWidth: hot ? 3 : 1.2,
                         markerEnd: "url(#kg-arrow)",
                         style: { color: tone }
-                      })
+                      }),
+                      // Two grabs, one per end: the tail asks "who is the parent", the head asks
+                      // "who is the child". They only appear under the pointer, where the edge is
+                      // already the thing being looked at.
+                      ...hot ? [
+                        jsx6("circle", {
+                          key: "grab-from",
+                          cx: geo.x1,
+                          cy: geo.y1 + 7,
+                          r: 5,
+                          fill: "var(--ui-accent)",
+                          stroke: "var(--ui-bg-elevated)",
+                          strokeWidth: 2,
+                          style: { pointerEvents: "all", cursor: "grab" },
+                          onPointerDown: (event) => startEdgeMove(event, e, "from")
+                        }),
+                        jsx6("circle", {
+                          key: "grab-to",
+                          cx: geo.x2,
+                          cy: geo.y2 - 7,
+                          r: 5,
+                          fill: "var(--ui-accent)",
+                          stroke: "var(--ui-bg-elevated)",
+                          strokeWidth: 2,
+                          style: { pointerEvents: "all", cursor: "grab" },
+                          onPointerDown: (event) => startEdgeMove(event, e, "to")
+                        })
+                      ] : []
                     ]
                   });
                 })
@@ -5988,6 +6056,16 @@ function KanbanGanttPage() {
       return out;
     };
   }, [allTasks, board]);
+  const parentsAllowed = useMemo2(() => {
+    return (childId) => {
+      const out = /* @__PURE__ */ new Set();
+      if (!childId) return out;
+      for (const candidate of dropCandidates(allTasks, childId, boardOf(childId))) {
+        if (candidate.allowed) out.add(candidate.task.id);
+      }
+      return out;
+    };
+  }, [allTasks, board]);
   const handlePickParent = (parentId) => {
     const childId = moveUnderId;
     $moveUnderId.set(null);
@@ -6676,6 +6754,7 @@ function KanbanGanttPage() {
             onLinkChild: handleLinkChild,
             linkAllowed,
             onUnlink: (parentId, childId) => unlinkMutation.mutate({ childId, parentId }),
+            parentsAllowed,
             tallCards: cardsTall,
             arrangement: arrange,
             sortBy: "status"
