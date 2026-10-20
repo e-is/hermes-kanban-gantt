@@ -1202,7 +1202,7 @@ export function GraphView({
     }
     return new Map([...out].map(([key, e]) => [key, {
       total: e.total,
-      parts: ORDER.filter(st => e.counts.has(st)).map(st => `${e.counts.get(st)} ${(i18n.col && i18n.col[st]) || st}`)
+      parts: ORDER.filter(st => e.counts.has(st)).map(st => `${e.counts.get(st)} ${((i18n.col && i18n.col[st]) || st).toLowerCase()}`)
     }]))
   }, [shown, i18n])
 
@@ -1417,6 +1417,12 @@ export function GraphView({
         children: jsxs('div', {
           className: 'absolute origin-top-left',
           style: {
+            // `left/top: 0` is not decoration: an absolutely positioned box with no offsets
+            // sits at its STATIC position, which depends on what else is in flow. Without it
+            // the whole surface drifted right by whatever that position happened to be, and
+            // every pan/fit number was off by the same amount.
+            left: '0px',
+            top: '0px',
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             width: `${layout.width + GRAPH_MARGIN * 2}px`,
             height: `${layout.height + GRAPH_MARGIN * 2}px`
