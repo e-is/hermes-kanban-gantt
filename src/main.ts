@@ -1147,6 +1147,14 @@ export function GraphView({
   onNewChild,
   /** Called on a click that did NOT drag and did not land on a card: the empty canvas. */
   onClearSelection,
+  /**
+   * Linking from a card's slot: `parentId` is the card the arrow starts from, `childId` the card
+   * the arrow head is released on. It is the INVERSE of the drag gesture, where the dragged card
+   * becomes the child of the card it is dropped on.
+   */
+  onLinkChild,
+  /** (parentId) => Set of task ids that may become `parentId`'s child. */
+  linkAllowed,
   /** Taller cards: the title wraps onto a second line instead of being cut. */
   tallCards = false,
   sortBy = 'status'
@@ -1159,6 +1167,18 @@ export function GraphView({
   const NEAR_PX = 64
   const [nearTarget, setNearTarget] = useState(null)
   const dragRects = useRef(new Map())
+  // The LINK slot: a handle on the bottom border of a card, armed when the pointer comes near
+  // it, that starts an arrow whose head the pointer drives. Clicking the slot must not start a
+  // card drag — the two gestures are inverses (drag = the card becomes the child; arrow = the
+  // card the head lands on becomes the child).
+  const SLOT_HALO = 26
+  const [slotFor, setSlotFor] = useState(null)
+  const [slotNear, setSlotNear] = useState(false)
+  const [link, setLink] = useState(null)
+  const linkRef = useRef(null)
+  linkRef.current = link
+  const wrapperRef = useRef(null)
+  const allowedFor = useMemo(() => (link && linkAllowed ? linkAllowed(link.from) : null), [link, linkAllowed])
   const pressedAt = useRef(null)
   const canvasRef = useRef(null)
 
@@ -1284,6 +1304,98 @@ export function GraphView({
   // Box lookup by id: a linear find per node turns the render pass quadratic, which on a
   // 500-task board is 250 000 comparisons on every pan.
   const boxes = useMemo(() => new Map(layout.nodes.map(b => [b.id, b])), [layout])
+
+  // ── linking from a card's slot ────────────────────────────────────────────
+  // Screen -> layout is exact: the surface is scaled from its top-left corner, so a client
+  // point divided by the zoom (minus the surface origin) is a layout coordinate.
+  const toLayout = event => {
+    const el = wrapperRef.current
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { x: (event.clientX - r.left) / zoom, y: (event.clientY - r.top) / zoom }
+  }
+  /** The card whose SLOT (bottom border, centred) is under the pointer, within SLOT_HALO. */
+  const slotUnder = pt => {
+    if (!pt) return null
+    let best = null
+    let bestD = SLOT_HALO
+    for (const b of boxes.values()) {
+      const cx = b.x + b.w / 2 + GRAPH_MARGIN
+      const cy = b.y + b.h + GRAPH_MARGIN
+      if (Math.abs(pt.x - cx) > b.w / 2 + 10) continue
+      const d = Math.abs(pt.y - cy)
+      if (d < bestD) { bestD = d; best = b.id }
+    }
+    return best
+  }
+  /** The card the arrow HEAD is over (or near), which is the one that would become the child. */
+  const cardUnder = (pt, exclude) => {
+    if (!pt) return null
+    let best = null
+    let bestD = 34
+    for (const b of boxes.values()) {
+      if (b.id === exclude) continue
+      const dx = Math.max(b.x + GRAPH_MARGIN - pt.x, 0, pt.x - (b.x + b.w + GRAPH_MARGIN))
+      const dy = Math.max(b.y + GRAPH_MARGIN - pt.y, 0, pt.y - (b.y + b.h + GRAPH_MARGIN))
+      const d = Math.sqrt(dx * dx + dy * dy)
+      if (d < bestD) { bestD = d; best = b.id }
+    }
+    return best
+  }
+  const onCanvasPointerMove = event => {
+    if (dragging || link) return
+    const pt = toLayout(event)
+    const slot = slotUnder(pt)
+    if (slot !== slotFor) setSlotFor(slot)
+    if (slot) {
+      const b = boxes.get(slot)
+      const cx = b.x + b.w / 2 + GRAPH_MARGIN
+      const cy = b.y + b.h + GRAPH_MARGIN
+      setSlotNear(Math.sqrt((pt.x - cx) ** 2 + (pt.y - cy) ** 2) < 16)
+    } else if (slotNear) {
+      setSlotNear(false)
+    }
+  }
+  const startLink = (event, id) => {
+    // preventDefault stops the browser from starting a card drag under the slot, and the
+    // card's own `draggable` is off while a link is in flight: the two gestures are inverses.
+    event.preventDefault()
+    event.stopPropagation()
+    const b = boxes.get(id)
+    if (!b) return
+    setSlotNear(false)
+    setLink({ from: id, x: b.x + b.w / 2 + GRAPH_MARGIN, y: b.y + b.h + GRAPH_MARGIN, target: null })
+  }
+  const allowedRef = useRef(null)
+  allowedRef.current = allowedFor
+  const linkFrom = link ? link.from : null
+  useEffect(() => {
+    if (!linkFrom) return undefined
+    const move = event => {
+      const pt = toLayout(event)
+      if (!pt) return
+      const raw = cardUnder(pt, linkFrom)
+      const allowed = allowedRef.current
+      const target = raw && (!allowed || allowed.has(raw)) ? raw : null
+      setLink(current => (current ? { ...current, x: pt.x, y: pt.y, target } : current))
+    }
+    const up = () => {
+      const current = linkRef.current
+      setLink(null)
+      if (current && current.target && onLinkChild) onLinkChild(current.from, current.target)
+    }
+    const key = event => {
+      if (event.key === 'Escape') setLink(null)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up, { once: true })
+    window.addEventListener('keydown', key)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('keydown', key)
+    }
+  }, [linkFrom, zoom, onLinkChild])
 
   // Ctrl/⌘+wheel zooms at the cursor (the same gesture as the timeline, so nobody has to
   // learn a second one); plain wheel scrolls, Shift+wheel pans. The listener is native
@@ -1419,6 +1531,7 @@ export function GraphView({
         title: i18n.graphHint,
         onKeyDown,
         onPointerDown: onCanvasPointerDown,
+        onPointerMove: onCanvasPointerMove,
         // Proximity drop lives on the CANVAS, not on the cards: a release that misses a card by
         // 20 px used to be a release into the void, which read as the feature being broken.
         onDragOver: event => {
@@ -1444,9 +1557,10 @@ export function GraphView({
           dragRects.current = new Map()
           if (target) onDropOn(target)
         },
-        style: { cursor: dragging ? 'grabbing' : 'grab' },
+        style: { cursor: dragging ? 'grabbing' : link ? 'crosshair' : slotFor ? 'crosshair' : 'grab' },
         children: jsxs('div', {
           className: 'absolute origin-top-left',
+          ref: wrapperRef,
           style: {
             // `left/top: 0` is not decoration: an absolutely positioned box with no offsets
             // sits at its STATIC position, which depends on what else is in flow. Without it
@@ -1502,6 +1616,36 @@ export function GraphView({
                 })
               ]
             })),
+            // THE SLOT. A handle on the bottom border of the card the pointer is near; it grows
+            // when the pointer is on it, so it reads as something you can take hold of, and
+            // pressing it starts the arrow instead of dragging the card.
+            slotFor && boxes.get(slotFor)
+              ? (() => {
+                  const b = boxes.get(slotFor)
+                  const size = slotNear ? 18 : 11
+                  return jsx('div', {
+                    key: 'slot',
+                    className: 'absolute rounded-full',
+                    role: 'button',
+                    'aria-label': i18n.graphLink,
+                    title: i18n.graphLink,
+                    onPointerDown: event => startLink(event, slotFor),
+                    style: {
+                      left: `${b.x + b.w / 2 + GRAPH_MARGIN}px`,
+                      top: `${b.y + b.h + GRAPH_MARGIN}px`,
+                      width: `${size}px`,
+                      height: `${size}px`,
+                      transform: 'translate(-50%, -50%)',
+                      background: 'var(--ui-accent)',
+                      border: '2px solid var(--ui-bg-elevated)',
+                      boxShadow: '0 0 0 1px var(--ui-accent)',
+                      cursor: 'crosshair',
+                      transition: 'width 120ms ease, height 120ms ease',
+                      touchAction: 'none'
+                    }
+                  })
+                })()
+              : null,
             jsx('svg', {
               className: 'absolute inset-0 pointer-events-none',
               width: layout.width + GRAPH_MARGIN * 2,
@@ -1515,6 +1659,28 @@ export function GraphView({
                     children: jsx('path', { d: 'M 0 0 L 8 4 L 0 8 z', fill: 'currentColor' })
                   })
                 }),
+                // The arrow being drawn: its base is the SLOT of the card it started from, and
+                // its head follows the pointer. Releasing on a card makes that card the child.
+                link
+                  ? jsx('path', {
+                      key: 'link-arrow',
+                      d: (() => {
+                        const b = boxes.get(link.from)
+                        if (!b) return ''
+                        const x1 = b.x + b.w / 2 + GRAPH_MARGIN
+                        const y1 = b.y + b.h + GRAPH_MARGIN
+                        const x2 = link.x
+                        const y2 = link.y
+                        return `M ${x1} ${y1} C ${x1} ${y1 + 46}, ${x2} ${y2 - 46}, ${x2} ${y2}`
+                      })(),
+                      fill: 'none',
+                      stroke: 'var(--ui-accent)',
+                      strokeWidth: link.target ? 2 : 1.6,
+                      strokeDasharray: '6 4',
+                      markerEnd: 'url(#kg-arrow)',
+                      style: { color: 'var(--ui-accent)' }
+                    })
+                  : null,
                 // The link the release would create, drawn from the source card to the card
                 // the pointer is near: the gesture says what it is about to do before it does it.
                 nearTarget && dragId && boxes.get(dragId) && boxes.get(nearTarget)
@@ -1560,7 +1726,8 @@ export function GraphView({
                   isSelected ? 'border-(--ui-accent)' : 'border-(--ui-stroke-secondary)',
                   drop && drop.allowed ? 'ring-1 ring-(--ui-accent)' : '',
                   drop && !drop.allowed ? 'ring-1 ring-red-500/60' : '',
-                  node.id === nearTarget ? 'ring-2 ring-(--ui-accent)' : ''
+                  node.id === nearTarget ? 'ring-2 ring-(--ui-accent)' : '',
+                  link && link.target === node.id ? 'ring-2 ring-(--ui-accent)' : ''
                 ),
                 'data-graph-node': node.id,
                 style: {
@@ -1578,7 +1745,8 @@ export function GraphView({
                   borderLeft: `6px solid ${tone}`,
                   backgroundImage: `linear-gradient(color-mix(in srgb, ${tone} 7%, transparent), color-mix(in srgb, ${tone} 7%, transparent))`
                 },
-                draggable: Boolean(onDragStart),
+                // No card drag while the arrow is drawn: the slot gesture owns the pointer.
+                draggable: Boolean(onDragStart) && !link,
                 title: `${node.title} (${node.id})${node.assignee ? ` — ${node.assignee}` : ''}`,
                 onClick: () => onOpen && onOpen(node.id),
                 onDoubleClick: event => {
@@ -1586,6 +1754,7 @@ export function GraphView({
                   if (onNewChild) onNewChild(node.id)
                 },
                 onDragStart: event => {
+                  if (link) return
                   event.dataTransfer.setData('text/plain', node.id)
                   event.dataTransfer.effectAllowed = 'move'
                   // Snapshot the boxes ONCE: dragover fires continuously and reading a rect per
@@ -3545,6 +3714,39 @@ export function KanbanGanttPage() {
     reparentMutation.mutate({ childId, parentId: targetId, mode: 'add' })
   }
 
+  // Linking from a card's slot: the arrow starts at the PARENT and lands on the CHILD, which is
+  // the inverse of a card drop — there the dragged card is the one that becomes a child. Same
+  // refusals, same dialog when the child already has parents: only the roles are swapped.
+  const handleLinkChild = (parentId, childId) => {
+    if (!parentId || !childId || parentId === childId) return
+    const candidate = dropCandidates(allTasks, childId, boardOf(childId)).find(c => c.task.id === parentId)
+    if (candidate && !candidate.allowed) {
+      toast('error', reasonLabel(candidate.reason, i18n))
+      return
+    }
+    const child = allTasks.find(t => t.id === childId)
+    if (((child && child.parents) || []).length > 0) {
+      setPendingReparent({ childId, parentId })
+      return
+    }
+    reparentMutation.mutate({ childId, parentId, mode: 'add' })
+  }
+
+  // Which cards may become the child of the card the arrow started from. Computed when a link
+  // starts, not on every render: the answer only depends on the source.
+  const linkAllowed = useMemo(() => {
+    return parentId => {
+      const out = new Set()
+      if (!parentId) return out
+      for (const task of allTasks) {
+        if (task.id === parentId) continue
+        const candidate = dropCandidates(allTasks, task.id, boardOf(task.id)).find(c => c.task.id === parentId)
+        if (candidate && candidate.allowed) out.add(task.id)
+      }
+      return out
+    }
+  }, [allTasks, board])
+
   // Same decision path as a drop, reached from the drawer's "move under…" item.
   const handlePickParent = parentId => {
     const childId = moveUnderId
@@ -4352,6 +4554,8 @@ export function KanbanGanttPage() {
             // the rest (it is the same creation verb, reached from the graph).
             onNewChild: id => $newTask.set({ parentId: id }),
             onClearSelection: () => $openTaskId.set(null),
+            onLinkChild: handleLinkChild,
+            linkAllowed,
             tallCards: cardsTall,
             sortBy: 'status'
           })
