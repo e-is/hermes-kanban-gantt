@@ -1629,7 +1629,7 @@ export function GraphView({
             slotFor && boxes.get(slotFor)
               ? (() => {
                   const b = boxes.get(slotFor)
-                  const dot = slotNear ? 16 : 10
+                  const dot = slotNear ? 14 : 9
                   return jsxs('div', {
                     key: 'slot',
                     className: 'absolute flex items-center justify-center',
@@ -1639,10 +1639,13 @@ export function GraphView({
                     title: i18n.graphLink,
                     onPointerDown: event => startLink(event, slotFor),
                     style: {
-                      left: `${b.x + b.w / 2 + GRAPH_MARGIN - 12}px`,
-                      top: `${b.y + b.h + GRAPH_MARGIN + 3}px`,
-                      width: '24px',
-                      height: '24px',
+                      // INSIDE the card, just above its bottom border: hanging below, the dot
+                      // read as belonging to the card underneath. 20 px box, entirely within
+                      // the card's footprint, so nothing overflows the border.
+                      left: `${b.x + b.w / 2 + GRAPH_MARGIN - 10}px`,
+                      top: `${b.y + b.h + GRAPH_MARGIN - 21}px`,
+                      width: '20px',
+                      height: '20px',
                       zIndex: 30,
                       cursor: 'crosshair',
                       touchAction: 'none'
