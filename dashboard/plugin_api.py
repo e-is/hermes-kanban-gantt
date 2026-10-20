@@ -308,6 +308,48 @@ def list_boards():
     return {"boards": boards, "current": _resolve_board(None)}
 
 
+def _activity_series(conn, window_sec: int = 24 * 3600, buckets: int = 24) -> dict:
+    """Per-task activity volume over the last `window_sec`, bucketed server-side.
+
+    The graph view draws a sparkline along each node's bottom edge ("has anyone worked on
+    this?"), and it costs ONE aggregate pass per table rather than shipping every event of
+    every task to the desktop: `task_events` and `task_runs` are scanned once, each
+    timestamp lands in its bucket, and only tasks with at least one hit appear in the
+    result. A task that is absent means "no activity in the window" — which the client
+    must draw differently from "activity, then silence", so absence is the signal.
+    """
+    now = int(time.time())
+    start = now - window_sec
+    step = window_sec / float(buckets)
+    out: dict[str, list[int]] = {}
+
+    def add(task_id: str, ts) -> None:
+        try:
+            t = int(ts)
+        except (TypeError, ValueError):
+            return
+        if t < start:
+            return
+        # Clock skew between gateway and desktop clamps into the last bucket rather than
+        # producing an index the client would have to guard.
+        idx = max(0, min(buckets - 1, int((t - start) / step)))
+        series = out.setdefault(task_id, [0] * buckets)
+        series[idx] += 1
+
+    for task_id, created_at in conn.execute(
+        "SELECT task_id, created_at FROM task_events WHERE created_at >= ?", (start,)
+    ):
+        add(task_id, created_at)
+    for task_id, started_at, ended_at in conn.execute(
+        "SELECT task_id, started_at, ended_at FROM task_runs "
+        "WHERE COALESCE(ended_at, started_at) >= ?", (start,)
+    ):
+        add(task_id, started_at)
+        if ended_at:
+            add(task_id, ended_at)
+    return out
+
+
 def _read_gantt(slug: str) -> dict:
     if slug == "all" or slug == "*":
         return _read_gantt_all()
@@ -316,6 +358,7 @@ def _read_gantt(slug: str) -> dict:
     try:
         runs = _run_windows(conn)
         attachment_counts = _attachment_counts(conn)
+        activity = _activity_series(conn)
         rows = conn.execute(
             "SELECT id, title, status, assignee, priority, created_at, started_at, completed_at, "
             "NULL AS run_started_at, NULL AS run_ended_at "
@@ -341,6 +384,9 @@ def _read_gantt(slug: str) -> dict:
             rec["attachment_count"] = attachment_counts.get(rec["id"], 0)
             rec["children"] = children.get(rec["id"], [])
             rec["parents"] = parents.get(rec["id"], [])
+            # The graph's sparkline: present only for tasks with activity in the window.
+            if rec["id"] in activity:
+                rec["activity"] = activity[rec["id"]]
             tasks.append(rec)
             if rec["label"]:
                 label_counts[rec["label"]] = label_counts.get(rec["label"], 0) + 1
@@ -375,6 +421,7 @@ def _read_gantt_all() -> dict:
             continue
         try:
             runs = _run_windows(conn)
+            activity = _activity_series(conn)
             rows = conn.execute(
                 "SELECT id, title, status, assignee, priority, created_at, started_at, completed_at, "
                 "NULL AS run_started_at, NULL AS run_ended_at "
@@ -398,6 +445,8 @@ def _read_gantt_all() -> dict:
                 rec["attachment_count"] = attachment_counts.get(rec["id"], 0)
                 rec["children"] = children.get(rec["id"], [])
                 rec["parents"] = parents.get(rec["id"], [])
+                if rec["id"] in activity:
+                    rec["activity"] = activity[rec["id"]]
                 all_tasks.append(rec)
                 if rec["label"]:
                     label_counts[rec["label"]] = label_counts.get(rec["label"], 0) + 1

@@ -248,6 +248,18 @@ test('events outside the window are ignored, and clock skew clamps into the last
   assert.equal(buckets[23], 1)
 })
 
+test('a backend-computed series is used as-is, and wins over a sparse event list', () => {
+  // `/gantt` sends 24 pre-bucketed integers for every task it saw activity on; the desktop
+  // must not re-derive from an event list that may not have been shipped at all.
+  const t = task('a', { activity: [0, 0, 3, 0, 1] })
+  const { buckets, max } = activityBuckets(t, NOW, 24 * H, 24)
+  assert.equal(max, 3)
+  assert.equal(buckets[2], 3)   // the series is kept in order, right-aligned at now
+  // An all-zero series is not "activity": it is the absence of it, and the renderer must
+  // still draw the empty axis.
+  assert.equal(activityBuckets(task('b', { activity: [0, 0, 0] }), NOW, 24 * H, 24), null)
+})
+
 test('activityMap omits untouched tasks instead of zeroing them', () => {
   const nodes = [
     { id: 'a', events: [{ created_at: NOW - 10 }] },
@@ -379,7 +391,8 @@ test('one node with 200 parents and another with 200 children still lays out', (
 // ── quick scopes ────────────────────────────────────────────────────────────
 
 test('the scope list is exactly the three the segmented control offers', () => {
-  assert.deepEqual(SCOPES, ['all', 'open', 'running-lineage'])
+  // Their order, so the control reads the same in both plugins.
+  assert.deepEqual(SCOPES, ['running-lineage', 'open', 'all'])
 })
 
 test('Open drops done and archived; All keeps everything', () => {

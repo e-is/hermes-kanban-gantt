@@ -45,6 +45,10 @@ export function graphNodes(tasks) {
     // Kept whole: the sparkline needs them and a second fetch per node is not a thing.
     events: t.events || [],
     runs: t.runs || [],
+    // The backend's own bucketed series (`/gantt` computes it in one aggregate pass), when
+    // it is there: the desktop then has nothing to derive, and a 500-task board ships 24
+    // small integers per touched task instead of every event.
+    activity: Array.isArray(t.activity) && t.activity.length ? t.activity : null,
     startedAt: t.started_at || null,
     completedAt: t.completed_at || null,
     createdAt: t.created_at || null
@@ -316,6 +320,13 @@ export function lineage(nodes, edges, id) {
  *  the second draws bars on the left and nothing on the right.
  */
 export function activityBuckets(node, now, windowSec, count) {
+  // A series computed by the backend wins: it saw every event, including the ones the
+  // snapshot does not carry, and it is already bucketed over the same window.
+  if (Array.isArray(node?.activity) && node.activity.length) {
+    const buckets = node.activity.slice(-count).map(v => Number(v) || 0);
+    const max = buckets.reduce((m, v) => (v > m ? v : m), 0);
+    return max > 0 ? { buckets, max } : null;
+  }
   const buckets = new Array(count).fill(0);
   const start = now - windowSec;
   const bucketSec = windowSec / count;
@@ -417,10 +428,11 @@ export function layoutGraph(nodes, edges, { arrangement = 'down', sortBy = 'stat
   };
 }
 
-/** The quick scopes, in the order the segmented control shows them. `running` is the
- *  one that needs the graph: running tasks **plus their lineage**, which is what a
- *  reader actually wants to see when asking "what is moving?". */
-export const SCOPES = ['all', 'open', 'running-lineage'];
+/** The quick scopes, in the order the segmented control shows them — the same order
+ *  `kanban-graph` uses (Running + lineage, Open, All), so a reader who knows one plugin
+ *  finds the same control in the other. Their DEFAULT is `running`; ours stays `all`,
+ *  because a first visit to a board where nothing runs must not open on an empty canvas. */
+export const SCOPES = ['running-lineage', 'open', 'all'];
 
 /** Which ids a scope keeps. Pure, so the footer's "N hidden" is assertable. */
 export function scopeIds(nodes, edges, scope) {

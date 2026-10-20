@@ -17,6 +17,10 @@ function graphNodes(tasks) {
     // Kept whole: the sparkline needs them and a second fetch per node is not a thing.
     events: t.events || [],
     runs: t.runs || [],
+    // The backend's own bucketed series (`/gantt` computes it in one aggregate pass), when
+    // it is there: the desktop then has nothing to derive, and a 500-task board ships 24
+    // small integers per touched task instead of every event.
+    activity: Array.isArray(t.activity) && t.activity.length ? t.activity : null,
     startedAt: t.started_at || null,
     completedAt: t.completed_at || null,
     createdAt: t.created_at || null
@@ -208,6 +212,11 @@ function lineage(nodes, edges, id) {
   return { upstream: walk(id, up), downstream: walk(id, down) };
 }
 function activityBuckets(node, now, windowSec, count) {
+  if (Array.isArray(node?.activity) && node.activity.length) {
+    const buckets2 = node.activity.slice(-count).map((v) => Number(v) || 0);
+    const max2 = buckets2.reduce((m, v) => v > m ? v : m, 0);
+    return max2 > 0 ? { buckets: buckets2, max: max2 } : null;
+  }
   const buckets = new Array(count).fill(0);
   const start = now - windowSec;
   const bucketSec = windowSec / count;
@@ -294,7 +303,7 @@ function layoutGraph(nodes, edges, { arrangement = "down", sortBy = "status" } =
     truncated
   };
 }
-var SCOPES = ["all", "open", "running-lineage"];
+var SCOPES = ["running-lineage", "open", "all"];
 function scopeIds(nodes, edges, scope) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, status: void 0 } : n);
   if (scope === "open") {
