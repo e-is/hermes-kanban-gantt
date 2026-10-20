@@ -3260,7 +3260,10 @@ export function KanbanGanttPage() {
   // Taller cards: the title wraps onto a second line. It is a LAYOUT option, not a CSS one —
   // the node height is a constant the ranks are computed from (see `nodeH` in graph-core), so
   // the graph stays a set of exact equations instead of overlapping boxes.
-  const [cardsTall, setCardsTall] = useState(() => readPref('cardsTall') === '1')
+  // ON by default: a one-line 10 px title was the smallest text on the screen and the only
+  // text that matters in the graph, so legibility is the starting point and the compact card
+  // is the option, not the other way round.
+  const [cardsTall, setCardsTall] = useState(() => readPref('cardsTall') !== '0')
   const handleCardsTall = next => {
     setCardsTall(next)
     writePref('cardsTall', next ? '1' : '0')

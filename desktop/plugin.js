@@ -5228,7 +5228,7 @@ function KanbanGanttPage() {
     setGraphZoomPct(clamped);
     writePref("graphZoomPct", String(clamped));
   };
-  const [cardsTall, setCardsTall] = useState4(() => readPref("cardsTall") === "1");
+  const [cardsTall, setCardsTall] = useState4(() => readPref("cardsTall") !== "0");
   const handleCardsTall = (next) => {
     setCardsTall(next);
     writePref("cardsTall", next ? "1" : "0");
