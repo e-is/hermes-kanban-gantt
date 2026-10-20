@@ -1618,34 +1618,47 @@ export function GraphView({
                 })
               ]
             })),
-            // THE SLOT. A handle on the bottom border of the card the pointer is near; it grows
-            // when the pointer is on it, so it reads as something you can take hold of, and
-            // pressing it starts the arrow instead of dragging the card.
+            // THE SLOT. A handle hanging just under the bottom border of the card the pointer
+            // is near. It grows when the pointer is on it, so it reads as something you can take
+            // hold of, and pressing it starts the arrow instead of dragging the card.
+            //
+            // Two details make it usable rather than merely visible: the whole 24 px box is the
+            // hit area (a 10 px dot is not a target), and it hangs BELOW the border so the card
+            // underneath cannot steal the press at the boundary pixel — which is exactly what
+            // `elementFromPoint` kept reporting.
             slotFor && boxes.get(slotFor)
               ? (() => {
                   const b = boxes.get(slotFor)
-                  const size = slotNear ? 18 : 11
-                  return jsx('div', {
+                  const dot = slotNear ? 16 : 10
+                  return jsxs('div', {
                     key: 'slot',
-                    className: 'absolute rounded-full',
+                    className: 'absolute flex items-center justify-center',
                     role: 'button',
                     'data-graph-slot': slotFor,
                     'aria-label': i18n.graphLink,
                     title: i18n.graphLink,
                     onPointerDown: event => startLink(event, slotFor),
                     style: {
-                      left: `${b.x + b.w / 2 + GRAPH_MARGIN}px`,
-                      top: `${b.y + b.h + GRAPH_MARGIN}px`,
-                      width: `${size}px`,
-                      height: `${size}px`,
-                      transform: 'translate(-50%, -50%)',
-                      background: 'var(--ui-accent)',
-                      border: '2px solid var(--ui-bg-elevated)',
-                      boxShadow: '0 0 0 1px var(--ui-accent)',
+                      left: `${b.x + b.w / 2 + GRAPH_MARGIN - 12}px`,
+                      top: `${b.y + b.h + GRAPH_MARGIN + 3}px`,
+                      width: '24px',
+                      height: '24px',
+                      zIndex: 30,
                       cursor: 'crosshair',
-                      transition: 'width 120ms ease, height 120ms ease',
                       touchAction: 'none'
-                    }
+                    },
+                    children: jsx('span', {
+                      className: 'rounded-full',
+                      style: {
+                        width: `${dot}px`,
+                        height: `${dot}px`,
+                        background: 'var(--ui-accent)',
+                        border: '2px solid var(--ui-bg-elevated)',
+                        boxShadow: '0 0 0 1px var(--ui-accent)',
+                        transition: 'width 120ms ease, height 120ms ease',
+                        pointerEvents: 'none'
+                      }
+                    })
                   })
                 })()
               : null,
