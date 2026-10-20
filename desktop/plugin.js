@@ -247,6 +247,9 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `Activity over the last ${n} h`,
     graphNoActivity: "No activity in this window",
     graphFit: "Fit",
+    graphFitOn: "Fit — the view keeps framing itself while the pane resizes",
+    cardsTall: "Taller cards, full titles",
+    cardsTallHint: "Two lines, wrapped, instead of one cut line",
     openBoard: "Open another board",
     closeBoard: "Close this board tab",
     noOtherBoards: "Every board is already open",
@@ -495,6 +498,9 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `Activité sur les ${n} dernières heures`,
     graphNoActivity: "Aucune activité dans cette fenêtre",
     graphFit: "Ajuster",
+    graphFitOn: "Ajuster — la vue se recadre toute seule quand le panneau change de taille",
+    cardsTall: "Cartes plus hautes, titres entiers",
+    cardsTallHint: "Deux lignes avec retour à la ligne, au lieu d’une ligne tronquée",
     openBoard: "Ouvrir un autre board",
     closeBoard: "Fermer cet onglet de board",
     noOtherBoards: "Tous les boards sont déjà ouverts",
@@ -742,6 +748,9 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `最近 ${n} 小时的活动`,
     graphNoActivity: "此时间窗口内无活动",
     graphFit: "适应",
+    graphFitOn: "适应 —— 面板尺寸变化时自动重新取景",
+    cardsTall: "更高的卡片，完整标题",
+    cardsTallHint: "两行自动换行，而不是截断的一行",
     openBoard: "打开另一个看板",
     closeBoard: "关闭此看板标签页",
     noOtherBoards: "所有看板均已打开",
@@ -2460,16 +2469,20 @@ function layoutGraph(nodes, edges, {
   groupBy = null,
   groupGap = 22,
   groupHead = 20,
-  groupPad = 9
+  groupPad = 9,
+  // `nodeH` exists so the reader can ask for taller cards (two lines of title) without the
+  // layout lying about it: the height is a CONSTANT the equations use, not a CSS accident, and
+  // it has to travel through the rank spacing as well as the boxes.
+  nodeH = NODE_H
 } = {}) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, title: n } : n);
   const keys = groupBy ? [...new Set(list.map((n) => groupBy(n)))].filter((k) => k != null && k !== "") : [];
   if (keys.length <= 1) {
-    return { ...layoutOne(list, edges, arrangement, sortBy), groups: [] };
+    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH), groups: [] };
   }
   const blocks = keys.map((key) => ({
     key,
-    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy)
+    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy, nodeH)
   }));
   const inner = Math.max(...blocks.map((b) => b.block.width));
   const width = inner + groupPad * 2;
@@ -2502,7 +2515,7 @@ function layoutGraph(nodes, edges, {
     truncated: blocks.some((b) => b.block.truncated)
   };
 }
-function layoutOne(list, edges, arrangement, sortBy) {
+function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
   const reduced = reduceEdges(list, es);
@@ -2512,11 +2525,11 @@ function layoutOne(list, edges, arrangement, sortBy) {
   const placed = [];
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r];
-    const extent = row.length * (vertical ? NODE_W + NODE_GAP : NODE_H + NODE_GAP) - NODE_GAP;
+    const extent = row.length * (vertical ? NODE_W + NODE_GAP : nodeH + NODE_GAP) - NODE_GAP;
     let offset = -extent / 2;
     for (const node of row) {
-      const box = vertical ? { id: node.id, x: offset, y: r * (NODE_H + RANK_GAP), w: NODE_W, h: NODE_H, rank: r } : { id: node.id, x: r * (NODE_W + RANK_GAP), y: offset, w: NODE_W, h: NODE_H, rank: r };
-      offset += vertical ? NODE_W + NODE_GAP : NODE_H + NODE_GAP;
+      const box = vertical ? { id: node.id, x: offset, y: r * (nodeH + RANK_GAP), w: NODE_W, h: nodeH, rank: r } : { id: node.id, x: r * (NODE_W + RANK_GAP), y: offset, w: NODE_W, h: nodeH, rank: r };
+      offset += vertical ? NODE_W + NODE_GAP : nodeH + NODE_GAP;
       boxes.set(node.id, box);
       placed.push(box);
     }
@@ -3449,6 +3462,8 @@ function GraphView({
   onNewChild,
   /** Called on a click that did NOT drag and did not land on a card: the empty canvas. */
   onClearSelection,
+  /** Taller cards: the title wraps onto a second line instead of being cut. */
+  tallCards = false,
   sortBy = "status",
   sparkWindow = 24 * 3600
 }) {
@@ -3463,9 +3478,10 @@ function GraphView({
     return nodes.filter((n) => keep.has(n.id));
   }, [nodes, edges, scope]);
   const grouping = showBoardBadge;
+  const nodeH = tallCards ? NODE_H + 20 : NODE_H;
   const layout = useMemo2(
-    () => layoutGraph(shown, edges, { sortBy, groupBy: grouping ? (n) => n.board || "" : null }),
-    [shown, edges, sortBy, grouping]
+    () => layoutGraph(shown, edges, { sortBy, nodeH, groupBy: grouping ? (n) => n.board || "" : null }),
+    [shown, edges, sortBy, grouping, nodeH]
   );
   const series = useMemo2(() => activityMap(shown, now, sparkWindow, GRAPH_BUCKETS), [shown, now, sparkWindow]);
   const lin = useMemo2(() => {
@@ -3474,10 +3490,19 @@ function GraphView({
     return { up: upstream, down: downstream };
   }, [shown, edges, selectedId]);
   const hiddenByScope = nodes.length - shown.length;
+  const selectedBoard = useMemo2(() => {
+    if (!selectedId) return null;
+    const n = shown.find((x) => x.id === selectedId);
+    return n ? n.board || "" : null;
+  }, [shown, selectedId]);
   const zoomRef = useRef2(zoom);
   zoomRef.current = zoom;
+  const [autoFit, setAutoFit] = useState4(true);
+  const autoFitRef = useRef2(true);
+  autoFitRef.current = autoFit;
+  const fitPctRef = useRef2(null);
   const fittedSize = useRef2("");
-  const fitView = () => {
+  const fitView = (mark = true) => {
     const el = canvasRef.current;
     if (!el || !layout.width || !layout.height) return;
     const rect = el.getBoundingClientRect();
@@ -3487,25 +3512,33 @@ function GraphView({
       (rect.height - GRAPH_MARGIN * 2) / layout.height
     );
     const pct = Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, fit));
+    fitPctRef.current = pct;
+    if (mark) {
+      setAutoFit(true);
+      autoFitRef.current = true;
+    }
     if (onZoom) onZoom(pct);
     setPan({ x: GRAPH_MARGIN / 2, y: GRAPH_MARGIN / 2 });
   };
+  useEffect3(() => {
+    if (fitPctRef.current == null) return;
+    if (Math.abs(zoom - fitPctRef.current) > 5e-3) setAutoFit(false);
+  }, [zoom]);
   useEffect3(() => {
     if (!layout.width || !layout.height) return;
     const size = `${Math.round(layout.width / 24)}x${Math.round(layout.height / 24)}`;
     if (fittedSize.current === size) return;
     fittedSize.current = size;
+    fitView();
+  }, [layout.width, layout.height, onZoom]);
+  useEffect3(() => {
     const el = canvasRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const fit = Math.min(
-      1,
-      (rect.width - GRAPH_MARGIN * 2) / layout.width,
-      (rect.height - GRAPH_MARGIN * 2) / layout.height
-    );
-    const pct = Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, fit));
-    if (onZoom && Math.abs(pct - zoomRef.current) > 0.02) onZoom(pct);
-    setPan({ x: GRAPH_MARGIN / 2, y: GRAPH_MARGIN / 2 });
+    if (!el || typeof ResizeObserver === "undefined") return void 0;
+    const ro = new ResizeObserver(() => {
+      if (autoFitRef.current) fitView();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [layout.width, layout.height, onZoom]);
   const boxes = useMemo2(() => new Map(layout.nodes.map((b) => [b.id, b])), [layout]);
   useEffect3(() => {
@@ -3536,6 +3569,7 @@ function GraphView({
     if (target && target.closest && target.closest("[data-graph-node],button,a,input,select,textarea,[role=button]")) return;
     event.preventDefault();
     pressedAt.current = { x: event.clientX, y: event.clientY };
+    setAutoFit(false);
     const start = { x: event.clientX - pan.x, y: event.clientY - pan.y };
     setDragging(start);
   };
@@ -3652,12 +3686,15 @@ function GraphView({
                 top: `${g.y + GRAPH_MARGIN}px`,
                 width: `${g.w}px`,
                 height: `${g.h}px`,
-                borderColor: "var(--ui-stroke-tertiary)",
-                backgroundColor: "color-mix(in srgb, var(--ui-bg-elevated) 40%, transparent)"
+                borderColor: g.key === selectedBoard ? "var(--ui-accent)" : "var(--ui-stroke-tertiary)",
+                backgroundColor: g.key === selectedBoard ? "color-mix(in srgb, var(--ui-accent) 7%, transparent)" : "color-mix(in srgb, var(--ui-bg-elevated) 40%, transparent)"
               },
               children: [
                 jsx6("span", {
-                  className: "absolute left-1.5 top-0.5 text-[9.5px] uppercase tracking-wide text-(--ui-text-quaternary)",
+                  className: cn3(
+                    "absolute left-1.5 top-0.5 text-[9.5px] uppercase tracking-wide",
+                    g.key === selectedBoard ? "text-(--ui-accent)" : "text-(--ui-text-quaternary)"
+                  ),
                   children: groupLabel(g.key)
                 })
               ]
@@ -3760,7 +3797,10 @@ function GraphView({
                         ] }) : jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
                       }),
                       jsxs6("span", {
-                        className: "min-w-0 flex-1 text-[10.5px] leading-tight text-(--ui-text-primary) truncate",
+                        className: cn3(
+                          "min-w-0 flex-1 leading-tight text-(--ui-text-primary)",
+                          tallCards ? "text-[11px] line-clamp-2 whitespace-normal break-words" : "text-[10.5px] truncate"
+                        ),
                         children: [
                           prefix ? jsx6("span", {
                             className: "mr-1 rounded-sm px-0.5 text-[8.5px] font-semibold text-(--ui-text-secondary)",
@@ -3821,9 +3861,13 @@ function GraphView({
               event.stopPropagation();
               fitView();
             },
-            title: i18n.graphFit,
+            title: autoFit ? i18n.graphFitOn : i18n.graphFit,
             "aria-label": i18n.graphFit,
-            className: "pointer-events-auto inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9.5px] text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent",
+            "aria-pressed": autoFit ? "true" : "false",
+            className: cn3(
+              "pointer-events-auto inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9.5px] cursor-pointer border-0",
+              autoFit ? "bg-(--ui-accent)/15 text-(--ui-accent) ring-1 ring-(--ui-accent)/40" : "text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) bg-transparent"
+            ),
             children: [jsx6(Codicon5, { key: "i", name: "screen-full", size: "0.7rem" }), jsx6("span", { key: "l", children: i18n.graphFit })]
           })
         ]
@@ -5191,6 +5235,11 @@ function KanbanGanttPage() {
     setGraphZoomPct(clamped);
     writePref("graphZoomPct", String(clamped));
   };
+  const [cardsTall, setCardsTall] = useState4(() => readPref("cardsTall") === "1");
+  const handleCardsTall = (next) => {
+    setCardsTall(next);
+    writePref("cardsTall", next ? "1" : "0");
+  };
   const [graphScope, setGraphScope] = useState4(() => {
     const s = readPref("graphScope");
     return ["all", "open", "running-lineage"].includes(s) ? s : "all";
@@ -5899,7 +5948,26 @@ function KanbanGanttPage() {
                               })
                             ] })
                           ]
-                        })
+                        }),
+                        // Only meaningful in the graph, where a card is a fixed box.
+                        graphMode ? jsxs6(DropdownMenuItem3, {
+                          className: "flex items-start gap-2 px-3 py-1.5",
+                          onClick: () => handleCardsTall(!cardsTall),
+                          children: [
+                            jsx6(Codicon5, {
+                              name: cardsTall ? "check" : "blank",
+                              size: "0.85rem",
+                              className: "mt-0.5 shrink-0"
+                            }),
+                            jsxs6("span", { className: "flex flex-col gap-0.5 min-w-0", children: [
+                              jsx6("span", { children: i18n.cardsTall }),
+                              jsx6("span", {
+                                className: "text-[10px] text-(--ui-text-tertiary)",
+                                children: i18n.cardsTallHint
+                              })
+                            ] })
+                          ]
+                        }) : null
                       ]
                     })
                   ] })
@@ -6000,6 +6068,7 @@ function KanbanGanttPage() {
             // the rest (it is the same creation verb, reached from the graph).
             onNewChild: (id) => $newTask.set({ parentId: id }),
             onClearSelection: () => $openTaskId.set(null),
+            tallCards: cardsTall,
             sortBy: "status",
             sparkWindow: period || 24 * 3600
           }) : rows.length === 0 ? jsxs6("div", {

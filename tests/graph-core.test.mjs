@@ -387,6 +387,18 @@ test('layoutGraph groups a multi-board graph into framed blocks', () => {
   for (const b of l.nodes) assert.ok(b.x >= 0 && b.y >= 0 && b.x + b.w <= l.width && b.y + b.h <= l.height)
 })
 
+test('layoutGraph: taller cards are a real height, not a style', () => {
+  // The node height feeds the rank spacing, so a caller that asks for two lines of title gets
+  // boxes that actually contain them — and a second rank that clears the first.
+  const nodes = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }]
+  const tall = layoutGraph(nodes, edges, { nodeH: 82 })
+  assert.ok(tall.nodes.every(b => b.h === 82), 'every box is as tall as asked')
+  const byRank = [...tall.nodes].sort((x, y) => x.y - y.y)
+  assert.ok(byRank[1].y >= 82, 'the next rank starts below a tall card')
+  assert.ok(tall.height > layoutGraph(nodes, edges).height, 'and the canvas grows with them')
+})
+
 test('layoutGraph: one board (or no grouping) adds no frames', () => {
   const nodes = [{ id: 'a', board: 'x' }, { id: 'b', board: 'x' }]
   const edges = [{ from: 'a', to: 'b' }]

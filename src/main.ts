@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { graphNodes, graphEdges, layoutGraph, activityMap, lineage, scopeIds, SPARK_BAND } from './core/graph-core.ts'
+import { graphNodes, graphEdges, layoutGraph, activityMap, lineage, scopeIds, SPARK_BAND, NODE_H } from './core/graph-core.ts'
 import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -1151,6 +1151,8 @@ export function GraphView({
   onNewChild,
   /** Called on a click that did NOT drag and did not land on a card: the empty canvas. */
   onClearSelection,
+  /** Taller cards: the title wraps onto a second line instead of being cut. */
+  tallCards = false,
   sortBy = 'status',
   sparkWindow = 24 * 3600
 }) {
@@ -1171,9 +1173,10 @@ export function GraphView({
   // framed, contiguous block with its name at the top-left — the shape kanban-graph uses, and
   // the only one where "where does this board end?" is answerable at a glance.
   const grouping = showBoardBadge
+  const nodeH = tallCards ? NODE_H + 20 : NODE_H
   const layout = useMemo(
-    () => layoutGraph(shown, edges, { sortBy, groupBy: grouping ? n => n.board || '' : null }),
-    [shown, edges, sortBy, grouping]
+    () => layoutGraph(shown, edges, { sortBy, nodeH, groupBy: grouping ? n => n.board || '' : null }),
+    [shown, edges, sortBy, grouping, nodeH]
   )
   const series = useMemo(() => activityMap(shown, now, sparkWindow, GRAPH_BUCKETS), [shown, now, sparkWindow])
   const lin = useMemo(() => {
@@ -1183,17 +1186,28 @@ export function GraphView({
   }, [shown, edges, selectedId])
 
   const hiddenByScope = nodes.length - shown.length
+  // Which board the selected card belongs to: its frame is lit, so a reader in an all-boards
+  // graph sees WHERE they are, not just which card.
+  const selectedBoard = useMemo(() => {
+    if (!selectedId) return null
+    const n = shown.find(x => x.id === selectedId)
+    return n ? (n.board || '') : null
+  }, [shown, selectedId])
 
-  // Fit the first view: a real board's layout is wider than the pane, and a graph whose
-  // first screen is mostly cut off reads as broken. Refits when the layout's SIZE changes
-  // (another board, another scope), not on every refresh, so a reader who zoomed in keeps
-  // their scale while the data moves under it.
+  // FIT MODE. Fit is not just a button: it is a MODE the view can stay in. While it is on, the
+  // view re-fits itself whenever the canvas changes size — which is exactly what opening or
+  // collapsing the detail pane does — so the graph never ends up half out of frame because a
+  // pane took 400 px. Any camera gesture of the reader's own (wheel, drag, slider, +/-) leaves
+  // the mode, and the button stops being lit.
   const zoomRef = useRef(zoom)
   zoomRef.current = zoom
+  const [autoFit, setAutoFit] = useState(true)
+  const autoFitRef = useRef(true)
+  autoFitRef.current = autoFit
+  // The scale the last fit produced: a zoom that differs from it came from somewhere else.
+  const fitPctRef = useRef(null)
   const fittedSize = useRef('')
-  // One function for both the first view and the Fit button (and `0`, their shortcut), so
-  // "fit" can never mean two different things.
-  const fitView = () => {
+  const fitView = (mark = true) => {
     const el = canvasRef.current
     if (!el || !layout.width || !layout.height) return
     const rect = el.getBoundingClientRect()
@@ -1203,9 +1217,19 @@ export function GraphView({
       (rect.height - GRAPH_MARGIN * 2) / layout.height
     )
     const pct = Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, fit))
+    fitPctRef.current = pct
+    if (mark) {
+      setAutoFit(true)
+      autoFitRef.current = true
+    }
     if (onZoom) onZoom(pct)
     setPan({ x: GRAPH_MARGIN / 2, y: GRAPH_MARGIN / 2 })
   }
+  // A zoom the view did not produce itself means the reader took the camera: leave the mode.
+  useEffect(() => {
+    if (fitPctRef.current == null) return
+    if (Math.abs(zoom - fitPctRef.current) > 0.005) setAutoFit(false)
+  }, [zoom])
   useEffect(() => {
     if (!layout.width || !layout.height) return
     // Refit when the layout's SIZE changes (another board, another scope), not on every
@@ -1213,17 +1237,18 @@ export function GraphView({
     const size = `${Math.round(layout.width / 24)}x${Math.round(layout.height / 24)}`
     if (fittedSize.current === size) return
     fittedSize.current = size
+    fitView()
+  }, [layout.width, layout.height, onZoom])
+  // The pane resizing (a docked detail, the sidebar collapsing, the window) re-fits, but only
+  // while the mode is on — a reader who placed the camera keeps it.
+  useEffect(() => {
     const el = canvasRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const fit = Math.min(
-      1,
-      (rect.width - GRAPH_MARGIN * 2) / layout.width,
-      (rect.height - GRAPH_MARGIN * 2) / layout.height
-    )
-    const pct = Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, fit))
-    if (onZoom && Math.abs(pct - zoomRef.current) > 0.02) onZoom(pct)
-    setPan({ x: GRAPH_MARGIN / 2, y: GRAPH_MARGIN / 2 })
+    if (!el || typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(() => {
+      if (autoFitRef.current) fitView()
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
   }, [layout.width, layout.height, onZoom])
   // Box lookup by id: a linear find per node turns the render pass quadratic, which on a
   // 500-task board is 250 000 comparisons on every pan.
@@ -1271,6 +1296,9 @@ export function GraphView({
     if (target && target.closest && target.closest('[data-graph-node],button,a,input,select,textarea,[role=button]')) return
     event.preventDefault()
     pressedAt.current = { x: event.clientX, y: event.clientY }
+    // Taking the camera by hand ends FIT MODE, even before the pointer has moved: from here on
+    // the reader decides where the graph sits, and a resize must not yank it back.
+    setAutoFit(false)
     const start = { x: event.clientX - pan.x, y: event.clientY - pan.y }
     setDragging(start)
   }
@@ -1402,12 +1430,17 @@ export function GraphView({
                 top: `${g.y + GRAPH_MARGIN}px`,
                 width: `${g.w}px`,
                 height: `${g.h}px`,
-                borderColor: 'var(--ui-stroke-tertiary)',
-                backgroundColor: 'color-mix(in srgb, var(--ui-bg-elevated) 40%, transparent)'
+                borderColor: g.key === selectedBoard ? 'var(--ui-accent)' : 'var(--ui-stroke-tertiary)',
+                backgroundColor: g.key === selectedBoard
+                  ? 'color-mix(in srgb, var(--ui-accent) 7%, transparent)'
+                  : 'color-mix(in srgb, var(--ui-bg-elevated) 40%, transparent)'
               },
               children: [
                 jsx('span', {
-                  className: 'absolute left-1.5 top-0.5 text-[9.5px] uppercase tracking-wide text-(--ui-text-quaternary)',
+                  className: cn(
+                    'absolute left-1.5 top-0.5 text-[9.5px] uppercase tracking-wide',
+                    g.key === selectedBoard ? 'text-(--ui-accent)' : 'text-(--ui-text-quaternary)'
+                  ),
                   children: groupLabel(g.key)
                 })
               ]
@@ -1507,7 +1540,12 @@ export function GraphView({
                           : jsx(Codicon, { name: statusIcon(node.status), size: '0.8rem' })
                       }),
                       jsxs('span', {
-                        className: 'min-w-0 flex-1 text-[10.5px] leading-tight text-(--ui-text-primary) truncate',
+                        className: cn(
+                          'min-w-0 flex-1 leading-tight text-(--ui-text-primary)',
+                          tallCards
+                            ? 'text-[11px] line-clamp-2 whitespace-normal break-words'
+                            : 'text-[10.5px] truncate'
+                        ),
                         children: [
                           prefix ? jsx('span', {
                             className: 'mr-1 rounded-sm px-0.5 text-[8.5px] font-semibold text-(--ui-text-secondary)',
@@ -1577,9 +1615,15 @@ export function GraphView({
           jsx('button', {
             type: 'button',
             onClick: event => { event.stopPropagation(); fitView() },
-            title: i18n.graphFit,
+            title: autoFit ? i18n.graphFitOn : i18n.graphFit,
             'aria-label': i18n.graphFit,
-            className: 'pointer-events-auto inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9.5px] text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent',
+            'aria-pressed': autoFit ? 'true' : 'false',
+            className: cn(
+              'pointer-events-auto inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9.5px] cursor-pointer border-0',
+              autoFit
+                ? 'bg-(--ui-accent)/15 text-(--ui-accent) ring-1 ring-(--ui-accent)/40'
+                : 'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) bg-transparent'
+            ),
             children: [jsx(Codicon, { key: 'i', name: 'screen-full', size: '0.7rem' }), jsx('span', { key: 'l', children: i18n.graphFit })]
           })
         ]
@@ -3185,6 +3229,14 @@ export function KanbanGanttPage() {
 
   // Which tasks the graph shows, on top of every filter: all of them, the open ones, or
   // the running ones with their whole lineage (the question this view exists to answer).
+  // Taller cards: the title wraps onto a second line. It is a LAYOUT option, not a CSS one —
+  // the node height is a constant the ranks are computed from (see `nodeH` in graph-core), so
+  // the graph stays a set of exact equations instead of overlapping boxes.
+  const [cardsTall, setCardsTall] = useState(() => readPref('cardsTall') === '1')
+  const handleCardsTall = next => {
+    setCardsTall(next)
+    writePref('cardsTall', next ? '1' : '0')
+  }
   const [graphScope, setGraphScope] = useState(() => {
     const s = readPref('graphScope')
     return ['all', 'open', 'running-lineage'].includes(s) ? s : 'all'
@@ -4064,7 +4116,28 @@ export function KanbanGanttPage() {
                           })
                         ] })
                       ]
-                    })
+                    }),
+                    // Only meaningful in the graph, where a card is a fixed box.
+                    graphMode
+                      ? jsxs(DropdownMenuItem, {
+                          className: 'flex items-start gap-2 px-3 py-1.5',
+                          onClick: () => handleCardsTall(!cardsTall),
+                          children: [
+                            jsx(Codicon, {
+                              name: cardsTall ? 'check' : 'blank',
+                              size: '0.85rem',
+                              className: 'mt-0.5 shrink-0'
+                            }),
+                            jsxs('span', { className: 'flex flex-col gap-0.5 min-w-0', children: [
+                              jsx('span', { children: i18n.cardsTall }),
+                              jsx('span', {
+                                className: 'text-[10px] text-(--ui-text-tertiary)',
+                                children: i18n.cardsTallHint
+                              })
+                            ] })
+                          ]
+                        })
+                      : null
                   ]
                 })
               ] })
@@ -4175,6 +4248,7 @@ export function KanbanGanttPage() {
             // the rest (it is the same creation verb, reached from the graph).
             onNewChild: id => $newTask.set({ parentId: id }),
             onClearSelection: () => $openTaskId.set(null),
+            tallCards: cardsTall,
             sortBy: 'status',
             sparkWindow: period || 24 * 3600
           })

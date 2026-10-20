@@ -380,19 +380,23 @@ export function layoutGraph(nodes, edges, {
   groupBy = null,
   groupGap = 22,
   groupHead = 20,
-  groupPad = 9
+  groupPad = 9,
+  // `nodeH` exists so the reader can ask for taller cards (two lines of title) without the
+  // layout lying about it: the height is a CONSTANT the equations use, not a CSS accident, and
+  // it has to travel through the rank spacing as well as the boxes.
+  nodeH = NODE_H
 } = {}) {
   const list = (nodes || []).map(n => (typeof n === 'string' ? { id: n, title: n } : n));
   const keys = groupBy ? [...new Set(list.map(n => groupBy(n)))].filter(k => k != null && k !== '') : [];
   if (keys.length <= 1) {
-    return { ...layoutOne(list, edges, arrangement, sortBy), groups: [] };
+    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH), groups: [] };
   }
 
   // Each group is laid out by the same code as a single board, then placed: blocks stacked
   // top to bottom, centred on the widest one, each with its own header strip.
   const blocks = keys.map(key => ({
     key,
-    block: layoutOne(list.filter(n => groupBy(n) === key), edges, arrangement, sortBy)
+    block: layoutOne(list.filter(n => groupBy(n) === key), edges, arrangement, sortBy, nodeH)
   }));
   const inner = Math.max(...blocks.map(b => b.block.width));
   const width = inner + groupPad * 2;
@@ -429,7 +433,7 @@ export function layoutGraph(nodes, edges, {
 }
 
 /** One board's layout: ranks top-down (or left-right), each rank centred on the longest. */
-function layoutOne(list, edges, arrangement, sortBy) {
+function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
   const reduced = reduceEdges(list, es);
@@ -442,13 +446,13 @@ function layoutOne(list, edges, arrangement, sortBy) {
     const row = rows[r];
     // Centre each rank on the longest one, so the graph reads as a tree rather than as
     // a staircase of left-aligned blocks.
-    const extent = row.length * (vertical ? NODE_W + NODE_GAP : NODE_H + NODE_GAP) - NODE_GAP;
+    const extent = row.length * (vertical ? NODE_W + NODE_GAP : nodeH + NODE_GAP) - NODE_GAP;
     let offset = -extent / 2;
     for (const node of row) {
       const box = vertical
-        ? { id: node.id, x: offset, y: r * (NODE_H + RANK_GAP), w: NODE_W, h: NODE_H, rank: r }
-        : { id: node.id, x: r * (NODE_W + RANK_GAP), y: offset, w: NODE_W, h: NODE_H, rank: r };
-      offset += (vertical ? NODE_W + NODE_GAP : NODE_H + NODE_GAP);
+        ? { id: node.id, x: offset, y: r * (nodeH + RANK_GAP), w: NODE_W, h: nodeH, rank: r }
+        : { id: node.id, x: r * (NODE_W + RANK_GAP), y: offset, w: NODE_W, h: nodeH, rank: r };
+      offset += (vertical ? NODE_W + NODE_GAP : nodeH + NODE_GAP);
       boxes.set(node.id, box);
       placed.push(box);
     }
