@@ -246,6 +246,7 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `Activity over the last ${n} h`,
     graphNoActivity: "No activity in this window",
     graphFit: "Fit",
+    graphNoActivityWindow: (n) => `No activity in the last ${n} h — the band lights up as soon as there is some`,
     graphHiddenByScope: (n) => `${n} task${n > 1 ? "s" : ""} hidden by this scope`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: "now", m: "m", h: "h", d: "d", w: "w", mo: "mo", y: "y" },
@@ -489,6 +490,7 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `Activité sur les ${n} dernières heures`,
     graphNoActivity: "Aucune activité dans cette fenêtre",
     graphFit: "Ajuster",
+    graphNoActivityWindow: (n) => `Aucune activité sur les ${n} dernières heures — la bande s'allume dès qu'il y en a`,
     graphHiddenByScope: (n) => `${n} tâche${n > 1 ? "s" : ""} masquée${n > 1 ? "s" : ""} par ce filtre`,
     // Suffixes concaténés au nombre (« 5min », « 2 j »… l'espace est inclus).
     relativeUnits: { now: "à l'instant", m: "min", h: "h", d: " j", w: " sem", mo: " mois", y: " a" },
@@ -731,6 +733,7 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `最近 ${n} 小时的活动`,
     graphNoActivity: "此时间窗口内无活动",
     graphFit: "适应",
+    graphNoActivityWindow: (n) => `最近 ${n} 小时内无活动 —— 一旦有活动该条带就会亮起`,
     graphHiddenByScope: (n) => `此筛选隐藏了 ${n} 个任务`,
     relativeUnits: { now: "刚刚", m: "分", h: "小时", d: "天", w: "周", mo: "个月", y: "年" },
     clickForDetail: "点击查看详情",
@@ -3709,6 +3712,9 @@ function GraphView({
           layout.cyclic.length ? jsx6("span", { className: "text-[#f87171]", children: i18n.graphCyclic(layout.cyclic.length) }) : null,
           layout.dangling ? jsx6("span", { children: i18n.graphDangling(layout.dangling) }) : null,
           hiddenByScope ? jsx6("span", { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
+          // Nothing in the window at all: say it once, in words, instead of leaving 40 empty
+          // axes that a reader would take for a broken feature.
+          series.size === 0 ? jsx6("span", { title: i18n.graphNoActivity, children: i18n.graphNoActivityWindow(Math.round(sparkWindow / 3600)) }) : null,
           jsx6("span", { className: "ml-auto tabular-nums", children: `${shown.length}/${nodes.length}` }),
           // The camera, where the counts are: Fit is the one camera action a clipped first
           // view makes necessary, and it is kanban-graph's `0`.

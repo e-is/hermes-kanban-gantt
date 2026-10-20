@@ -203,6 +203,41 @@ def test_task_attachment_routes(client):
         conn.close()
 
 
+def test_gantt_ships_the_activity_series_for_the_sparkline(client):
+    """The graph's cardio band needs activity volume, and it must not cost a second request.
+
+    `/gantt` computes the series in ONE aggregate pass and sends 24 integers per task that
+    had a hit in the window; a task with no hit is ABSENT, which is how the desktop tells
+    "never touched" (empty axis) from "touched, then silent" (bars on the left). The fixture
+    board's tasks do have creation events, so what is asserted here is the DELTA: three new
+    events now must land in the last two buckets, one of them an hour back.
+    """
+    http, board = client
+    before = {t["id"]: t.get("activity") for t in http.get(f"/gantt?board={board['slug']}").json()["tasks"]}
+    series_before = before[board["child"]] or [0] * 24
+    assert len(series_before) == 24
+
+    conn = open_board(board["slug"])
+    now = int(time.time())
+    for offset in (0, 60, int(2.5 * 3600)):
+        conn.execute(
+            "INSERT INTO task_events (task_id, kind, payload, created_at) VALUES (?, 'edited', NULL, ?)",
+            (board["child"], now - offset),
+        )
+    conn.commit()
+    conn.close()
+
+    after = {t["id"]: t.get("activity") for t in http.get(f"/gantt?board={board['slug']}").json()["tasks"]}
+    series = after[board["child"]]
+    assert len(series) == 24
+    assert sum(series) - sum(series_before) == 3
+    # Bucket 23 is the last hour (the two newest events), bucket 21 the one 2.5 h back.
+    # A timestamp exactly ON a boundary belongs to the bucket it opens — hence 2*3600 and
+    # not 3600, which lands in 23.
+    assert series[23] - series_before[23] == 2
+    assert series[21] - series_before[21] == 1
+
+
 def test_gantt_rejects_traversal(client):
     http, _ = client
     assert http.get("/gantt?board=../").status_code == 400

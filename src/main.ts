@@ -1522,6 +1522,11 @@ export function GraphView({
           layout.cyclic.length ? jsx('span', { className: 'text-[#f87171]', children: i18n.graphCyclic(layout.cyclic.length) }) : null,
           layout.dangling ? jsx('span', { children: i18n.graphDangling(layout.dangling) }) : null,
           hiddenByScope ? jsx('span', { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
+          // Nothing in the window at all: say it once, in words, instead of leaving 40 empty
+          // axes that a reader would take for a broken feature.
+          series.size === 0
+            ? jsx('span', { title: i18n.graphNoActivity, children: i18n.graphNoActivityWindow(Math.round(sparkWindow / 3600)) })
+            : null,
           jsx('span', { className: 'ml-auto tabular-nums', children: `${shown.length}/${nodes.length}` }),
           // The camera, where the counts are: Fit is the one camera action a clipped first
           // view makes necessary, and it is kanban-graph's `0`.
