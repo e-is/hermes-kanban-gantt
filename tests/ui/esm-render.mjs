@@ -434,6 +434,10 @@ if (pageNode) {
   // The quick scopes are not the graph's private vocabulary: a list can answer "what is in
   // flight, and what does it wait on" just as well, so the control is in the toolbar there too.
   check(listFlat.includes('"aria-label":"graphScopeAria"'), 'list view carries the quick scopes')
+  // It sits with the FILTERS, before the funnel icon in the tree: it is one more filter, and a
+  // reader looks for it where the other narrowing controls are.
+  check(listFlat.indexOf('"aria-label":"graphScopeAria"') < listFlat.indexOf('"aria-label":"filters"'),
+    'the scopes come before the funnel, among the filters')
   check(['graphScopeRunning', 'graphScopeOpen', 'graphScopeAll'].every(k => listFlat.includes(k)),
     'all three scopes are offered in list view')
   globalThis.__kgView = 'timeline'

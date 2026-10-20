@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { graphNodes, graphEdges, layoutGraph, lineage, scopeIds, nearestInHalo, NODE_H, NODE_W } from './core/graph-core.ts'
+import { graphNodes, graphEdges, layoutGraph, lineage, scopeIds, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
 import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -821,10 +821,19 @@ function FilterDropdown({
   showArchived,
   onToggleArchived,
   onlyAttachments,
-  onToggleOnlyAttachments
+  onToggleOnlyAttachments,
+  scope,
+  onScopeChange
 }) {
   const i18n = useGanttI18n()
-  const active = selectedAssignees.size > 0 || disabledStatuses.size > 0 || showArchived || onlyAttachments
+  const active =
+    selectedAssignees.size > 0 || disabledStatuses.size > 0 || showArchived || onlyAttachments || scope !== 'all'
+  // A status the scope rules out is not "unchecked by the reader" — but it is unchecked on
+  // screen, and a menu that showed a check beside a status that cannot appear would be lying
+  // about what the view contains. So it reads unchecked, says why, and clicking it lifts the
+  // scope (the inverse of checking a box: it puts the tasks back).
+  const hiddenByScope = status => (scope === 'open' ? status === 'done' || status === 'archived' : false)
+  const scopeLabel = { 'running-lineage': i18n.graphScopeRunning, open: i18n.graphScopeOpen, all: i18n.graphScopeAll }
   return jsxs(DropdownMenu, {
     children: [
       jsx(DropdownMenuTrigger, {
@@ -841,6 +850,17 @@ function FilterDropdown({
         align: 'start',
         className: 'min-w-[12rem] p-1',
         children: [
+          jsx('div', { className: 'px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)', children: i18n.scopeSection }),
+          SCOPES.map(id => jsxs(DropdownMenuItem, {
+            key: id,
+            onClick: () => onScopeChange(id),
+            className: 'flex items-center gap-2 cursor-pointer text-xs py-1.5',
+            children: [
+              jsx('span', { className: 'flex-1', children: scopeLabel[id] }),
+              scope === id ? jsx(Codicon, { name: 'check', size: '0.8rem', className: 'ml-auto' }) : null
+            ]
+          })),
+          jsx(DropdownMenuSeparator, {}),
           jsx('div', { className: 'px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)', children: i18n.profiles }),
           jsxs(DropdownMenuItem, {
             onClick: onClearAssignees,
@@ -866,12 +886,14 @@ function FilterDropdown({
           jsx(DropdownMenuSeparator, {}),
           jsx('div', { className: 'px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)', children: i18n.statuses }),
           ALL_STATUS_KEYS.map(s => {
-            const isVisible = !disabledStatuses.has(s)
+            const byScope = hiddenByScope(s)
+            const isVisible = !disabledStatuses.has(s) && !byScope
             const meta = STATUS_META[s] || { tone: 'var(--ui-text-secondary)', label: s }
             const label = i18n.col?.[s] || meta.label
             return jsxs(DropdownMenuItem, {
               key: s,
-              onClick: () => onToggleStatus(s),
+              onClick: () => (byScope ? onScopeChange('all') : onToggleStatus(s)),
+              title: byScope ? i18n.scopeHides(scopeLabel[scope]) : undefined,
               className: 'flex items-center gap-2 cursor-pointer text-xs py-1.5',
               children: [
                 jsx('span', { className: 'h-2 w-2 rounded-full shrink-0', style: { backgroundColor: meta.tone } }),
@@ -4631,6 +4653,7 @@ export function KanbanGanttPage() {
                     ]
                   })
                 : null,
+              jsx(ScopeToggle, { value: graphScope, onChange: handleGraphScope }),
               jsx(FilterDropdown, {
                 assignees: derived?.allAssignees || [],
                 selectedAssignees,
@@ -4641,7 +4664,9 @@ export function KanbanGanttPage() {
                 showArchived,
                 onToggleArchived: setShowArchived,
                 onlyAttachments,
-                onToggleOnlyAttachments: toggleOnlyAttachments
+                onToggleOnlyAttachments: toggleOnlyAttachments,
+                scope: graphScope,
+                onScopeChange: handleGraphScope
               }),
               jsxs('div', {
                 className: 'inline-flex items-center gap-1.5 border-b border-transparent focus-within:border-(--ui-stroke-secondary) px-1 py-0.5 ml-1',
@@ -4673,23 +4698,11 @@ export function KanbanGanttPage() {
               // axis to slice, and since the activity band is gone there is nothing left for a
               // window to tune.
               graphMode
-                ? jsxs('span', {
-                    className: 'inline-flex items-center gap-1.5',
-                    children: [
-                      jsx(ScopeToggle, { value: graphScope, onChange: handleGraphScope }),
-                      jsx(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
-                    ]
-                  })
-                : jsxs('span', {
-                    className: 'inline-flex items-center gap-1.5',
-                    children: [
-                      listMode ? null : jsx(PeriodSelector, {
-                        value: period,
-                        onChange: handlePeriod,
-                        disabled: false
-                      }),
-                      jsx(ScopeToggle, { value: graphScope, onChange: handleGraphScope })
-                    ]
+                ? jsx(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
+                : listMode ? null : jsx(PeriodSelector, {
+                    value: period,
+                    onChange: handlePeriod,
+                    disabled: false
                   }),
               listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {

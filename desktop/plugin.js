@@ -239,6 +239,8 @@ var GANTT_LOCALES = {
     graphScopeOpen: "Open",
     graphScopeRunning: "Running + lineage",
     graphScopeAria: "Which tasks are shown",
+    scopeSection: "Scope",
+    scopeHides: (label) => `Hidden by the scope “${label}” — click to widen it`,
     graphZoom: "Graph zoom",
     graphHint: "Click to open · double-click to add a child · drag a task NEAR another to re-parent it (the nearest one is picked)",
     graphImplied: (n) => `${n} implied link${n > 1 ? "s" : ""} hidden`,
@@ -500,6 +502,8 @@ var GANTT_LOCALES = {
     graphScopeOpen: "Ouverts",
     graphScopeRunning: "En cours + lignée",
     graphScopeAria: "Quelles tâches sont affichées",
+    scopeSection: "Périmètre",
+    scopeHides: (label) => `Masqué par le périmètre « ${label} » — cliquer pour l’élargir`,
     graphZoom: "Zoom du graphe",
     graphHint: "Clic pour ouvrir · double-clic pour ajouter un enfant · glisser une tâche À PROXIMITÉ d’une autre pour la re-parentaliser (la plus proche est retenue)",
     graphImplied: (n) => `${n} lien${n > 1 ? "s" : ""} implicite${n > 1 ? "s" : ""} masqué${n > 1 ? "s" : ""}`,
@@ -760,6 +764,8 @@ var GANTT_LOCALES = {
     graphScopeOpen: "未完成",
     graphScopeRunning: "进行中 + 血缘",
     graphScopeAria: "显示哪些任务",
+    scopeSection: "范围",
+    scopeHides: (label) => `被范围“${label}”隐藏 — 点击以扩大范围`,
     graphZoom: "关系图缩放",
     graphHint: "单击打开 · 双击添加子任务 · 将任务拖到另一个任务附近即可更改父任务（自动选择最近的一个）",
     graphImplied: (n) => `已隐藏 ${n} 条隐含链接`,
@@ -2720,6 +2726,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     quiet
   };
 }
+var SCOPES = ["running-lineage", "open", "all"];
 function scopeIds(nodes, edges, scope) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, status: void 0 } : n);
   if (scope === "open") {
@@ -3330,10 +3337,14 @@ function FilterDropdown({
   showArchived,
   onToggleArchived,
   onlyAttachments,
-  onToggleOnlyAttachments
+  onToggleOnlyAttachments,
+  scope,
+  onScopeChange
 }) {
   const i18n = useGanttI18n();
-  const active = selectedAssignees.size > 0 || disabledStatuses.size > 0 || showArchived || onlyAttachments;
+  const active = selectedAssignees.size > 0 || disabledStatuses.size > 0 || showArchived || onlyAttachments || scope !== "all";
+  const hiddenByScope = (status) => scope === "open" ? status === "done" || status === "archived" : false;
+  const scopeLabel = { "running-lineage": i18n.graphScopeRunning, open: i18n.graphScopeOpen, all: i18n.graphScopeAll };
   return jsxs6(DropdownMenu3, {
     children: [
       jsx6(DropdownMenuTrigger3, {
@@ -3350,6 +3361,17 @@ function FilterDropdown({
         align: "start",
         className: "min-w-[12rem] p-1",
         children: [
+          jsx6("div", { className: "px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)", children: i18n.scopeSection }),
+          SCOPES.map((id) => jsxs6(DropdownMenuItem3, {
+            key: id,
+            onClick: () => onScopeChange(id),
+            className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
+            children: [
+              jsx6("span", { className: "flex-1", children: scopeLabel[id] }),
+              scope === id ? jsx6(Codicon5, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
+            ]
+          })),
+          jsx6(DropdownMenuSeparator3, {}),
           jsx6("div", { className: "px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)", children: i18n.profiles }),
           jsxs6(DropdownMenuItem3, {
             onClick: onClearAssignees,
@@ -3375,12 +3397,14 @@ function FilterDropdown({
           jsx6(DropdownMenuSeparator3, {}),
           jsx6("div", { className: "px-2 py-1 text-[10px] font-semibold uppercase text-(--ui-text-tertiary)", children: i18n.statuses }),
           ALL_STATUS_KEYS.map((s) => {
-            const isVisible = !disabledStatuses.has(s);
+            const byScope = hiddenByScope(s);
+            const isVisible = !disabledStatuses.has(s) && !byScope;
             const meta = STATUS_META[s] || { tone: "var(--ui-text-secondary)", label: s };
             const label = i18n.col?.[s] || meta.label;
             return jsxs6(DropdownMenuItem3, {
               key: s,
-              onClick: () => onToggleStatus(s),
+              onClick: () => byScope ? onScopeChange("all") : onToggleStatus(s),
+              title: byScope ? i18n.scopeHides(scopeLabel[scope]) : void 0,
               className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
               children: [
                 jsx6("span", { className: "h-2 w-2 rounded-full shrink-0", style: { backgroundColor: meta.tone } }),
@@ -6527,6 +6551,7 @@ function KanbanGanttPage() {
                       jsx6("span", { children: `${blockedCount}` })
                     ]
                   }) : null,
+                  jsx6(ScopeToggle, { value: graphScope, onChange: handleGraphScope }),
                   jsx6(FilterDropdown, {
                     assignees: derived?.allAssignees || [],
                     selectedAssignees,
@@ -6537,7 +6562,9 @@ function KanbanGanttPage() {
                     showArchived,
                     onToggleArchived: setShowArchived,
                     onlyAttachments,
-                    onToggleOnlyAttachments: toggleOnlyAttachments
+                    onToggleOnlyAttachments: toggleOnlyAttachments,
+                    scope: graphScope,
+                    onScopeChange: handleGraphScope
                   }),
                   jsxs6("div", {
                     className: "inline-flex items-center gap-1.5 border-b border-transparent focus-within:border-(--ui-stroke-secondary) px-1 py-0.5 ml-1",
@@ -6566,22 +6593,10 @@ function KanbanGanttPage() {
                   // Scopes in graph mode, the period selector in the timeline: a graph has no time
                   // axis to slice, and since the activity band is gone there is nothing left for a
                   // window to tune.
-                  graphMode ? jsxs6("span", {
-                    className: "inline-flex items-center gap-1.5",
-                    children: [
-                      jsx6(ScopeToggle, { value: graphScope, onChange: handleGraphScope }),
-                      jsx6(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
-                    ]
-                  }) : jsxs6("span", {
-                    className: "inline-flex items-center gap-1.5",
-                    children: [
-                      listMode ? null : jsx6(PeriodSelector, {
-                        value: period,
-                        onChange: handlePeriod,
-                        disabled: false
-                      }),
-                      jsx6(ScopeToggle, { value: graphScope, onChange: handleGraphScope })
-                    ]
+                  graphMode ? jsx6(GraphArrangeSelect, { value: arrange, onChange: handleArrange }) : listMode ? null : jsx6(PeriodSelector, {
+                    value: period,
+                    onChange: handlePeriod,
+                    disabled: false
                   }),
                   listMode ? null : jsxs6("span", { className: "inline-flex items-center gap-1.5", children: [
                     jsx6("input", {
