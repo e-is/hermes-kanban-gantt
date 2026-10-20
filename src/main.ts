@@ -1139,6 +1139,8 @@ export function GraphView({
   onScopeChange,
   selectedId = null,
   showBoardBadge = false,
+  /** board slug -> its label, for the group frames (only used when grouping) */
+  groupLabel = slug => slug,
   board = '',
   dragId = null,
   dropMap = null,
@@ -1162,7 +1164,14 @@ export function GraphView({
     const keep = scopeIds(nodes, edges, scope)
     return nodes.filter(n => keep.has(n.id))
   }, [nodes, edges, scope])
-  const layout = useMemo(() => layoutGraph(shown, edges, { sortBy }), [shown, edges, sortBy])
+  // Grouping replaces the per-card board badge: in an all-boards graph each board becomes a
+  // framed, contiguous block with its name at the top-left — the shape kanban-graph uses, and
+  // the only one where "where does this board end?" is answerable at a glance.
+  const grouping = showBoardBadge
+  const layout = useMemo(
+    () => layoutGraph(shown, edges, { sortBy, groupBy: grouping ? n => n.board || '' : null }),
+    [shown, edges, sortBy, grouping]
+  )
   const series = useMemo(() => activityMap(shown, now, sparkWindow, GRAPH_BUCKETS), [shown, now, sparkWindow])
   const lin = useMemo(() => {
     if (!selectedId || !shown.some(n => n.id === selectedId)) return null
@@ -1249,7 +1258,15 @@ export function GraphView({
   // Dragging the empty canvas pans: the pointer leaves the surface as soon as the gesture
   // starts, so the move/up listeners live on the window and are removed with it.
   const onCanvasPointerDown = event => {
-    if (event.target !== event.currentTarget && event.target.tagName !== 'svg') return
+    if (event.button !== 0) return
+    // Panning works at ANY zoom. The old rule — "only the canvas or the svg" — held at fit
+    // zoom, where empty space sits under the cursor, and broke the moment you zoomed in: the
+    // scaled surface then covers the pane, so every press landed on a card and nothing moved.
+    // The rule is what the reader can ACT on: cards drag (HTML5 DnD), buttons and links
+    // click. Everything else is the hand.
+    const target = event.target
+    if (target && target.closest && target.closest('[data-graph-node],button,a,input,select,textarea,[role=button]')) return
+    event.preventDefault()
     const start = { x: event.clientX - pan.x, y: event.clientY - pan.y }
     setDragging(start)
   }
@@ -1308,14 +1325,9 @@ export function GraphView({
 
   const sparkline = node => {
     const s = series.get(node.id)
-    // "Never touched" and "touched then silent" must not look the same: the first draws
-    // the band's axis and nothing else, the second draws bars on the left.
-    if (!s) return jsx('div', {
-      className: 'absolute inset-x-0 bottom-0 border-t border-dashed border-(--ui-stroke-tertiary)',
-      style: { height: `${SPARK_BAND}px` },
-      title: i18n.graphNoActivity,
-      'aria-hidden': 'true'
-    })
+    // No activity, nothing drawn: an empty axis on every card of a quiet board was noise, and
+    // it competed with the border. "Touched, then silent" still shows its bars on the left.
+    if (!s) return null
     const tone = statusTone(node.status)
     return jsx('div', {
       className: 'absolute inset-x-0 bottom-0 flex items-end gap-px px-0.5',
@@ -1365,6 +1377,27 @@ export function GraphView({
             height: `${layout.height + GRAPH_MARGIN * 2}px`
           },
           children: [
+            // One frame per board, behind everything: dashed and rounded, with the name in the
+            // top-left corner, so the boundary of a board is visible without a badge on
+            // every card. Pointer-events off — a frame is scenery, not a target.
+            ...(layout.groups || []).map(g => jsxs('div', {
+              key: `frame-${g.key}`,
+              className: 'absolute rounded-lg border border-dashed pointer-events-none',
+              style: {
+                left: `${g.x + GRAPH_MARGIN}px`,
+                top: `${g.y + GRAPH_MARGIN}px`,
+                width: `${g.w}px`,
+                height: `${g.h}px`,
+                borderColor: 'var(--ui-stroke-tertiary)',
+                backgroundColor: 'color-mix(in srgb, var(--ui-bg-elevated) 40%, transparent)'
+              },
+              children: [
+                jsx('span', {
+                  className: 'absolute left-1.5 top-0.5 text-[9.5px] uppercase tracking-wide text-(--ui-text-quaternary)',
+                  children: groupLabel(g.key)
+                })
+              ]
+            })),
             jsx('svg', {
               className: 'absolute inset-0 pointer-events-none',
               width: layout.width + GRAPH_MARGIN * 2,
@@ -1480,14 +1513,6 @@ export function GraphView({
                   jsxs('div', {
                     className: 'mt-auto flex items-center gap-1 px-1.5 pb-0.5 text-[9px] text-(--ui-text-quaternary) min-w-0',
                     children: [
-                      showBoardBadge && node.board
-                        ? jsx('span', {
-                            className: 'shrink-0 max-w-[64px] truncate rounded px-1 font-mono text-[8.5px]',
-                            style: { backgroundColor: 'var(--ui-bg-tertiary)' },
-                            title: node.board,
-                            children: node.board
-                          })
-                        : null,
                       node.priority != null
                         ? jsx('span', { className: 'shrink-0 tabular-nums', children: `P${node.priority}` })
                         : null,
@@ -4121,6 +4146,7 @@ export function KanbanGanttPage() {
             // same rule the rows follow: with one board selected it is already on the
             // switcher, and repeating it on every node is noise.
             showBoardBadge: isAllBoards,
+            groupLabel: boardLabel,
             board,
             dragId,
             dropMap,

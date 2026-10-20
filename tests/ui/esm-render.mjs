@@ -448,7 +448,7 @@ if (typeof pluginModule.GraphView === 'function') {
     id, title: extra.title || `task ${id}`, status: extra.status || 'todo',
     priority: extra.priority ?? null, assignee: extra.assignee || '',
     parents: extra.parents || [], children: extra.children || [], events: extra.events || [],
-    runs: extra.runs || [], attachment_count: extra.attachment_count || 0, board: 'sumaris-app'
+    runs: extra.runs || [], attachment_count: extra.attachment_count || 0, board: extra.board || 'sumaris-app'
   })
   const tasks = [
     mk('a', { status: 'done', children: [{ id: 'b' }], events: [{ created_at: now - 23.5 * H }] }),
@@ -473,16 +473,27 @@ if (typeof pluginModule.GraphView === 'function') {
   check(all.includes('3px solid'), 'each node carries its status stripe')
   check(all.includes('0.85rem') && all.includes('dev'), 'the node shows the assignee avatar (initials)')
   check(all.includes('graphSparkline(24)'), 'the sparkline is drawn from the events, over the period window')
-  check(all.includes('graphNoActivity'), 'a node with no activity draws an empty axis instead of a flat line')
+  check(!all.includes('graphNoActivity'), 'a node with no activity draws no band at all (no empty axis)')
   // The footer always reports how much of the board it is showing (nothing was implied or
   // dangling on this chain, so the counts collapse to the ratio).
   check(all.includes('"children":"3/3"'), 'the footer reports how many tasks the view shows')
 
-  // No board name on the node unless several boards are shown: the rule we keep from our
-  // rows and deliberately do NOT take from kanban-graph.
+  // The board name is never on a CARD (a single-board graph carries none at all). When several
+  // boards share the view, each board becomes a framed, contiguous block labelled at its
+  // top-left — the kanban-graph shape — instead of every card wearing a badge.
   check(!all.includes('"children":"sumaris-app"'), 'a single-board graph carries no board name')
-  const withBadge = JSON.stringify(renderGraph({ showBoardBadge: true }))
-  check(withBadge.includes('"children":"sumaris-app"'), 'the all-boards graph names the board on the node')
+  const twoBoards = [
+    mk('x1', { title: 'alpha task', board: 'alpha' }),
+    mk('y1', { title: 'beta task', board: 'beta' })
+  ]
+  const framed = JSON.stringify(pluginModule.GraphView({
+    tasks: twoBoards, i18n: gi18n, now, showBoardBadge: true, groupLabel: slug => slug.toUpperCase()
+  }))
+  check(framed.includes('border-dashed') && framed.includes('rounded-lg'),
+    'the all-boards graph frames each board (dashed, rounded) instead of badging every card')
+  check(framed.includes('"children":"ALPHA"') && framed.includes('"children":"BETA"'),
+    'each frame names its board at the top-left, through the label resolver')
+  check(!framed.includes('"title":"alpha"'), 'no per-card board badge in the frame layout')
 
   // Scopes: Open drops the done task; Running + lineage keeps the running one AND its
   // ancestry and descendants.

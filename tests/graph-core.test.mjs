@@ -355,6 +355,62 @@ function wideBoard(n) {
   return tasks
 }
 
+test('layoutGraph groups a multi-board graph into framed blocks', () => {
+  // Two boards, each with its own chain. The point of grouping is that a reader can see
+  // WHERE a board ends: no interleaving, one frame per board, labelled at its top-left.
+  const nodes = [
+    { id: 'a1', board: 'alpha' }, { id: 'a2', board: 'alpha' }, { id: 'a3', board: 'alpha' },
+    { id: 'b1', board: 'beta' }, { id: 'b2', board: 'beta' }
+  ]
+  const edges = [
+    { from: 'a1', to: 'a2' }, { from: 'a2', to: 'a3' }, { from: 'b1', to: 'b2' }
+  ]
+  const l = layoutGraph(nodes, edges, { groupBy: n => n.board })
+  assert.deepEqual(l.groups.map(g => g.key), ['alpha', 'beta'])
+  const box = id => l.nodes.find(b => b.id === id)
+  for (const g of l.groups) {
+    const inside = nodes.filter(n => n.board === g.key).map(n => box(n.id))
+    for (const b of inside) {
+      assert.ok(b.x >= g.x && b.x + b.w <= g.x + g.w, `${b.id} stays inside its frame (x)`)
+      assert.ok(b.y >= g.y && b.y + b.h <= g.y + g.h, `${b.id} stays inside its frame (y)`)
+    }
+  }
+  // Frames are stacked, never overlapping, and all as wide as the widest board.
+  assert.ok(l.groups[1].y >= l.groups[0].y + l.groups[0].h, 'the second frame starts below the first')
+  assert.equal(new Set(l.groups.map(g => g.w)).size, 1)
+  // A link never leaves its board.
+  for (const e of l.edges) {
+    const from = nodes.find(n => n.id === e.from).board
+    const to = nodes.find(n => n.id === e.to).board
+    assert.equal(from, to)
+  }
+  for (const b of l.nodes) assert.ok(b.x >= 0 && b.y >= 0 && b.x + b.w <= l.width && b.y + b.h <= l.height)
+})
+
+test('layoutGraph: one board (or no grouping) adds no frames', () => {
+  const nodes = [{ id: 'a', board: 'x' }, { id: 'b', board: 'x' }]
+  const edges = [{ from: 'a', to: 'b' }]
+  assert.equal(layoutGraph(nodes, edges, { groupBy: n => n.board }).groups.length, 0, 'a single board needs no frame')
+  assert.deepEqual(layoutGraph(nodes, edges).groups, [], 'no groupBy, no frames')
+})
+
+test('grouping two full boards stays inside the budget', () => {
+  const nodes = []
+  const edges = []
+  for (const board of ['one', 'two']) {
+    for (let i = 0; i < 250; i++) {
+      nodes.push({ id: `${board}-${i}`, board })
+      if (i) edges.push({ from: `${board}-${i - 1}`, to: `${board}-${i}` })
+    }
+  }
+  const started = performance.now()
+  const l = layoutGraph(nodes, edges, { groupBy: n => n.board })
+  const elapsed = performance.now() - started
+  assert.equal(l.groups.length, 2)
+  assert.equal(l.nodes.length, 500)
+  assert.ok(elapsed < 120, `500 nodes in two groups took ${elapsed.toFixed(2)} ms`)
+})
+
 test('500 nodes lay out in under 50 ms', () => {
   const tasks = wideBoard(500)
   const edges = graphEdges(tasks)

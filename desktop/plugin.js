@@ -2451,8 +2451,58 @@ function activityMap(nodes, now, windowSec, count) {
   }
   return out;
 }
-function layoutGraph(nodes, edges, { arrangement = "down", sortBy = "status" } = {}) {
+function layoutGraph(nodes, edges, {
+  arrangement = "down",
+  sortBy = "status",
+  // Grouping is what makes an all-boards graph readable: layout each group on its own and
+  // stack the blocks, so a board is a CONTIGUOUS, framed region instead of its members being
+  // interleaved with another board's and each card needing a badge to say where it belongs.
+  groupBy = null,
+  groupGap = 22,
+  groupHead = 20,
+  groupPad = 9
+} = {}) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, title: n } : n);
+  const keys = groupBy ? [...new Set(list.map((n) => groupBy(n)))].filter((k) => k != null && k !== "") : [];
+  if (keys.length <= 1) {
+    return { ...layoutOne(list, edges, arrangement, sortBy), groups: [] };
+  }
+  const blocks = keys.map((key) => ({
+    key,
+    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy)
+  }));
+  const inner = Math.max(...blocks.map((b) => b.block.width));
+  const width = inner + groupPad * 2;
+  const groups = [];
+  const out = [];
+  const drawnEdges = [];
+  let cursor = 0;
+  for (const { key, block } of blocks) {
+    const h = block.height + groupHead + groupPad;
+    const dx = groupPad + (inner - block.width) / 2;
+    const dy = cursor + groupHead;
+    for (const b of block.nodes) out.push({ ...b, x: b.x + dx, y: b.y + dy });
+    groups.push({ key, x: 0, y: cursor, w: width, h });
+    for (const e of block.edges) {
+      drawnEdges.push({ ...e, x1: e.x1 + dx, y1: e.y1 + dy, x2: e.x2 + dx, y2: e.y2 + dy });
+    }
+    cursor += h + groupGap;
+  }
+  const height = cursor - groupGap;
+  return {
+    nodes: out,
+    edges: drawnEdges,
+    groups,
+    width,
+    height,
+    ranks: Math.max(...blocks.map((b) => b.block.ranks)),
+    implied: blocks.reduce((n, b) => n + b.block.implied, 0),
+    dangling: blocks.reduce((n, b) => n + b.block.dangling, 0),
+    cyclic: blocks.some((b) => b.block.cyclic),
+    truncated: blocks.some((b) => b.block.truncated)
+  };
+}
+function layoutOne(list, edges, arrangement, sortBy) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
   const reduced = reduceEdges(list, es);
@@ -3387,6 +3437,8 @@ function GraphView({
   onScopeChange,
   selectedId = null,
   showBoardBadge = false,
+  /** board slug -> its label, for the group frames (only used when grouping) */
+  groupLabel = (slug) => slug,
   board = "",
   dragId = null,
   dropMap = null,
@@ -3407,7 +3459,11 @@ function GraphView({
     const keep = scopeIds(nodes, edges, scope);
     return nodes.filter((n) => keep.has(n.id));
   }, [nodes, edges, scope]);
-  const layout = useMemo2(() => layoutGraph(shown, edges, { sortBy }), [shown, edges, sortBy]);
+  const grouping = showBoardBadge;
+  const layout = useMemo2(
+    () => layoutGraph(shown, edges, { sortBy, groupBy: grouping ? (n) => n.board || "" : null }),
+    [shown, edges, sortBy, grouping]
+  );
   const series = useMemo2(() => activityMap(shown, now, sparkWindow, GRAPH_BUCKETS), [shown, now, sparkWindow]);
   const lin = useMemo2(() => {
     if (!selectedId || !shown.some((n) => n.id === selectedId)) return null;
@@ -3472,7 +3528,10 @@ function GraphView({
     return () => el.removeEventListener("wheel", onWheel);
   }, [zoom, onZoom]);
   const onCanvasPointerDown = (event) => {
-    if (event.target !== event.currentTarget && event.target.tagName !== "svg") return;
+    if (event.button !== 0) return;
+    const target = event.target;
+    if (target && target.closest && target.closest("[data-graph-node],button,a,input,select,textarea,[role=button]")) return;
+    event.preventDefault();
     const start = { x: event.clientX - pan.x, y: event.clientY - pan.y };
     setDragging(start);
   };
@@ -3523,12 +3582,7 @@ function GraphView({
   }
   const sparkline = (node) => {
     const s = series.get(node.id);
-    if (!s) return jsx6("div", {
-      className: "absolute inset-x-0 bottom-0 border-t border-dashed border-(--ui-stroke-tertiary)",
-      style: { height: `${SPARK_BAND}px` },
-      title: i18n.graphNoActivity,
-      "aria-hidden": "true"
-    });
+    if (!s) return null;
     const tone = statusTone(node.status);
     return jsx6("div", {
       className: "absolute inset-x-0 bottom-0 flex items-end gap-px px-0.5",
@@ -3576,6 +3630,27 @@ function GraphView({
             height: `${layout.height + GRAPH_MARGIN * 2}px`
           },
           children: [
+            // One frame per board, behind everything: dashed and rounded, with the name in the
+            // top-left corner, so the boundary of a board is visible without a badge on
+            // every card. Pointer-events off — a frame is scenery, not a target.
+            ...(layout.groups || []).map((g) => jsxs6("div", {
+              key: `frame-${g.key}`,
+              className: "absolute rounded-lg border border-dashed pointer-events-none",
+              style: {
+                left: `${g.x + GRAPH_MARGIN}px`,
+                top: `${g.y + GRAPH_MARGIN}px`,
+                width: `${g.w}px`,
+                height: `${g.h}px`,
+                borderColor: "var(--ui-stroke-tertiary)",
+                backgroundColor: "color-mix(in srgb, var(--ui-bg-elevated) 40%, transparent)"
+              },
+              children: [
+                jsx6("span", {
+                  className: "absolute left-1.5 top-0.5 text-[9.5px] uppercase tracking-wide text-(--ui-text-quaternary)",
+                  children: groupLabel(g.key)
+                })
+              ]
+            })),
             jsx6("svg", {
               className: "absolute inset-0 pointer-events-none",
               width: layout.width + GRAPH_MARGIN * 2,
@@ -3690,12 +3765,6 @@ function GraphView({
                   jsxs6("div", {
                     className: "mt-auto flex items-center gap-1 px-1.5 pb-0.5 text-[9px] text-(--ui-text-quaternary) min-w-0",
                     children: [
-                      showBoardBadge && node.board ? jsx6("span", {
-                        className: "shrink-0 max-w-[64px] truncate rounded px-1 font-mono text-[8.5px]",
-                        style: { backgroundColor: "var(--ui-bg-tertiary)" },
-                        title: node.board,
-                        children: node.board
-                      }) : null,
                       node.priority != null ? jsx6("span", { className: "shrink-0 tabular-nums", children: `P${node.priority}` }) : null,
                       jsx6("span", { className: "flex-1" }),
                       node.attachmentCount ? jsx6(AttachmentMenu, {
@@ -5907,6 +5976,7 @@ function KanbanGanttPage() {
             // same rule the rows follow: with one board selected it is already on the
             // switcher, and repeating it on every node is noise.
             showBoardBadge: isAllBoards,
+            groupLabel: boardLabel,
             board,
             dragId,
             dropMap,

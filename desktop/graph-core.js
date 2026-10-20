@@ -248,8 +248,58 @@ function activityMap(nodes, now, windowSec, count) {
   }
   return out;
 }
-function layoutGraph(nodes, edges, { arrangement = "down", sortBy = "status" } = {}) {
+function layoutGraph(nodes, edges, {
+  arrangement = "down",
+  sortBy = "status",
+  // Grouping is what makes an all-boards graph readable: layout each group on its own and
+  // stack the blocks, so a board is a CONTIGUOUS, framed region instead of its members being
+  // interleaved with another board's and each card needing a badge to say where it belongs.
+  groupBy = null,
+  groupGap = 22,
+  groupHead = 20,
+  groupPad = 9
+} = {}) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, title: n } : n);
+  const keys = groupBy ? [...new Set(list.map((n) => groupBy(n)))].filter((k) => k != null && k !== "") : [];
+  if (keys.length <= 1) {
+    return { ...layoutOne(list, edges, arrangement, sortBy), groups: [] };
+  }
+  const blocks = keys.map((key) => ({
+    key,
+    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy)
+  }));
+  const inner = Math.max(...blocks.map((b) => b.block.width));
+  const width = inner + groupPad * 2;
+  const groups = [];
+  const out = [];
+  const drawnEdges = [];
+  let cursor = 0;
+  for (const { key, block } of blocks) {
+    const h = block.height + groupHead + groupPad;
+    const dx = groupPad + (inner - block.width) / 2;
+    const dy = cursor + groupHead;
+    for (const b of block.nodes) out.push({ ...b, x: b.x + dx, y: b.y + dy });
+    groups.push({ key, x: 0, y: cursor, w: width, h });
+    for (const e of block.edges) {
+      drawnEdges.push({ ...e, x1: e.x1 + dx, y1: e.y1 + dy, x2: e.x2 + dx, y2: e.y2 + dy });
+    }
+    cursor += h + groupGap;
+  }
+  const height = cursor - groupGap;
+  return {
+    nodes: out,
+    edges: drawnEdges,
+    groups,
+    width,
+    height,
+    ranks: Math.max(...blocks.map((b) => b.block.ranks)),
+    implied: blocks.reduce((n, b) => n + b.block.implied, 0),
+    dangling: blocks.reduce((n, b) => n + b.block.dangling, 0),
+    cyclic: blocks.some((b) => b.block.cyclic),
+    truncated: blocks.some((b) => b.block.truncated)
+  };
+}
+function layoutOne(list, edges, arrangement, sortBy) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
   const reduced = reduceEdges(list, es);
