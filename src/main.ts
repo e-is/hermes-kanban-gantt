@@ -1166,6 +1166,48 @@ export function GraphView({
   }, [shown, edges, selectedId])
 
   const hiddenByScope = nodes.length - shown.length
+
+  // Fit the first view: a real board's layout is wider than the pane, and a graph whose
+  // first screen is mostly cut off reads as broken. Refits when the layout's SIZE changes
+  // (another board, another scope), not on every refresh, so a reader who zoomed in keeps
+  // their scale while the data moves under it.
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  const fittedSize = useRef('')
+  // One function for both the first view and the Fit button (and `0`, their shortcut), so
+  // "fit" can never mean two different things.
+  const fitView = () => {
+    const el = canvasRef.current
+    if (!el || !layout.width || !layout.height) return
+    const rect = el.getBoundingClientRect()
+    const fit = Math.min(
+      1,
+      (rect.width - GRAPH_MARGIN * 2) / layout.width,
+      (rect.height - GRAPH_MARGIN * 2) / layout.height
+    )
+    const pct = Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, fit))
+    if (onZoom) onZoom(pct)
+    setPan({ x: GRAPH_MARGIN / 2, y: GRAPH_MARGIN / 2 })
+  }
+  useEffect(() => {
+    if (!layout.width || !layout.height) return
+    // Refit when the layout's SIZE changes (another board, another scope), not on every
+    // refresh: a reader who zoomed in keeps their scale while the data moves under it.
+    const size = `${Math.round(layout.width / 24)}x${Math.round(layout.height / 24)}`
+    if (fittedSize.current === size) return
+    fittedSize.current = size
+    const el = canvasRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const fit = Math.min(
+      1,
+      (rect.width - GRAPH_MARGIN * 2) / layout.width,
+      (rect.height - GRAPH_MARGIN * 2) / layout.height
+    )
+    const pct = Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, fit))
+    if (onZoom && Math.abs(pct - zoomRef.current) > 0.02) onZoom(pct)
+    setPan({ x: GRAPH_MARGIN / 2, y: GRAPH_MARGIN / 2 })
+  }, [layout.width, layout.height, onZoom])
   // Box lookup by id: a linear find per node turns the render pass quadratic, which on a
   // 500-task board is 250 000 comparisons on every pan.
   const boxes = useMemo(() => new Map(layout.nodes.map(b => [b.id, b])), [layout])
@@ -1235,6 +1277,17 @@ export function GraphView({
     if (event.key === 'Enter' && at >= 0 && onOpen) {
       event.preventDefault()
       onOpen(order[at])
+      return
+    }
+    // The camera keys kanban-graph teaches (0 fits, +/- step): the same three, so a reader
+    // coming from that plugin does not have to learn a second vocabulary.
+    if (event.key === '0') {
+      event.preventDefault()
+      fitView()
+    } else if (event.key === '+' || event.key === '=' || event.key === '-') {
+      event.preventDefault()
+      const next = zoom * (event.key === '-' ? 0.8 : 1.25)
+      if (onZoom) onZoom(Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, next)))
     }
   }
 
@@ -1469,7 +1522,17 @@ export function GraphView({
           layout.cyclic.length ? jsx('span', { className: 'text-[#f87171]', children: i18n.graphCyclic(layout.cyclic.length) }) : null,
           layout.dangling ? jsx('span', { children: i18n.graphDangling(layout.dangling) }) : null,
           hiddenByScope ? jsx('span', { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
-          jsx('span', { className: 'ml-auto tabular-nums', children: `${shown.length}/${nodes.length}` })
+          jsx('span', { className: 'ml-auto tabular-nums', children: `${shown.length}/${nodes.length}` }),
+          // The camera, where the counts are: Fit is the one camera action a clipped first
+          // view makes necessary, and it is kanban-graph's `0`.
+          jsx('button', {
+            type: 'button',
+            onClick: event => { event.stopPropagation(); fitView() },
+            title: i18n.graphFit,
+            'aria-label': i18n.graphFit,
+            className: 'pointer-events-auto inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9.5px] text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent',
+            children: [jsx(Codicon, { key: 'i', name: 'screen-full', size: '0.7rem' }), jsx('span', { key: 'l', children: i18n.graphFit })]
+          })
         ]
       })
     ]
@@ -1495,9 +1558,11 @@ function GraphScopeToggle({ value, onChange }) {
     role: 'group',
     'aria-label': i18n.graphScopeAria,
     children: [
-      item('all', i18n.graphScopeAll),
+      // Same order as kanban-graph's MODES, so the control reads identically in both
+      // plugins; the DEFAULT stays `all` (see SCOPES in graph-core).
+      item('running-lineage', i18n.graphScopeRunning),
       item('open', i18n.graphScopeOpen),
-      item('running-lineage', i18n.graphScopeRunning)
+      item('all', i18n.graphScopeAll)
     ]
   })
 }

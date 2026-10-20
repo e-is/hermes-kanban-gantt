@@ -245,6 +245,7 @@ var GANTT_LOCALES = {
     graphDangling: (n) => `${n} link${n > 1 ? "s" : ""} to a task outside this view`,
     graphSparkline: (n) => `Activity over the last ${n} h`,
     graphNoActivity: "No activity in this window",
+    graphFit: "Fit",
     graphHiddenByScope: (n) => `${n} task${n > 1 ? "s" : ""} hidden by this scope`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: "now", m: "m", h: "h", d: "d", w: "w", mo: "mo", y: "y" },
@@ -487,6 +488,7 @@ var GANTT_LOCALES = {
     graphDangling: (n) => `${n} lien${n > 1 ? "s" : ""} vers une tâche hors de cette vue`,
     graphSparkline: (n) => `Activité sur les ${n} dernières heures`,
     graphNoActivity: "Aucune activité dans cette fenêtre",
+    graphFit: "Ajuster",
     graphHiddenByScope: (n) => `${n} tâche${n > 1 ? "s" : ""} masquée${n > 1 ? "s" : ""} par ce filtre`,
     // Suffixes concaténés au nombre (« 5min », « 2 j »… l'espace est inclus).
     relativeUnits: { now: "à l'instant", m: "min", h: "h", d: " j", w: " sem", mo: " mois", y: " a" },
@@ -728,6 +730,7 @@ var GANTT_LOCALES = {
     graphDangling: (n) => `${n} 条链接指向此视图外的任务`,
     graphSparkline: (n) => `最近 ${n} 小时的活动`,
     graphNoActivity: "此时间窗口内无活动",
+    graphFit: "适应",
     graphHiddenByScope: (n) => `此筛选隐藏了 ${n} 个任务`,
     relativeUnits: { now: "刚刚", m: "分", h: "小时", d: "天", w: "周", mo: "个月", y: "年" },
     clickForDetail: "点击查看详情",
@@ -2201,6 +2204,10 @@ function graphNodes(tasks) {
     // Kept whole: the sparkline needs them and a second fetch per node is not a thing.
     events: t.events || [],
     runs: t.runs || [],
+    // The backend's own bucketed series (`/gantt` computes it in one aggregate pass), when
+    // it is there: the desktop then has nothing to derive, and a 500-task board ships 24
+    // small integers per touched task instead of every event.
+    activity: Array.isArray(t.activity) && t.activity.length ? t.activity : null,
     startedAt: t.started_at || null,
     completedAt: t.completed_at || null,
     createdAt: t.created_at || null
@@ -2392,6 +2399,11 @@ function lineage(nodes, edges, id) {
   return { upstream: walk(id, up), downstream: walk(id, down) };
 }
 function activityBuckets(node, now, windowSec, count) {
+  if (Array.isArray(node?.activity) && node.activity.length) {
+    const buckets2 = node.activity.slice(-count).map((v) => Number(v) || 0);
+    const max2 = buckets2.reduce((m, v) => v > m ? v : m, 0);
+    return max2 > 0 ? { buckets: buckets2, max: max2 } : null;
+  }
   const buckets = new Array(count).fill(0);
   const start = now - windowSec;
   const bucketSec = windowSec / count;
@@ -3383,6 +3395,39 @@ function GraphView({
     return { up: upstream, down: downstream };
   }, [shown, edges, selectedId]);
   const hiddenByScope = nodes.length - shown.length;
+  const zoomRef = useRef2(zoom);
+  zoomRef.current = zoom;
+  const fittedSize = useRef2("");
+  const fitView = () => {
+    const el = canvasRef.current;
+    if (!el || !layout.width || !layout.height) return;
+    const rect = el.getBoundingClientRect();
+    const fit = Math.min(
+      1,
+      (rect.width - GRAPH_MARGIN * 2) / layout.width,
+      (rect.height - GRAPH_MARGIN * 2) / layout.height
+    );
+    const pct = Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, fit));
+    if (onZoom) onZoom(pct);
+    setPan({ x: GRAPH_MARGIN / 2, y: GRAPH_MARGIN / 2 });
+  };
+  useEffect3(() => {
+    if (!layout.width || !layout.height) return;
+    const size = `${Math.round(layout.width / 24)}x${Math.round(layout.height / 24)}`;
+    if (fittedSize.current === size) return;
+    fittedSize.current = size;
+    const el = canvasRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const fit = Math.min(
+      1,
+      (rect.width - GRAPH_MARGIN * 2) / layout.width,
+      (rect.height - GRAPH_MARGIN * 2) / layout.height
+    );
+    const pct = Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, fit));
+    if (onZoom && Math.abs(pct - zoomRef.current) > 0.02) onZoom(pct);
+    setPan({ x: GRAPH_MARGIN / 2, y: GRAPH_MARGIN / 2 });
+  }, [layout.width, layout.height, onZoom]);
   const boxes = useMemo2(() => new Map(layout.nodes.map((b) => [b.id, b])), [layout]);
   useEffect3(() => {
     const el = canvasRef.current;
@@ -3436,6 +3481,15 @@ function GraphView({
     if (event.key === "Enter" && at >= 0 && onOpen) {
       event.preventDefault();
       onOpen(order[at]);
+      return;
+    }
+    if (event.key === "0") {
+      event.preventDefault();
+      fitView();
+    } else if (event.key === "+" || event.key === "=" || event.key === "-") {
+      event.preventDefault();
+      const next = zoom * (event.key === "-" ? 0.8 : 1.25);
+      if (onZoom) onZoom(Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, next)));
     }
   };
   if (!shown.length) {
@@ -3655,7 +3709,20 @@ function GraphView({
           layout.cyclic.length ? jsx6("span", { className: "text-[#f87171]", children: i18n.graphCyclic(layout.cyclic.length) }) : null,
           layout.dangling ? jsx6("span", { children: i18n.graphDangling(layout.dangling) }) : null,
           hiddenByScope ? jsx6("span", { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
-          jsx6("span", { className: "ml-auto tabular-nums", children: `${shown.length}/${nodes.length}` })
+          jsx6("span", { className: "ml-auto tabular-nums", children: `${shown.length}/${nodes.length}` }),
+          // The camera, where the counts are: Fit is the one camera action a clipped first
+          // view makes necessary, and it is kanban-graph's `0`.
+          jsx6("button", {
+            type: "button",
+            onClick: (event) => {
+              event.stopPropagation();
+              fitView();
+            },
+            title: i18n.graphFit,
+            "aria-label": i18n.graphFit,
+            className: "pointer-events-auto inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9.5px] text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) cursor-pointer border-0 bg-transparent",
+            children: [jsx6(Codicon5, { key: "i", name: "screen-full", size: "0.7rem" }), jsx6("span", { key: "l", children: i18n.graphFit })]
+          })
         ]
       })
     ]
@@ -3679,9 +3746,11 @@ function GraphScopeToggle({ value, onChange }) {
     role: "group",
     "aria-label": i18n.graphScopeAria,
     children: [
-      item("all", i18n.graphScopeAll),
+      // Same order as kanban-graph's MODES, so the control reads identically in both
+      // plugins; the DEFAULT stays `all` (see SCOPES in graph-core).
+      item("running-lineage", i18n.graphScopeRunning),
       item("open", i18n.graphScopeOpen),
-      item("running-lineage", i18n.graphScopeRunning)
+      item("all", i18n.graphScopeAll)
     ]
   });
 }

@@ -145,6 +145,7 @@ const GANTT_LOCALES = {
     graphDangling: n => `${n} link${n > 1 ? 's' : ''} to a task outside this view`,
     graphSparkline: n => `Activity over the last ${n} h`,
     graphNoActivity: 'No activity in this window',
+    graphFit: 'Fit',
     graphHiddenByScope: n => `${n} task${n > 1 ? 's' : ''} hidden by this scope`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: 'now', m: 'm', h: 'h', d: 'd', w: 'w', mo: 'mo', y: 'y' },
@@ -393,6 +394,7 @@ const GANTT_LOCALES = {
     graphDangling: n => `${n} lien${n > 1 ? 's' : ''} vers une tâche hors de cette vue`,
     graphSparkline: n => `Activité sur les ${n} dernières heures`,
     graphNoActivity: 'Aucune activité dans cette fenêtre',
+    graphFit: 'Ajuster',
     graphHiddenByScope: n => `${n} tâche${n > 1 ? 's' : ''} masquée${n > 1 ? 's' : ''} par ce filtre`,
     // Suffixes concaténés au nombre (« 5min », « 2 j »… l'espace est inclus).
     relativeUnits: { now: "à l'instant", m: 'min', h: 'h', d: ' j', w: ' sem', mo: ' mois', y: ' a' },
@@ -640,6 +642,7 @@ const GANTT_LOCALES = {
     graphDangling: n => `${n} 条链接指向此视图外的任务`,
     graphSparkline: n => `最近 ${n} 小时的活动`,
     graphNoActivity: '此时间窗口内无活动',
+    graphFit: '适应',
     graphHiddenByScope: n => `此筛选隐藏了 ${n} 个任务`,
     relativeUnits: { now: '刚刚', m: '分', h: '小时', d: '天', w: '周', mo: '个月', y: '年' },
     clickForDetail: '点击查看详情',
