@@ -1149,11 +1149,14 @@ export function GraphView({
   onDragEnd,
   onDropOn,
   onNewChild,
+  /** Called on a click that did NOT drag and did not land on a card: the empty canvas. */
+  onClearSelection,
   sortBy = 'status',
   sparkWindow = 24 * 3600
 }) {
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(null)
+  const pressedAt = useRef(null)
   const canvasRef = useRef(null)
 
   const nodes = useMemo(() => graphNodes(tasks), [tasks])
@@ -1267,13 +1270,24 @@ export function GraphView({
     const target = event.target
     if (target && target.closest && target.closest('[data-graph-node],button,a,input,select,textarea,[role=button]')) return
     event.preventDefault()
+    pressedAt.current = { x: event.clientX, y: event.clientY }
     const start = { x: event.clientX - pan.x, y: event.clientY - pan.y }
     setDragging(start)
   }
   useEffect(() => {
     if (!dragging) return undefined
     const onMove = event => setPan({ x: event.clientX - dragging.x, y: event.clientY - dragging.y })
-    const onUp = () => setDragging(null)
+    // A press that never moved is a CLICK on the empty canvas, and it clears the selection:
+    // once a card was picked there was no way back except closing the drawer, which left the
+    // graph with a highlighted lineage nobody asked for any more.
+    const onUp = event => {
+      const from = pressedAt.current
+      pressedAt.current = null
+      if (from && event && Math.hypot(event.clientX - from.x, event.clientY - from.y) < 5 && onClearSelection) {
+        onClearSelection()
+      }
+      setDragging(null)
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     return () => {
@@ -3426,6 +3440,9 @@ export function KanbanGanttPage() {
         if (selectedIds.size > 0) {
           setSelectedIds(new Set())
         }
+        // The same verb as a click on the empty canvas: Escape drops the selection, which in
+        // the graph means the lineage highlight and, if it is the modal form, the detail.
+        $openTaskId.set(null)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -4157,6 +4174,7 @@ export function KanbanGanttPage() {
             // New task FROM a node: the node is the parent, and the existing dialog does
             // the rest (it is the same creation verb, reached from the graph).
             onNewChild: id => $newTask.set({ parentId: id }),
+            onClearSelection: () => $openTaskId.set(null),
             sortBy: 'status',
             sparkWindow: period || 24 * 3600
           })
