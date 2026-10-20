@@ -23,7 +23,7 @@ const core = await import(join(HERE, '..', 'desktop', 'graph-core.js'))
 const {
   graphNodes, graphEdges, dedupeEdges, edgesWithin, ranks, orderRanks, rankComparator,
   reduceEdges, lineage, activityBuckets, activityMap, layoutGraph, scopeIds, SCOPES,
-  nearestInHalo, arrangeRows, NODE_W, NODE_H, SPARK_BAND
+  nearestInHalo, arrangeRows, components, NODE_W, NODE_H, SPARK_BAND
 } = core
 
 const H = 3600
@@ -573,4 +573,31 @@ test('layout: the four arrangements put the ranks on the axis they claim', () =>
   assert.equal(compact.quiet, true, 'compact: a grid, so the caller hides the arrows')
   assert.equal(compact.edges.length, 0)
   assert.ok(compact.nodes.every(n => Number.isFinite(n.x) && Number.isFinite(n.y)))
+})
+
+test('solo tasks are packed into a trailing row instead of claiming ranks of their own', () => {
+  // Two linked tasks and three independents: without packing, each independent seeds a rank and
+  // the drawing becomes as wide as the board is long — and a fit then shrinks every card.
+  const tasks = [
+    { id: 'a', status: 'todo', title: 'a' }, { id: 'b', status: 'todo', title: 'b' },
+    { id: 's1', status: 'todo', title: 's1' }, { id: 's2', status: 'todo', title: 's2' },
+    { id: 's3', status: 'todo', title: 's3' }
+  ]
+  const edges = [{ from: 'a', to: 'b' }]
+  const out = layoutGraph(tasks, edges, { arrangement: 'down' })
+  const box = id => out.nodes.find(n => n.id === id)
+  const solos = ['s1', 's2', 's3'].map(box)
+  const linked = box('b')
+  assert.ok(solos.every(s => s.y >= linked.y + linked.h), 'the solos sit under the trees')
+  assert.equal(new Set(solos.map(s => s.y)).size, 1, 'all of them on one line')
+  assert.equal(new Set(solos.map(s => s.x)).size, 3, 'side by side, not stacked')
+  // The width stays the drawing's own width: three solos do not widen it further than the tree.
+  assert.ok(out.width <= 3 * 172 + 2 * 14 + 1, 'the graph did not grow a column per solo task')
+})
+
+test('components: linked groups and solos, whatever order the edges arrive in', () => {
+  const nodes = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id }))
+  const { linked, singles } = components(nodes, [{ from: 'c', to: 'a' }, { from: 'a', to: 'b' }])
+  assert.deepEqual([...linked].map(g => [...g].sort()).sort(), [['a', 'b', 'c']])
+  assert.deepEqual([...singles].sort(), ['d', 'e'])
 })

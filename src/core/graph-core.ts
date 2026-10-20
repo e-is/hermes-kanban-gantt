@@ -546,6 +546,43 @@ export function arrangeRows(list, rankMap, edges, by = 'status', { orderSweeps =
 }
 
 /**
+ * Undirected components over the edges, plus the isolated tasks.
+ *
+ * A board is rarely one tree: it holds a few trees and a tail of tasks nobody has linked yet.
+ * Upstream lays the trees out first and then packs those SOLO tasks into a trailing grid, side
+ * by side, instead of letting each of them claim a rank of its own — which is how a board with
+ * two dependencies and twenty independents ends up as twenty empty rows.
+ */
+export function components(nodes, edges) {
+  const ids = (nodes || []).map(n => n.id);
+  const root = new Map(ids.map(id => [id, id]));
+  const find = v => {
+    while (root.get(v) !== v) {
+      root.set(v, root.get(root.get(v)));
+      v = root.get(v);
+    }
+    return v;
+  };
+  for (const e of edges || []) {
+    if (!root.has(e.from) || !root.has(e.to)) continue;
+    root.set(find(e.from), find(e.to));
+  }
+  const groups = new Map();
+  for (const id of ids) {
+    const r = find(id);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(id);
+  }
+  const linked = [];
+  const singles = [];
+  for (const group of groups.values()) {
+    if (group.length > 1) linked.push(group);
+    else singles.push(group[0]);
+  }
+  return { linked, singles };
+}
+
+/**
  * One board's layout.
  *
  * Four arrangements, the same four upstream draws: `flow` (ranks left to right), `down` (ranks
@@ -556,6 +593,15 @@ export function arrangeRows(list, rankMap, edges, by = 'status', { orderSweeps =
  * reverse pass, barycentre ordering, monotone placement. `status` and `compact` are not layered
  * drawings at all — they answer "what needs me?" and "what is there?", so they place by index.
  */
+function rankedOnly(list, rankMap) {
+  const out = new Map();
+  if (!list.length) return out;
+  const values = list.map(n => rankMap.get(n.id) ?? 0);
+  const lo = Math.min(...values);
+  for (const n of list) out.set(n.id, (rankMap.get(n.id) ?? 0) - lo);
+  return out;
+}
+
 function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
@@ -564,6 +610,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   let rows;
   let slots;
   let quiet = false;
+  let soloIds = [];
   if (arrangement === 'status') {
     // One column per status, in workflow order; inside a column, dependency depth then title.
     const cmp = rankComparator(sortBy);
@@ -593,7 +640,18 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
       slots.set(n.id, i % cols);
     });
   } else {
-    const arranged = arrangeRows(list, rankMap, es, sortBy);
+    // Trees first, then the SOLO tasks packed into a trailing grid. Letting each unlinked task
+    // claim a rank of its own made the whole drawing as wide as the board is long, and since a
+    // fit scales the drawing to the pane, every card shrank with it. A trailing row of solos
+    // keeps the graph narrow, which is what makes the cards readable.
+    const { linked, singles } = components(list, es);
+    const linkedSet = new Set(linked.flat());
+    const layered = (list || []).filter(n => linkedSet.has(n.id));
+    soloIds = singles;
+    // No linked task at all: every card is a solo, and the trailing grid below places them.
+    const arranged = layered.length
+      ? arrangeRows(layered, rankedOnly(layered, rankMap), es, sortBy)
+      : { rows: [], slots: new Map() };
     rows = arranged.rows;
     slots = arranged.slots;
   }
@@ -618,6 +676,34 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
       placed.push(box);
     }
   });
+
+  // The trailing grid of solo tasks: side by side, lines stacked along the rank axis. Packed
+  // against the wide side of the drawing, so the graph grows downward (or rightward) instead of
+  // sideways — a narrow drawing is a drawing whose cards the fit can afford to keep big.
+  if (soloIds.length) {
+    const byId = new Map((list || []).map(n => [n.id, n]));
+    const cmp = rankComparator(sortBy);
+    const solos = soloIds.filter(id => byId.has(id)).sort((a, b) => cmp(byId.get(a), byId.get(b)));
+    const crossMin = placed.length ? Math.min(...placed.map(b => (crossAlongY ? b.y : b.x))) : 0;
+    const crossMax = placed.length ? Math.max(...placed.map(b => (crossAlongY ? b.y + b.h : b.x + b.w))) : 0;
+    const alongMax = placed.length ? Math.max(...placed.map(b => (crossAlongY ? b.x + b.w : b.y + b.h))) : -RANK_GAP;
+    // At least SOLO_COLS columns, and never wider than the trees above: upstream uses a minimum
+    // of five, and a single-column grid would stack the solos down the page, which is exactly
+    // the tall drawing this packing exists to avoid.
+    const SOLO_COLS = 5;
+    const fits = Math.round((crossMax - crossMin + NODE_GAP) / crossStep) || 1;
+    const cols = Math.max(1, Math.min(solos.length, Math.max(Math.min(SOLO_COLS, solos.length), fits)));
+    solos.forEach((id, i) => {
+      const line = Math.floor(i / cols);
+      const cross = crossMin + (i % cols) * crossStep;
+      const along = alongMax + (crossAlongY ? RANK_GAP : RANK_GAP) + line * crossStep;
+      const box = crossAlongY
+        ? { id, x: along, y: cross, w: nodeW, h: nodeH, rank: rows.length + line }
+        : { id, x: cross, y: along, w: nodeW, h: nodeH, rank: rows.length + line };
+      boxes.set(id, box);
+      placed.push(box);
+    });
+  }
 
   // Normalise to a positive origin: SVG does not care, but hit tests and scroll maths do.
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

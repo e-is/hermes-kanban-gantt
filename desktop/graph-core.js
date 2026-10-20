@@ -378,6 +378,42 @@ function arrangeRows(list, rankMap, edges, by = "status", { orderSweeps = 4, pla
   const lo = values.length ? Math.min(...values) : 0;
   return { rows, slots: new Map([...pos].map(([id, v]) => [id, v - lo])) };
 }
+function components(nodes, edges) {
+  const ids = (nodes || []).map((n) => n.id);
+  const root = new Map(ids.map((id) => [id, id]));
+  const find = (v) => {
+    while (root.get(v) !== v) {
+      root.set(v, root.get(root.get(v)));
+      v = root.get(v);
+    }
+    return v;
+  };
+  for (const e of edges || []) {
+    if (!root.has(e.from) || !root.has(e.to)) continue;
+    root.set(find(e.from), find(e.to));
+  }
+  const groups = /* @__PURE__ */ new Map();
+  for (const id of ids) {
+    const r = find(id);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(id);
+  }
+  const linked = [];
+  const singles = [];
+  for (const group of groups.values()) {
+    if (group.length > 1) linked.push(group);
+    else singles.push(group[0]);
+  }
+  return { linked, singles };
+}
+function rankedOnly(list, rankMap) {
+  const out = /* @__PURE__ */ new Map();
+  if (!list.length) return out;
+  const values = list.map((n) => rankMap.get(n.id) ?? 0);
+  const lo = Math.min(...values);
+  for (const n of list) out.set(n.id, (rankMap.get(n.id) ?? 0) - lo);
+  return out;
+}
 function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
@@ -385,6 +421,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   let rows;
   let slots;
   let quiet = false;
+  let soloIds = [];
   if (arrangement === "status") {
     const cmp = rankComparator(sortBy);
     const order = ["triage", "todo", "scheduled", "ready", "running", "blocked", "review", "done", "archived"];
@@ -409,7 +446,11 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
       slots.set(n.id, i % cols);
     });
   } else {
-    const arranged = arrangeRows(list, rankMap, es, sortBy);
+    const { linked, singles } = components(list, es);
+    const linkedSet = new Set(linked.flat());
+    const layered = (list || []).filter((n) => linkedSet.has(n.id));
+    soloIds = singles;
+    const arranged = layered.length ? arrangeRows(layered, rankedOnly(layered, rankMap), es, sortBy) : { rows: [], slots: /* @__PURE__ */ new Map() };
     rows = arranged.rows;
     slots = arranged.slots;
   }
@@ -427,6 +468,25 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
       placed.push(box);
     }
   });
+  if (soloIds.length) {
+    const byId = new Map((list || []).map((n) => [n.id, n]));
+    const cmp = rankComparator(sortBy);
+    const solos = soloIds.filter((id) => byId.has(id)).sort((a, b) => cmp(byId.get(a), byId.get(b)));
+    const crossMin = placed.length ? Math.min(...placed.map((b) => crossAlongY ? b.y : b.x)) : 0;
+    const crossMax = placed.length ? Math.max(...placed.map((b) => crossAlongY ? b.y + b.h : b.x + b.w)) : 0;
+    const alongMax = placed.length ? Math.max(...placed.map((b) => crossAlongY ? b.x + b.w : b.y + b.h)) : -RANK_GAP;
+    const SOLO_COLS = 5;
+    const fits = Math.round((crossMax - crossMin + NODE_GAP) / crossStep) || 1;
+    const cols = Math.max(1, Math.min(solos.length, Math.max(Math.min(SOLO_COLS, solos.length), fits)));
+    solos.forEach((id, i) => {
+      const line = Math.floor(i / cols);
+      const cross = crossMin + i % cols * crossStep;
+      const along = alongMax + (crossAlongY ? RANK_GAP : RANK_GAP) + line * crossStep;
+      const box = crossAlongY ? { id, x: along, y: cross, w: nodeW, h: nodeH, rank: rows.length + line } : { id, x: cross, y: along, w: nodeW, h: nodeH, rank: rows.length + line };
+      boxes.set(id, box);
+      placed.push(box);
+    });
+  }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const b of placed) {
     minX = Math.min(minX, b.x);
@@ -492,6 +552,7 @@ export {
   activityBuckets,
   activityMap,
   arrangeRows,
+  components,
   dedupeEdges,
   edgesWithin,
   graphEdges,
