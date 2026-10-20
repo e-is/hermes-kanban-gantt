@@ -407,11 +407,11 @@ if (pageNode) {
 
   check(flat.includes('"area":"workspace.pageHeader"') || flat.includes('"area": "workspace.pageHeader"'), 'page projects its switcher into WORKSPACE_PAGE_HEADER_AREA')
 
-  // Board tabs: the strip is a tablist, and its "+" is the only way to open a second board
-  // without leaving the page (the harness's effects are no-ops, so the open set is empty and
-  // the strip shows the affordance alone — which is exactly the point: it is always there).
-  check(flat.includes('"role":"tablist"'), 'the page declares the board tab strip')
-  check(flat.includes('"aria-label":"openBoard"'), 'the strip carries the "open another board" affordance')
+  // Board tabs are OFF (SHOW_BOARD_TABS in main.ts): the strip was not mature, so the page
+  // must not paint it — and must not leave the "+" behind either, since that is how a reader
+  // would open a second board and land in the unfinished behaviour.
+  check(!flat.includes('"role":"tablist"'), 'the board tab strip stays hidden until it is mature')
+  check(!flat.includes('"aria-label":"openBoard"'), 'and its "open another board" goes with it')
   check(typeof pluginModule.KanbanGanttRoute === 'function',
     'the route mounts one page instance per board (per-board preferences need the remount)')
 

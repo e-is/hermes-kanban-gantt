@@ -2175,6 +2175,12 @@ function GraphScopeToggle({ value, onChange }) {
   })
 }
 
+// The board tabs are not shown yet. A tab is a full page instance of its own (own mode, own
+// zoom, own arrangement), and with the "all boards" pseudo-board, the drawer and the header
+// switcher in the same room, they still disagree in ways a reader would call bugs. Kept
+// behind one constant so the work is not lost and the strip comes back with one word.
+const SHOW_BOARD_TABS = false
+
 /**
  * The arrangement, as a dropdown you can SEE.
  *
@@ -4794,7 +4800,8 @@ export function KanbanGanttPage() {
       // board A in graph mode and board B in timeline, at their own zooms — the preferences
       // are stored per board. The strip is always there: with one board it is where the "+"
       // lives, and it names what you are looking at.
-      jsxs('div', {
+      SHOW_BOARD_TABS
+        ? jsxs('div', {
         className: 'mb-2 flex items-center gap-1 overflow-x-auto min-w-0',
         role: 'tablist',
         'aria-label': i18n.boardsTabs,
@@ -4861,7 +4868,8 @@ export function KanbanGanttPage() {
             ]
           })
         ]
-      }),
+      })
+        : null,
 
       !derived
         ? jsx('div', { className: 'py-10 grid place-items-center', children: jsx(Loader, {}) })

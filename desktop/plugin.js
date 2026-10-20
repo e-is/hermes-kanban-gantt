@@ -4514,6 +4514,7 @@ function GraphScopeToggle({ value, onChange }) {
     ]
   });
 }
+var SHOW_BOARD_TABS = false;
 function GraphArrangeSelect({ value, onChange }) {
   const i18n = useGanttI18n();
   const options = [
@@ -6689,7 +6690,7 @@ function KanbanGanttPage() {
           // board A in graph mode and board B in timeline, at their own zooms — the preferences
           // are stored per board. The strip is always there: with one board it is where the "+"
           // lives, and it names what you are looking at.
-          jsxs6("div", {
+          SHOW_BOARD_TABS ? jsxs6("div", {
             className: "mb-2 flex items-center gap-1 overflow-x-auto min-w-0",
             role: "tablist",
             "aria-label": i18n.boardsTabs,
@@ -6751,7 +6752,7 @@ function KanbanGanttPage() {
                 ]
               })
             ]
-          }),
+          }) : null,
           !derived ? jsx6("div", { className: "py-10 grid place-items-center", children: jsx6(Loader, {}) }) : graphMode ? jsx6(GraphView, {
             tasks: derived.tasks || [],
             i18n,
