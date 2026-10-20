@@ -4070,7 +4070,7 @@ function GraphView({
                     const b = boxes.get(link.from);
                     if (!b) return "";
                     const x1 = b.x + b.w / 2 + GRAPH_MARGIN;
-                    const y1 = b.y + b.h + GRAPH_MARGIN;
+                    const y1 = b.y + b.h + GRAPH_MARGIN - 11;
                     let x2 = link.x;
                     let y2 = link.y;
                     const target = link.target ? boxes.get(link.target) : null;

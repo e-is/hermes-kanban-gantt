@@ -1687,7 +1687,9 @@ export function GraphView({
                         const b = boxes.get(link.from)
                         if (!b) return ''
                         const x1 = b.x + b.w / 2 + GRAPH_MARGIN
-                        const y1 = b.y + b.h + GRAPH_MARGIN
+                        // The arrow leaves FROM the slot, not from the border below it: the
+                        // slot is the base, the pointer drives the head.
+                        const y1 = b.y + b.h + GRAPH_MARGIN - 11
                         let x2 = link.x
                         let y2 = link.y
                         // Over a legal child, the head SNAPS to the nearest point of its border:
