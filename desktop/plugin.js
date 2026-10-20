@@ -3946,6 +3946,7 @@ function GraphView({
                 key: "slot",
                 className: "absolute rounded-full",
                 role: "button",
+                "data-graph-slot": slotFor,
                 "aria-label": i18n.graphLink,
                 title: i18n.graphLink,
                 onPointerDown: (event) => startLink(event, slotFor),
