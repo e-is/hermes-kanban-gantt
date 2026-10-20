@@ -3614,7 +3614,7 @@ function GraphView({
     children: [
       jsx6("div", {
         ref: canvasRef,
-        className: "absolute inset-0 overflow-hidden cursor-grab",
+        className: cn3("absolute inset-0 overflow-hidden", dragging ? "cursor-grabbing" : "cursor-grab"),
         tabIndex: 0,
         role: "application",
         "aria-label": i18n.viewGraph,
