@@ -247,6 +247,7 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `Activity over the last ${n} h`,
     graphNoActivity: "No activity in this window",
     graphTally: (n) => `${n} task${n === 1 ? "" : "s"}`,
+    graphUnlink: "Delete the link",
     graphLink: "Link a child: press and drag the arrow head onto the card that should become the child",
     arrangeAria: "How the cards are arranged",
     arrangeFlow: "Flow, left to right",
@@ -505,6 +506,7 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `Activité sur les ${n} dernières heures`,
     graphNoActivity: "Aucune activité dans cette fenêtre",
     graphTally: (n) => `${n} tâche${n === 1 ? "" : "s"}`,
+    graphUnlink: "Supprimer le lien",
     graphLink: "Lier un enfant : appuyer et faire glisser la pointe de la flèche sur la carte qui doit devenir l’enfant",
     arrangeAria: "Disposition des cartes",
     arrangeFlow: "Flux, de gauche à droite",
@@ -762,6 +764,7 @@ var GANTT_LOCALES = {
     graphSparkline: (n) => `最近 ${n} 小时的活动`,
     graphNoActivity: "此时间窗口内无活动",
     graphTally: (n) => `${n} 个任务`,
+    graphUnlink: "删除链接",
     graphLink: "链接子任务：按住并将箭头拖到要成为子任务的任务上",
     arrangeAria: "卡片排列方式",
     arrangeFlow: "流向：从左到右",
@@ -3611,6 +3614,10 @@ function GraphView({
   onLinkChild,
   /** (parentId) => Set of task ids that may become `parentId`'s child. */
   linkAllowed,
+  /** (parentId, childId) => void — drop the parent link between the two. */
+  onUnlink,
+  /** (childId) => dropCandidates for that child: which cards may become its parent. */
+  parentsAllowed,
   /** Taller cards: the title wraps onto a second line instead of being cut. */
   tallCards = false,
   /** 'down' | 'flow' | 'status' | 'compact' — see `layoutGraph`. */
@@ -3626,6 +3633,8 @@ function GraphView({
   const [slotFor, setSlotFor] = useState4(null);
   const [slotNear, setSlotNear] = useState4(false);
   const [link, setLink] = useState4(null);
+  const [hotEdge, setHotEdge] = useState4(null);
+  const [edgeMenu, setEdgeMenu] = useState4(null);
   const linkRef = useRef2(null);
   linkRef.current = link;
   const wrapperRef = useRef2(null);
@@ -3850,6 +3859,7 @@ function GraphView({
     return () => el.removeEventListener("wheel", onWheel);
   }, [zoom, onZoom]);
   const onCanvasPointerDown = (event) => {
+    if (edgeMenu) setEdgeMenu(null);
     if (event.button !== 0) return;
     const target = event.target;
     if (target && target.closest && target.closest("[data-graph-node],button,a,input,select,textarea,[role=button]")) return;
@@ -4134,17 +4144,80 @@ function GraphView({
                   markerEnd: "url(#kg-arrow)",
                   style: { color: "var(--ui-accent)" }
                 }) : null,
-                ...layout.edges.map((e) => jsx6("path", {
-                  key: `${e.from}>${e.to}`,
-                  d: edgePath({ ...e, x1: e.x1 + GRAPH_MARGIN, y1: e.y1 + GRAPH_MARGIN, x2: e.x2 + GRAPH_MARGIN, y2: e.y2 + GRAPH_MARGIN }),
-                  fill: "none",
-                  stroke: edgeTone(e.from, e.to),
-                  strokeWidth: 1.2,
-                  markerEnd: "url(#kg-arrow)",
-                  style: { color: edgeTone(e.from, e.to) }
-                }))
+                // Every edge is three paths: an invisible one wide enough to hit with a pointer
+                // (a 1.2 px line is not a target), the visible one, and — on hover — two grab
+                // handles near its ends for moving it.
+                ...layout.edges.map((e) => {
+                  const key = `${e.from}>${e.to}`;
+                  const hot = hotEdge === key;
+                  const geo = { ...e, x1: e.x1 + GRAPH_MARGIN, y1: e.y1 + GRAPH_MARGIN, x2: e.x2 + GRAPH_MARGIN, y2: e.y2 + GRAPH_MARGIN };
+                  const d = edgePath(geo);
+                  const tone = hot ? "var(--ui-accent)" : edgeTone(e.from, e.to);
+                  return jsxs6("g", {
+                    key,
+                    children: [
+                      jsx6("path", {
+                        key: "hit",
+                        d,
+                        fill: "none",
+                        stroke: "transparent",
+                        strokeWidth: 14,
+                        strokeLinecap: "round",
+                        style: { pointerEvents: "stroke", cursor: "context-menu" },
+                        onPointerEnter: () => setHotEdge(key),
+                        onPointerLeave: () => setHotEdge((current) => current === key ? null : current),
+                        onContextMenu: (event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setHotEdge(key);
+                          const pt = toLayout(event);
+                          if (pt) setEdgeMenu({ x: pt.x, y: pt.y, from: e.from, to: e.to });
+                        }
+                      }),
+                      jsx6("path", {
+                        key: "line",
+                        d,
+                        fill: "none",
+                        stroke: tone,
+                        strokeWidth: hot ? 3 : 1.2,
+                        markerEnd: "url(#kg-arrow)",
+                        style: { color: tone }
+                      })
+                    ]
+                  });
+                })
               ]
             }),
+            // The edge menu: one entry, where the pointer asked for it. Drawn in the graph's own
+            // coordinates and scaled back to 1:1, so it stays readable at any zoom.
+            edgeMenu ? jsx6("div", {
+              key: "edge-menu",
+              className: "absolute rounded-md border border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) p-1 shadow-lg",
+              style: {
+                left: `${edgeMenu.x}px`,
+                top: `${edgeMenu.y}px`,
+                zIndex: 40,
+                transform: `scale(${1 / zoom})`,
+                transformOrigin: "top left",
+                pointerEvents: "auto",
+                minWidth: "9rem"
+              },
+              onPointerDown: (event) => event.stopPropagation(),
+              onContextMenu: (event) => event.preventDefault(),
+              children: jsx6("button", {
+                type: "button",
+                className: "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs bg-transparent border-0 cursor-pointer text-(--ui-text-primary) hover:bg-(--chrome-action-hover)",
+                onClick: () => {
+                  onUnlink(edgeMenu.from, edgeMenu.to);
+                  setEdgeMenu(null);
+                  setHotEdge(null);
+                },
+                children: [
+                  jsx6(Codicon5, { name: "trash", size: "0.85rem" }),
+                  jsx6("span", { children: i18n.graphUnlink })
+                ]
+              })
+            }) : null,
             ...shown.map((node) => {
               const b = boxes.get(node.id);
               if (!b) return null;
@@ -6602,6 +6675,7 @@ function KanbanGanttPage() {
             onClearSelection: () => $openTaskId.set(null),
             onLinkChild: handleLinkChild,
             linkAllowed,
+            onUnlink: (parentId, childId) => unlinkMutation.mutate({ childId, parentId }),
             tallCards: cardsTall,
             arrangement: arrange,
             sortBy: "status"

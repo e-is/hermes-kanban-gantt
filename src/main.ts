@@ -1155,6 +1155,10 @@ export function GraphView({
   onLinkChild,
   /** (parentId) => Set of task ids that may become `parentId`'s child. */
   linkAllowed,
+  /** (parentId, childId) => void — drop the parent link between the two. */
+  onUnlink,
+  /** (childId) => dropCandidates for that child: which cards may become its parent. */
+  parentsAllowed,
   /** Taller cards: the title wraps onto a second line instead of being cut. */
   tallCards = false,
   /** 'down' | 'flow' | 'status' | 'compact' — see `layoutGraph`. */
@@ -1177,6 +1181,10 @@ export function GraphView({
   const [slotFor, setSlotFor] = useState(null)
   const [slotNear, setSlotNear] = useState(false)
   const [link, setLink] = useState(null)
+  // An edge under the pointer is a thing you can act on: it thickens, and a right click offers to
+  // delete it. Both states live here rather than in the DOM, so a re-render keeps them.
+  const [hotEdge, setHotEdge] = useState(null)
+  const [edgeMenu, setEdgeMenu] = useState(null)
   const linkRef = useRef(null)
   linkRef.current = link
   const wrapperRef = useRef(null)
@@ -1452,6 +1460,7 @@ export function GraphView({
   // Dragging the empty canvas pans: the pointer leaves the surface as soon as the gesture
   // starts, so the move/up listeners live on the window and are removed with it.
   const onCanvasPointerDown = event => {
+    if (edgeMenu) setEdgeMenu(null)
     if (event.button !== 0) return
     // Panning works at ANY zoom. The old rule — "only the canvas or the svg" — held at fit
     // zoom, where empty space sits under the cursor, and broke the moment you zoomed in: the
@@ -1766,17 +1775,82 @@ export function GraphView({
                       style: { color: 'var(--ui-accent)' }
                     })
                   : null,
-                ...layout.edges.map(e => jsx('path', {
-                  key: `${e.from}>${e.to}`,
-                  d: edgePath({ ...e, x1: e.x1 + GRAPH_MARGIN, y1: e.y1 + GRAPH_MARGIN, x2: e.x2 + GRAPH_MARGIN, y2: e.y2 + GRAPH_MARGIN }),
-                  fill: 'none',
-                  stroke: edgeTone(e.from, e.to),
-                  strokeWidth: 1.2,
-                  markerEnd: 'url(#kg-arrow)',
-                  style: { color: edgeTone(e.from, e.to) }
-                }))
+                // Every edge is three paths: an invisible one wide enough to hit with a pointer
+                // (a 1.2 px line is not a target), the visible one, and — on hover — two grab
+                // handles near its ends for moving it.
+                ...layout.edges.map(e => {
+                  const key = `${e.from}>${e.to}`
+                  const hot = hotEdge === key
+                  const geo = { ...e, x1: e.x1 + GRAPH_MARGIN, y1: e.y1 + GRAPH_MARGIN, x2: e.x2 + GRAPH_MARGIN, y2: e.y2 + GRAPH_MARGIN }
+                  const d = edgePath(geo)
+                  const tone = hot ? 'var(--ui-accent)' : edgeTone(e.from, e.to)
+                  return jsxs('g', {
+                    key,
+                    children: [
+                      jsx('path', {
+                        key: 'hit',
+                        d,
+                        fill: 'none',
+                        stroke: 'transparent',
+                        strokeWidth: 14,
+                        strokeLinecap: 'round',
+                        style: { pointerEvents: 'stroke', cursor: 'context-menu' },
+                        onPointerEnter: () => setHotEdge(key),
+                        onPointerLeave: () => setHotEdge(current => (current === key ? null : current)),
+                        onContextMenu: event => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setHotEdge(key)
+                          const pt = toLayout(event)
+                          if (pt) setEdgeMenu({ x: pt.x, y: pt.y, from: e.from, to: e.to })
+                        }
+                      }),
+                      jsx('path', {
+                        key: 'line',
+                        d,
+                        fill: 'none',
+                        stroke: tone,
+                        strokeWidth: hot ? 3 : 1.2,
+                        markerEnd: 'url(#kg-arrow)',
+                        style: { color: tone }
+                      })
+                    ]
+                  })
+                })
               ]
             }),
+            // The edge menu: one entry, where the pointer asked for it. Drawn in the graph's own
+            // coordinates and scaled back to 1:1, so it stays readable at any zoom.
+            edgeMenu
+              ? jsx('div', {
+                  key: 'edge-menu',
+                  className: 'absolute rounded-md border border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) p-1 shadow-lg',
+                  style: {
+                    left: `${edgeMenu.x}px`,
+                    top: `${edgeMenu.y}px`,
+                    zIndex: 40,
+                    transform: `scale(${1 / zoom})`,
+                    transformOrigin: 'top left',
+                    pointerEvents: 'auto',
+                    minWidth: '9rem'
+                  },
+                  onPointerDown: event => event.stopPropagation(),
+                  onContextMenu: event => event.preventDefault(),
+                  children: jsx('button', {
+                    type: 'button',
+                    className: 'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs bg-transparent border-0 cursor-pointer text-(--ui-text-primary) hover:bg-(--chrome-action-hover)',
+                    onClick: () => {
+                      onUnlink(edgeMenu.from, edgeMenu.to)
+                      setEdgeMenu(null)
+                      setHotEdge(null)
+                    },
+                    children: [
+                      jsx(Codicon, { name: 'trash', size: '0.85rem' }),
+                      jsx('span', { children: i18n.graphUnlink })
+                    ]
+                  })
+                })
+              : null,
             ...shown.map(node => {
               const b = boxes.get(node.id)
               if (!b) return null
@@ -4703,6 +4777,7 @@ export function KanbanGanttPage() {
             onClearSelection: () => $openTaskId.set(null),
             onLinkChild: handleLinkChild,
             linkAllowed,
+            onUnlink: (parentId, childId) => unlinkMutation.mutate({ childId, parentId }),
             tallCards: cardsTall,
             arrangement: arrange,
             sortBy: 'status'
