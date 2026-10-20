@@ -1634,23 +1634,25 @@ export function GraphView({
                           'min-w-0 flex-1 leading-tight text-(--ui-text-primary)',
                           tallCards ? 'text-[13px]' : 'text-[12.5px] truncate'
                         ),
-                        // Weight and size inline: this is the only text in the card that
-                        // matters, and a class the host bundle does not compile would leave it
-                        // exactly as small as it was.
-                        style: { fontWeight: 600 },
-                        // Wrapping as inline styles: the host bundle does not ship Tailwind's
-                        // line-clamp plugin, and a class that silently does nothing would let
-                        // the text overflow the card instead of being cut at three lines.
-                        style: tallCards
-                          ? {
-                              whiteSpace: 'normal',
-                              overflowWrap: 'anywhere',
-                              display: '-webkit-box',
-                              WebkitLineClamp: '3',
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden'
-                            }
-                          : undefined,
+
+                        // ONE style object, and weights inline: this is the only text in the
+                        // card that matters, and a class the host bundle does not compile would
+                        // leave it exactly as small as it was. Two `style` keys in the same
+                        // literal would silently keep only the last — which is how the first
+                        // attempt at bold ended up at 400.
+                        style: {
+                          fontWeight: 600,
+                          ...(tallCards
+                            ? {
+                                whiteSpace: 'normal',
+                                overflowWrap: 'anywhere',
+                                display: '-webkit-box',
+                                WebkitLineClamp: '3',
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden'
+                              }
+                            : {})
+                        },
                         children: [
                           prefix ? jsx('span', {
                             className: 'mr-1 rounded-sm px-0.5 text-[8.5px] font-semibold text-(--ui-text-secondary)',
