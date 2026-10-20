@@ -1685,8 +1685,18 @@ export function GraphView({
                         if (!b) return ''
                         const x1 = b.x + b.w / 2 + GRAPH_MARGIN
                         const y1 = b.y + b.h + GRAPH_MARGIN
-                        const x2 = link.x
-                        const y2 = link.y
+                        let x2 = link.x
+                        let y2 = link.y
+                        // Over a legal child, the head SNAPS to the nearest point of its border:
+                        // an arrow that stops where the pointer happens to be leaves the reader
+                        // guessing which card it is about to bite.
+                        const target = link.target ? boxes.get(link.target) : null
+                        if (target) {
+                          const tx = target.x + GRAPH_MARGIN
+                          const ty = target.y + GRAPH_MARGIN
+                          x2 = Math.min(Math.max(x1, tx), tx + target.w)
+                          y2 = Math.min(Math.max(y1, ty), ty + target.h)
+                        }
                         return `M ${x1} ${y1} C ${x1} ${y1 + 46}, ${x2} ${y2 - 46}, ${x2} ${y2}`
                       })(),
                       fill: 'none',
