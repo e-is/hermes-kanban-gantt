@@ -37,6 +37,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -54,6 +55,9 @@ DOCS = REPO / "docs"
 ANIM = DOCS / "animations"
 FRAMES = REPO / ".agents" / "plans" / "shot-frames"
 DEMO_BOARD = "gantt-demo"
+# A title only the demo seed holds: the capture's proof that the pane really shows that
+# board (the header no longer carries a chip to read back).
+DEMO_TASK = "Provision the analytics cluster"
 
 # A detail-rich task to open. (The drag pair that used to live here went with the
 # drag capture: leaving a drag behind contaminated every later still.)
@@ -183,14 +187,24 @@ class Desktop:
 
 # ── pre-flight ──────────────────────────────────────────────────────────────
 async def ensure_english(ui: Desktop):
-    """The catalog screenshots are English; the app follows its own locale."""
+    """The catalog screenshots are English; the app follows the ACTIVE GATEWAY's locale.
+
+    Two things this probe must not do. It must not read `document.body.innerText`: the
+    open session's transcript is part of the body, so a French conversation made the app
+    look French while its chrome was English — the run then "switched" the language and
+    aborted on a page that was already correct. And it must run AFTER the gateway switch
+    (`ensure_local_gateway`): `display.language` is read from the active connection's
+    config, so on the team's remote gateway the whole shell is French. Hence: chrome only.
+    """
     probe = await ui.ev("""(() => {
-      const txt = document.body.innerText;
-      return { fr: /Nouvelle session|Paramètres|Épinglées|Réglages/.test(txt),
-               en: /New session|Settings|Pinned/.test(txt) };
-    })()""")
-    if probe.get("en") and not probe.get("fr"):
-        print("  language: English ✓")
+      const chrome = [...document.querySelectorAll('nav button, aside button, header button, [role=tab]')]
+        .map(b => (b.getAttribute('aria-label') || '') + ' ' + (b.textContent || ''))
+        .join(' | ');
+      return { fr: /Nouvelle session|Paramètres|Épinglées|Réglages|Apparence/.test(chrome),
+               en: /New session|Settings|Pinned|Appearance/.test(chrome) };
+    })()""") or {}
+    if not probe.get("fr"):
+        print("  language: English ✓" if probe.get("en") else "  language: no French chrome ✓")
         return
     print("  language is not English — opening Settings → Appearance to switch it")
     # gear, top right
@@ -216,10 +230,43 @@ async def ensure_english(ui: Desktop):
     await asyncio.sleep(1.2)
     await ui.ev("document.body.click()")  # close the sheet
     await asyncio.sleep(0.6)
-    still = await ui.ev("(() => /Nouvelle session|Paramètres/.test(document.body.innerText))()")
+    still = await ui.ev("""(() => {
+      const chrome = [...document.querySelectorAll('nav button, aside button, header button, [role=tab]')]
+        .map(b => (b.getAttribute('aria-label') || '') + ' ' + (b.textContent || '')).join(' | ');
+      return /Nouvelle session|Paramètres|Apparence/.test(chrome);
+    })()""")
     print(f"  switch attempt: trigger={picked}, chosen={chosen}, still_french={still}")
     if still:
         raise Dead("the language is still French — switch it in Settings → Appearance, then rerun")
+
+
+async def press_escape(ui: Desktop):
+    """A real Esc, so a menu or sheet the last run left open cannot swallow the next click.
+
+    Learned the hard way: a leftover open menu makes the gateway chip's click CLOSE it, the
+    run then finds no « This device » entry and aborts on a shell that was one Escape from fine.
+    """
+    for kind in ("keyDown", "keyUp"):
+        await ui.call("Input.dispatchKeyEvent", {
+            "type": kind, "key": "Escape", "code": "Escape",
+            "windowsVirtualKeyCode": 27, "nativeVirtualKeyCode": 27
+        })
+    await asyncio.sleep(0.4)
+
+
+async def gateway_chip(ui: Desktop) -> str:
+    """What the status bar says the window is talking to.
+
+    This, not `hermesDesktop.getConnection()`: with a registered remote gateway that call
+    keeps reporting the registry entry (`mode: remote`) even after the window has been
+    switched to « This device » — measured on the 1.7.0 shell, where it aborted a run whose
+    chrome was already local (and English). The chip is the honest readout.
+    """
+    return str(await ui.ev("""(() => {
+      const c = [...document.querySelectorAll('button')].find(e =>
+        /registered gateways|connexions/i.test(e.getAttribute('aria-label') || ''));
+      return c ? (c.textContent || '').trim() : '';
+    })()""") or "")
 
 
 async def ensure_local_gateway(ui: Desktop):
@@ -234,28 +281,18 @@ async def ensure_local_gateway(ui: Desktop):
     """
     # The chip only names the active gateway once one is applied, which is after
     # the boot settles — a run started too early used to bail out here.
-    conn = ""
+    label = ""
     for _ in range(20):
-        conn = str(await ui.ev("""(async () => {
-          try { const c = await window.hermesDesktop.getConnection(); return c.mode + ' ' + c.baseUrl; }
-          catch (e) { return 'ERR ' + e.message; }
-        })()""") or "")
-        if conn and not conn.startswith("ERR"):
+        label = await gateway_chip(ui)
+        if label:
             break
         await asyncio.sleep(3)
-    print(f"  connection: {conn}")
-    if conn.startswith("ERR"):
-        raise Dead(f"the desktop never reported its connection ({conn})")
+    if not label:
+        raise Dead("could not find the « Registered gateways » chip in the status bar")
+    print(f"  gateway chip: {label}")
 
-    if not conn.startswith("local"):
-        label = await ui.ev("""(() => {
-          const c = [...document.querySelectorAll('button')].find(e =>
-            /registered gateways|connexions/i.test(e.getAttribute('aria-label') || ''));
-          return c ? (c.getAttribute('aria-label') || '') : '';
-        })()""")
-        if not label:
-            raise Dead("could not find the « Registered gateways » chip in the status bar")
-        print(f"  gateway chip: {label}")
+    if not re.search(r"this device|cet appareil", label, re.I):
+        await press_escape(ui)   # a leftover menu would be CLOSED by the chip click
 
         chip_box = await ui.ev("""(() => {
           const c = [...document.querySelectorAll('button')].find(e =>
@@ -307,13 +344,10 @@ async def ensure_local_gateway(ui: Desktop):
         else:
             await asyncio.sleep(6)
 
-    after = str(await ui.ev("""(async () => {
-      try { const c = await window.hermesDesktop.getConnection(); return c.mode + ' ' + c.baseUrl; }
-      catch (e) { return 'ERR'; }
-    })()""") or "")
-    print(f"  connection now: {after}")
-    if not after.startswith("local"):
-        raise Dead(f"still not on « This device » ({after}) — switch it by hand, then rerun")
+    after = await gateway_chip(ui)
+    print(f"  gateway chip now: {after}")
+    if not re.search(r"this device|cet appareil", after, re.I):
+        raise Dead(f"still not on « This device » ({after!r}) — switch it by hand, then rerun")
 
     # Pinned to the local connection: this is the route the plugin's own calls use.
     boards = await ui.ev("""(async () => {
@@ -378,6 +412,25 @@ async def collapse_private_sections(ui: Desktop):
         }})()""")
         if clicked != "absent":
             print(f"  {label}: {clicked}")
+    # Every OTHER sidebar section (Telegram, Cron jobs, …) lists session titles as well, and its
+    # header carries no aria-expanded. The section's own container does the talking: a collapsed
+    # group holds its header alone, an open one holds more — so the count is what keeps this
+    # idempotent (clicking a collapsed header would OPEN it).
+    other = await ui.ev("""(() => {
+      const heads = [...document.querySelectorAll('button')].filter(e => {
+        const r = e.getBoundingClientRect();
+        return r.x < 260 && r.y > 60 &&
+          /^(Telegram|Cron jobs|Discord|Slack|Projects|Workspaces)/i.test((e.textContent || '').trim());
+      });
+      let n = 0;
+      for (const h of heads) {
+        const section = h.parentElement && h.parentElement.parentElement;
+        if (section && section.children.length > 1) { h.click(); n++; }
+      }
+      return n;
+    })()""")
+    if other:
+        print(f"  other sidebar sections: {other} collapsed")
     await asyncio.sleep(0.6)
 
 
@@ -440,6 +493,7 @@ async def open_plugin(ui: Desktop):
     view-state reset does exactly that) left the run about to capture a page that was never opened,
     and to photograph an empty plugin without saying so.
     """
+    await press_escape(ui)   # never click through a sheet the last run left open
     box = await ui.ev("""(() => {
       const span = [...document.querySelectorAll('span')].find(s => s.textContent.trim() === 'Kanban Gantt');
       const btn = span && span.closest('button');
@@ -450,11 +504,13 @@ async def open_plugin(ui: Desktop):
     if not box:
         raise Dead("the « Kanban Gantt » entry is missing from the sidebar")
     await ui.click_xy(box["x"], box["y"])
-    # Mounted means its own chrome is on screen: the board switcher is the first thing it draws.
+    # Mounted means its own chrome is on screen, and the view toggle is the stable anchor:
+    # 1.7.0's header carries the board's own name where « Board … » used to sit, so the old
+    # text probe waited twenty seconds on a page that was already open.
     for _ in range(20):
         await asyncio.sleep(1.0)
         ready = await ui.ev("""(() => [...document.querySelectorAll('button')]
-          .some(e => /^Board\\b/.test((e.textContent || '').trim())))()""")
+          .some(e => (e.getAttribute('aria-label') || '').trim() === 'Graph'))()""")
         if ready:
             print("  plugin surface mounted")
             return
@@ -462,50 +518,109 @@ async def open_plugin(ui: Desktop):
 
 
 async def select_board(ui: Desktop):
-    """Point the plugin at the demo board, with REAL pointer events, and verify it took.
+    """Point the plugin at the demo board through its stored preference, then prove it.
 
-    A synthetic `.click()` neither opens this switcher nor picks its items — the script already
-    knows that for the gateway chip and uses coordinates there. It went unnoticed because a manual
-    session usually left the board on `gantt-demo` already; the day the page state was reset first,
-    the run captured whatever board the app happened to hold and photographed an empty plugin. So:
-    coordinates, then read the chip back and refuse to continue if the selection did not take.
+    The 1.7.0 header shows the board's own name instead of a « Board … » chip, so there is no
+    switcher to click by label — and clicking blind is what the old comment was warning about.
+    Worse, the plugin reads a PER-CONNECTION key (`board.<connectionId>`), and that scope stays
+    the registry's connection even after the window was switched to « This device »: `board.local`
+    already read `gantt-demo` while the page painted `sumaris`. So every `board*` key is pointed
+    at the demo board, the page reloaded, and the result checked against a task only that seed
+    holds — a title, not a chip, because a title is what the pane actually draws.
     """
-    box = await ui.ev("""(() => {
-      const b = [...document.querySelectorAll('button')].find(e => /^Board\\b/.test(e.textContent.trim()));
-      if (!b) return null;
-      const r = b.getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    keys = await ui.ev("""(() => {
+      const out = [];
+      for (const k of Object.keys(localStorage)) {
+        if (!/^hermes\\.plugin\\.kanban-gantt\\.board/.test(k)) continue;
+        localStorage.setItem(k, JSON.stringify('gantt-demo'));
+        out.push(k);
+      }
+      return out;
     })()""")
-    if not box:
-        raise Dead("the board switcher is not on the page — is the plugin surface open?")
-    await ui.click_xy(box["x"], box["y"])
-    await asyncio.sleep(1.0)
-    item = await ui.ev(f"""(() => {{
-      // The menu shows the LABEL ("Gantt Demo") while the slug is "gantt-demo": comparing the one
-      // against the other found nothing, clicked nothing, and left the chip on the previous board.
-      const wants = {json.dumps([DEMO_BOARD, DEMO_BOARD.replace('-', ' '), DEMO_BOARD.replace('-', ' ').title()])}
-        .map(w => w.toLowerCase());
-      const hits = [...document.querySelectorAll('[role=menuitem], button, div')].filter(e => {{
-        const text = (e.textContent || '').trim().toLowerCase();
-        return text.length < 40 && wants.some(w => text.indexOf(w) >= 0);
-      }});
-      if (!hits.length) return null;
-      const r = hits[hits.length - 1].getBoundingClientRect();
-      return {{ x: r.left + r.width / 2, y: r.top + r.height / 2 }};
-    }})()""")
-    if item:
-        await ui.click_xy(item["x"], item["y"])
-        await asyncio.sleep(2.0)
-    chip = await ui.ev("""(() => {
-      const b = [...document.querySelectorAll('button')].find(e => /^Board\\b/.test(e.textContent.trim()));
-      return b ? b.textContent.trim() : '';
-    })()""")
-    print(f"  board chip: {chip}")
-    # Either form is fine here: the chip prints the label, the seed works in slugs.
-    if DEMO_BOARD not in (chip or "").lower() and DEMO_BOARD.replace('-', ' ') not in (chip or "").lower():
-        raise Dead(f"the board switcher still reads {chip!r} — the captures would show the wrong board")
+    print(f"  board preference(s) set: {', '.join(keys or []) or 'none'}")
+    await ui.call("Page.reload", {"ignoreCache": False})
+    await asyncio.sleep(9)
+    await open_plugin(ui)
+    # AFTER the reload, not before: the sections' collapse is not persisted, and the reload
+    # above re-opens them — which is how a run that collapsed earlier still photographed the
+    # user's own session titles.
+    await collapse_private_sections(ui)
+    text = str(await ui.ev("(() => document.body.innerText)()") or "")
+    if DEMO_TASK not in text:
+        raise Dead(f"the page does not show the demo board (no {DEMO_TASK!r}) — "
+                   "the captures would show the wrong data")
+    print("  board: the demo seed is on screen")
     rows = await ui.ev("(() => document.body.innerText.split('\\n').filter(t => t.trim().length > 12).length)()")
     print(f"  rows with text: {rows}")
+
+
+async def click_exact(ui: Desktop, text: str, *, selector: str = "button") -> bool:
+    """Click the last element whose trimmed text is exactly `text`, with REAL pointer events.
+
+    Menu items and segmented controls ignore synthetic `.click()` in this shell — the board
+    switcher taught us that — so anything that opens or picks from a popup goes through
+    coordinates. The LAST match is the innermost visible one (a menu item's div and its span
+    both carry the label).
+    """
+    box = await ui.ev(f"""(() => {{
+      const want = {json.dumps(text)};
+      const hits = [...document.querySelectorAll({json.dumps(selector)})]
+        .filter(e => (e.textContent || '').trim() === want);
+      const hit = hits[hits.length - 1];
+      if (!hit) return null;
+      const r = hit.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
+      return {{ x: r.left + r.width / 2, y: r.top + r.height / 2 }};
+    }})()""")
+    if not box:
+        return False
+    await ui.click_xy(box["x"], box["y"])
+    return True
+
+
+async def click_attr(ui: Desktop, label: str) -> bool:
+    """Click the first on-screen element whose aria-label is exactly `label`, by coordinates."""
+    box = await ui.ev(f"""(() => {{
+      const want = {json.dumps(label)};
+      const hit = [...document.querySelectorAll('[aria-label]')]
+        .filter(e => e.getAttribute('aria-label') === want)
+        .find(e => {{ const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; }});
+      if (!hit) return null;
+      const r = hit.getBoundingClientRect();
+      return {{ x: r.left + r.width / 2, y: r.top + r.height / 2 }};
+    }})()""")
+    if not box:
+        return False
+    await ui.click_xy(box["x"], box["y"])
+    return True
+
+
+async def capture_graph(ui: Desktop, name: str = "screenshot-en-08-graph"):
+    """The third mode, captured on the demo board in « Flow, top down » with the scope on « All ».
+
+    Both choices are deliberate. `down` is the arrangement a reader meets first and the one
+    that reads like a dependency tree; the scope must be `All`, because any narrower scope
+    hides exactly the edges the picture exists to show. Fit comes last: the camera is
+    persisted per board, so a zoom left by a previous session frames a corner.
+    """
+    if not await ui.click_text("Graph"):
+        print("  ! graph toggle not found — skipping the graph shot")
+        return None
+    await asyncio.sleep(1.8)
+    if await click_attr(ui, "How the cards are arranged"):
+        await asyncio.sleep(0.7)
+        if not await click_exact(ui, "Flow, top down", selector="[role=menuitem]"):
+            print("  ! « Flow, top down » not in the arrangement menu — keeping the default")
+        await asyncio.sleep(1.6)
+    else:
+        print("  ! arrangement dropdown not found — capturing the default arrangement")
+    if await click_exact(ui, "All", selector='[aria-label="Which tasks are shown"] button'):
+        await asyncio.sleep(1.0)
+    else:
+        print("  ! scope toggle not found — the scope stays as the run found it")
+    if await click_attr(ui, "Fit"):
+        await asyncio.sleep(1.4)
+    return await ui.shot(name)
 
 
 async def run_scenario(ui: Desktop, *, make_gif: bool):
@@ -585,6 +700,9 @@ async def run_scenario(ui: Desktop, *, make_gif: bool):
             await asyncio.sleep(0.6)
     else:
         print("  ! list toggle not found — skipping the list-view shots")
+
+    # ── the graph view: the dependency structure of the same board ───────────
+    await capture_graph(ui)
 
     # The animation, LAST: Page.captureScreenshot returns no frame while a
     # screencast runs, so every still above has to be taken first.
@@ -764,10 +882,12 @@ async def main():
     print(f"attached: {page.get('title')} ({args.port})")
     outcome = "Capture terminée."
     try:
-        await ensure_english(ui)
+        # Gateway FIRST: the shell's locale is read from the ACTIVE connection's config,
+        # so switching afterwards would mean capturing French chrome after checking for
+        # English on the remote gateway (the team's is French).
         await ensure_local_gateway(ui)
+        await ensure_english(ui)
         await ensure_current_board(ui)
-        await collapse_private_sections(ui)
         # The capture must not inherit what the last session left on the page. These keys survive a
         # reload, so a run could find a list view instead of the timeline, the "only tasks with
         # attachments" filter still on, or a folded tree — and then report "no fold square found",
