@@ -1,5 +1,72 @@
 # Changelog
 
+## 1.7.0 — a third view: the shape of the work, and links you can draw
+
+**The plugin gains a third view.** List answers *what*, Timeline answers *when*, and **Graph**
+answers *what hangs off what*: a card per task, an arrow per parent → child link, laid out by
+longest path so a task always sits below its parents. The toggle that traded List and Timeline
+now carries three values, with the same persistence — per board, so a board you read as a graph
+does not drag the next one with it.
+
+**The drawing is a function, not a drawing routine.** Ranks, the transitive reduction, the
+lineage walk and the four arrangements live in `src/core/graph-core.ts`, which knows nothing
+about the DOM and is unit-tested in Node like the Gantt core: a diamond's three links draw two
+arrows and *count* the implied one in the footer rather than hiding it, a chain ranks without
+recursion, and a hand-edited board that closes a loop is drawn at the deepest rank it can reach
+instead of hanging the page — every traversal carries a visited set and a depth cap, and the
+tests fail on a hang rather than waiting for one. Perf is a budget, not a claim: 500 nodes lay
+out in a few milliseconds, 2000 in under 400, measured with `performance.now()` in the tests.
+
+**Four arrangements**, taken from the vocabulary of `kanban-graph` so the two read alike:
+`Flow, top down` (the default, a dependency tree), `Flow, left to right`, `Columns by status`,
+and `Compact grid`. Each is remembered per board, and tasks nothing depends on — and that
+depend on nothing — are packed into a trailing row instead of stretching the layout into a
+ribbon, which is what lets the fit keep the cards large.
+
+**The camera is the timeline's.** Ctrl/⌘ + wheel zooms at the cursor, a plain wheel scrolls,
+Shift+wheel pans, a drag on the empty canvas pans at any zoom (the old rule only worked at fit
+zoom, where empty space happens to sit under the pointer), and `0` / `+` / `−` do what they do
+in `kanban-graph`. **Fit** is a mode, not a button press: while it is on the view reframes
+itself as the pane resizes — opening the detail pane no longer leaves half the graph outside
+the frame — and any gesture of your own hands the camera back to you. A click on the empty
+canvas clears the selection, which was previously only possible by closing the drawer.
+
+**Links are editable where they are drawn.** Every card carries a **slot** — a dot hanging
+under its border, halfway to the card below, tied to its card by a short stem — and dragging
+from it draws an arrow that *adds* a parent; it never moves one, never detaches one, and asks
+nothing. Releasing over a legal card snaps the head to that card's border, so the gesture says
+what it is about to do before it does it. An arrow you point at thickens, a right click offers
+to delete it, and each end carries a grab dot that moves that end to another card. What may be
+linked is what the domain allows, from the same gate the drag-and-drop already used: no cycles,
+no finished parents.
+
+**Scopes are shared by the three views.** `Running + lineage` (what is live, and everything it
+blocks or waits for), `Open`, and `All` sit in the toolbar; the scope a reader picks filters
+the graph *and* the timeline *and* the list, because all three now narrow through the same pure
+function. The funnel menu shows the checks and says when a status is out of the picture because
+of the scope, and the legend strikes through what the scope rules out, instead of describing a
+view nobody is looking at.
+
+**A card keeps the density of a row**: status icon in its tone, the run's arc while it runs, a
+failed-run warning, the title (wrapped onto two lines rather than cut), priority, and the whole
+lineage lit when you select one — clicking a node opens the same detail drawer the other views
+open, and a click on the canvas closes it.
+
+**The detail reads in three tabs.** Comments, Activity and Runs are now siblings under a
+segmented strip, with the count as a badge beside the label, and an empty feed is not offered
+as a tab at all. The drawer and the modal also end with the task's own shell command — `hermes
+kanban --board <slug> show <id>` — monospace, selectable, with a copy button that says so.
+
+**Shipped but not shown: board tabs.** A tab per open board is implemented and deliberately
+hidden behind `SHOW_BOARD_TABS = false`: a tab is a full page instance of its own — own mode,
+own zoom, own arrangement — and with the "all boards" pseudo-board, the drawer and the header
+switcher in the same room, they still disagree in ways a reader would call bugs. The code
+stays, the strip comes back with one word.
+
+Every new string is translated in English, French and Chinese in the same edit, and the
+catalogue screenshot of the graph is part of the release: the vertical flow, scope `All`, on
+the demo board.
+
 ## 1.6.3 — a mislabelled file can no longer run, and "ready" stops answering 500
 
 **A security fix.** The previewer chose its renderer from the file name, but handed the Blob the
