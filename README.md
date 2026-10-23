@@ -1,7 +1,7 @@
 # Hermes Kanban Gantt
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-113%20passed-brightgreen?style=for-the-badge)](#tests)
+[![Tests](https://img.shields.io/badge/tests-273%20passed-brightgreen?style=for-the-badge)](#tests)
 [![Zero API keys](https://img.shields.io/badge/zero-API%20keys-00d26a?style=for-the-badge)](#architecture)
 
 A **Gantt timeline view** plugin for [Hermes Desktop](https://hermes-agent.nousresearch.com) — a full-page `/kanban-gantt` route that renders any Hermes kanban board as a timeline of real work (created / started / done timestamps), not a forecast planner.
@@ -19,13 +19,14 @@ TÂCHES        │ LUN 7 ── MAR 8 ── MER 9 ── JEU 10 ── VEN 11 �
 - **Board switcher** projected into the desktop page-header band (`WORKSPACE_PAGE_HEADER_AREA`), styled like the official kanban switcher, with an "All boards" aggregate mode; per-board badges on rows in aggregate view. Requires Hermes ≥ 0.21.5.
 - **Real timeline bars** — from the kanban tasks' actual timestamps (created / started / review / done), with live-activity arc on running tasks, weekend shading, zoom (7 days at 100%), auto-scroll to "now".
 - **List view** — a List / Timeline toggle in the header swaps the bars for full-width columns (task, assignee, status, last activity). The choice is persisted; the timeline stays the default.
+- **Graph view** — the third mode of that same toggle: the dependency structure, drawn as a card per task with an arrow per parent → child link, laid out by longest path and reduced (a link implied by a longer path is counted in the footer, not drawn). Four arrangements — `Flow, top down`, `Flow, left to right`, `Columns by status`, `Compact grid` — remembered per board, with tasks nothing hangs off packed into a trailing row. The camera is the timeline's (Ctrl/⌘ + wheel at the cursor, drag to pan at any zoom, `0` / `+` / `−`), **Fit** is a mode that keeps reframing as the pane resizes, and selecting a card lights its whole lineage. Links are editable where they are drawn: a slot under each card draws an arrow that *adds* a parent, a right click deletes a link, and each end carries a grab dot that moves it — all gated by the domain's own rules (no cycles, no finished parents).
 - **Dependencies** — parent → child links drawn as tree connectors in the task column and dependency chains in the timeline.
 - **Collapsible tree column** — the task column reads like a file explorer: a boxed `+` / `−` on every task that has children (a leaf keeps the slot, so titles stay aligned), a vertical down every level that still has a sibling below it plus the `├` / `└` elbow for the row itself, and a global toggle in the column header, in front of the master checkbox, that collapses or opens everything. The fold state is persisted **per board**; a search ignores it — everything opens and matches are flagged — without touching what is stored, so clearing the query restores exactly the branches you had. Selecting a task tints its descendants, which is what makes a child not printed directly beneath its parent visible. On a multi-parent board the task is still printed once, under its first parent: a later parent shows a **dashed** square, closed by default, which reprints the child without repeating its subtree — so the link is always visible and a task never disappears because its first parent happens to be collapsed.
 - **Create tasks** — “New task” at the right end of the toolbar (title, description, project, workspace kind + path, assignee, priority, skills, model override, parent, triage, goal mode), and “Create a sub-task” from a task's ⋯ menu (labels come from the locale bundles). The status is derived by the kanban domain — `ready`, or `todo` while the chosen parent is unfinished, `triage` when asked. Parent and project pickers are searchable, assignees come from the board *and* the Hermes profiles, and an idempotency key per submit means a double click cannot duplicate the task.
 - **Re-parent by drag & drop** — drag a task's name onto another task to move it under it; refused targets (itself, its own subtree, another board, a done/archived task) light up red before you release. A task that already has parents asks: add a new parent, or replace them with this one — and the parent list can be pruned right there. Full parent/child lists (status icon, click to open that task) live in the detail drawer; the drawer's ⋯ menu also offers a searchable “Move under…” picker for the same operation without the mouse.
 - **Task detail drawer** — status transitions (action matrix), assignee, comments, runs, attachments; dockable (`«` / `»`) beside the gantt instead of overlaying, resizable, position persisted.
 - **Bulk operations** — multi-select rows (header checkbox, shift-click) → move status, assign, archive, delete.
-- **Filters** — by assignee, by status, show/hide archived, text search.
+- **Filters** — by assignee, by status, show/hide archived, text search, and the three **scopes** (`Running + lineage`, `Open`, `All`) which narrow the graph, the timeline and the list through the same pure function; the legend strikes through what the scope rules out.
 - **Readable by design** — sticky opaque label column, opaque dropdown menus, resizable label column, all state persisted per plugin.
 
 ## Creating and moving tasks
@@ -147,7 +148,9 @@ a container).
 The scenario leaves nothing to the state it finds: it forces the **timeline** before
 the first capture (the view mode is persisted, so a previous run could have left the
 app in list mode), folds a branch for the tree shot, then switches to the **list
-view** for the last captures. It also fixes what the shell would otherwise impose —
+view** for the next captures, and ends on the **graph** — `Flow, top down` (the
+vertical dependency tree) with the scope on `All`, because any narrower scope hides
+exactly the edges the picture exists to show. It also fixes what the shell would otherwise impose —
 the task column's width (400 px), the **light** appearance (this machine follows the
 system, and a switch to dark turned every capture dark) and the sidebar width — and
 puts the appearance and the sidebar back the way it found them when the run ends.
@@ -156,6 +159,7 @@ puts the appearance and the sidebar back the way it found them when the run ends
 ![](docs/screenshot-en-02-details.png)
 ![](docs/screenshot-en-05-tree-folded.png)
 ![](docs/screenshot-en-06-list.png)
+![](docs/screenshot-en-08-graph.png)
 
 
 ## Catalogue card
