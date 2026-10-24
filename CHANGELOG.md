@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.7.1 — scopes you can combine, and a graph that reads straight down
+
+**The quick scope becomes four, and gains a modifier.** It was one combined thing — *Running +
+lineage* — which meant a reader with blocked work had no scope for it, and a reader who wanted only
+what is running got the whole closure whether they asked for it or not. It is now **Running**,
+**Blocked**, **Open** and **All**, each a single status filter, and **+ lineage** sits right after
+them as a switch of its own: it widens whichever scope is chosen to everything that leads to the
+selection and everything that follows it. The switch disappears on *All*, where the closure of
+everything is everything — an off switch that cannot change anything is a lie you only discover by
+clicking it. A preference stored before the split is read as *Running* with the modifier on, so an
+existing reader keeps the view they chose.
+
+**The lineage widens in all three views, not just in the graph.** The three views were reading the
+closure off the set the other filters had already cut down — where the parent the modifier should
+reach is gone, and every edge pointing at it has been dropped as dangling. So the closure was empty
+and the switch did nothing in the list and the timeline; the graph only *looked* like it worked
+because it lights a click's lineage, so its ancestry happened to be on screen. The selection is now
+computed once, over the whole board: a scope narrows what the funnel allows, and the lineage
+deliberately does not, since the tasks it brings back are exactly the ones the funnel just removed.
+
+**A parent sits over its children.** In the top-down drawing, a parent could land a whole card to
+one side of the children it leads to — the sweeps that aim at their mean aim in fractional slots,
+and the row's own no-overlap rule then pushed them back into line. A pass after them moves a parent
+onto the mean of its children, but only when the spot lies strictly between its two neighbours, so
+it can remove a sideways link and can never overlap two cards or cross a row.
+
+**Selecting a card in the graph no longer fails.** The `lineage` prop the plugin hands to the graph
+took the name of the core's `lineage` function, which the same component calls to light a
+selection — so inside it the name referred to a boolean, and the first click that asked for a
+lineage raised *"lineage is not a function"*. The bundle compiled anyway: esbuild does not
+typecheck, and nothing exercised a selection. The import is aliased now, and rendering the graph
+*with* a selection is asserted, which is the path that failed.
+
+Tests, all measured on this commit: 153 assertions in the Node suites (61 of them in the graph
+core, including the new ones for the four scopes, the closure with and without the modifier, and the
+refusals of the centring pass), 69 render checks — fifteen of them in the list, the timeline *and*
+the graph — 23 hook-order checks, and 57 pytest tests.
+
 ## 1.7.0 — a third view: the shape of the work, and links you can draw
 
 **The plugin gains a third view.** List answers *what*, Timeline answers *when*, and **Graph**

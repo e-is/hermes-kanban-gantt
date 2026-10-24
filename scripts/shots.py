@@ -58,6 +58,10 @@ DEMO_BOARD = "gantt-demo"
 # A title only the demo seed holds: the capture's proof that the pane really shows that
 # board (the header no longer carries a chip to read back).
 DEMO_TASK = "Provision the analytics cluster"
+# Desktop plugins that must NOT appear in a capture: the sidebar's plugin list is the shell's,
+# not the plugin's, so a catalogue image of kanban-gantt should not advertise its neighbours.
+OTHER_PLUGINS = ("model-leaderboard", "kanban-graph")
+DECISIONS_KEY = "hermes.desktop.pluginDecisions.v2"
 
 # A detail-rich task to open. (The drag pair that used to live here went with the
 # drag capture: leaving a drag behind contaminated every later still.)
@@ -554,6 +558,63 @@ async def select_board(ui: Desktop):
     print(f"  rows with text: {rows}")
 
 
+async def close_file_explorer(ui: Desktop):
+    """Close the project file-browser panel: its tree is workspace noise in a capture.
+
+    The panel lives in the shell's « right sidebar » (whose SIDE the user can swap — it renders
+    on the left here), and its own toolbar only offers gitignored / refresh / collapse-all. The
+    titlebar's « Hide right sidebar » is the control that actually closes it, and its label flips
+    to « Show … » once it is, so the presence of the tree's own buttons is what decides.
+    """
+    tree_open = """(() => [...document.querySelectorAll('button')]
+      .some(e => /refresh tree|actualiser l/i.test(e.getAttribute('aria-label') || '')))()"""
+    if not await ui.ev(tree_open):
+        print("  file explorer: already closed")
+        return
+    if not await click_attr(ui, "Hide right sidebar"):
+        print("  ! no « Hide right sidebar » button — leaving the file explorer as it is")
+        return
+    await asyncio.sleep(1.2)
+    if await ui.ev(tree_open):
+        print("  ! the file explorer is still on screen")
+    else:
+        print("  file explorer: closed")
+
+
+async def hide_other_plugins(ui: Desktop):
+    """Take the other desktop plugins off the sidebar for THIS run, and put them back after.
+
+    The desktop keeps its own per-plugin switches in `hermes.desktop.pluginDecisions.v2` — a name
+    -> enabled map, independent of `hermes plugins disable`, which only tells the gateway's
+    registry. The map as found is saved in RESTORE and re-applied by `restore_plugin_decisions`;
+    a capture has no business leaving the user's app reconfigured.
+    """
+    RESTORE["pluginDecisions"] = await ui.ev(f"localStorage.getItem({DECISIONS_KEY!r})")
+    after = await ui.ev(f"""(() => {{
+      const key = {DECISIONS_KEY!r};
+      let map = {{}};
+      try {{ map = JSON.parse(localStorage.getItem(key) || '{{}}'); }} catch (e) {{ map = {{}}; }}
+      for (const name of {json.dumps(list(OTHER_PLUGINS))}) map[name] = false;
+      map['kanban-gantt'] = true;
+      localStorage.setItem(key, JSON.stringify(map));
+      return Object.entries(map).map(([k, v]) => `${{k}}=${{v ? 'on' : 'off'}}`);
+    }})()""")
+    print(f"  plugin decisions: {', '.join(after or [])}")
+
+
+async def restore_plugin_decisions(ui: Desktop):
+    saved = RESTORE.get("pluginDecisions")
+    if saved is None:
+        return
+    await ui.ev(f"""(() => {{
+      localStorage.setItem({DECISIONS_KEY!r}, {json.dumps(saved)});
+      return 1;
+    }})()""")
+    RESTORE.pop("pluginDecisions", None)
+    print("  plugin decisions restored")
+    RESTORE["needsReload"] = True
+
+
 async def click_exact(ui: Desktop, text: str, *, selector: str = "button") -> bool:
     """Click the last element whose trimmed text is exactly `text`, with REAL pointer events.
 
@@ -603,6 +664,25 @@ async def capture_graph(ui: Desktop, name: str = "screenshot-en-08-graph"):
     hides exactly the edges the picture exists to show. Fit comes last: the camera is
     persisted per board, so a zoom left by a previous session frames a corner.
     """
+    # The scenario above opened a task's detail. A docked drawer squeezes the graph to two
+    # thirds of the pane and lights a lineage nobody asked for — not what a catalogue image
+    # should show. Escape is the page's own shortcut for it; the button is the fallback, and
+    # the LAST one is the drawer's (the tab strip has a Close of its own, far to the left).
+    await press_escape(ui)
+    await asyncio.sleep(0.9)
+    if await ui.ev("(() => /Add a comment/i.test(document.body.innerText))()"):
+        box = await ui.ev("""(() => {
+          const btns = [...document.querySelectorAll('button')]
+            .filter(e => /^close$/i.test((e.getAttribute('aria-label') || '').trim()))
+            .map(e => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+          return btns.length ? btns[btns.length - 1] : null;
+        })()""")
+        if box:
+            await ui.click_xy(box["x"], box["y"])
+            await asyncio.sleep(0.9)
+        if await ui.ev("(() => /Add a comment/i.test(document.body.innerText))()"):
+            print("  ! the task detail is still open — the graph will be narrower than it should")
+
     if not await ui.click_text("Graph"):
         print("  ! graph toggle not found — skipping the graph shot")
         return None
@@ -707,6 +787,10 @@ async def run_scenario(ui: Desktop, *, make_gif: bool):
     # The animation, LAST: Page.captureScreenshot returns no frame while a
     # screencast runs, so every still above has to be taken first.
     if make_gif:
+        # Back to the timeline first: the fold beats below are timeline affordances, and the
+        # graph capture above left the page on the third view.
+        await ui.click_text("Timeline")
+        await asyncio.sleep(0.9)
         await ui.start_screencast()
         await toggle_first("Collapse ")
         await asyncio.sleep(0.9)
@@ -716,6 +800,9 @@ async def run_scenario(ui: Desktop, *, make_gif: bool):
         await asyncio.sleep(0.4)
         await ui.click_text("List")
         await asyncio.sleep(1.0)
+        # …and the third mode, which is what this release is about.
+        await ui.click_text("Graph")
+        await asyncio.sleep(1.8)
         await ui.stop_screencast()
         await asyncio.sleep(0.4)
 
@@ -766,40 +853,55 @@ def encode_animation():
     gif = ANIM / "kanban-gantt.gif"
     mp4 = ANIM / "kanban-gantt.mp4"
     palette = FRAMES / "palette.png"
-    pattern = str(FRAMES / "frame-%05d.jpg")
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "8", "-i", pattern,
-                    "-vf", "scale=1280:-1:flags=lanczos,palettegen", str(palette)], check=True)
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "8", "-i", pattern,
-                    "-i", str(palette), "-lavfi", "paletteuse", str(gif)], check=True)
-    print(f"  ✓ {gif.relative_to(REPO)}  ({gif.stat().st_size // 1024} kB, {len(frames)} frames)")
+    # A captured frame is a BEAT, not a tick: Chromium pushes one only when the pixels change,
+    # so a run yields 4–12 frames whatever its duration. Encoding them at a nominal 8 fps turned
+    # a five-beat walkthrough into a half-second flash (measured: 4 frames, 0.5 s). Each frame is
+    # therefore held for most of a second through a concat list, and the 8 fps the palette pass
+    # declares is just the sampling grid for the GIF encoder.
+    HOLD = 0.9
+    listing = FRAMES / "frames.txt"
+    listing.write_text("".join(f"file '{f.resolve()}'\nduration {HOLD}\n" for f in frames)
+                       + f"file '{frames[-1].resolve()}'\n")
+    source = ["-f", "concat", "-safe", "0", "-i", str(listing)]
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *source,
+                    "-vf", "fps=8,scale=1280:-1:flags=lanczos,palettegen", str(palette)], check=True)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *source,
+                    "-i", str(palette), "-lavfi", "fps=8,paletteuse", str(gif)], check=True)
+    print(f"  ✓ {gif.relative_to(REPO)}  ({gif.stat().st_size // 1024} kB, "
+          f"{len(frames)} beats held {HOLD}s each)")
     # MP4 as well: easier to review than a GIF, and what a release page embeds.
     try:
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "8", "-i", pattern,
-                        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                        "-crf", "20", str(mp4)], check=True)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *source,
+                        "-vf", "fps=8,scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264",
+                        "-pix_fmt", "yuv420p", "-crf", "20", str(mp4)], check=True)
         print(f"  ✓ {mp4.relative_to(REPO)}  ({mp4.stat().st_size // 1024} kB)")
     except subprocess.CalledProcessError as exc:
         print(f"  (no MP4: {exc})")
 
 
 async def notify(ui: Desktop, message: str):
-    """Tell the human the run is over without blocking the CDP session.
+    """Tell the human the run is over — WITHOUT blocking the renderer.
 
-    `alert()` freezes the renderer until it is dismissed, and a Runtime.evaluate
-    that calls it would never return — so it is scheduled instead of awaited.
+    `alert()` is a native dialog in this shell: it freezes the page's JS until someone clicks
+    OK, and that freezes CDP with it. Measured: a run that ended on an alert left the app
+    unreachable minutes later (`Page.captureScreenshot` and `Runtime.evaluate` both timing out,
+    while `/json` still answered). A desktop notification, or nothing but the log line, is the
+    right amount of courtesy.
     """
     try:
-        await ui.ev(f"""(() => {{
+        channel = await ui.ev(f"""(() => {{
           const text = {json.dumps(message)};
-          setTimeout(() => {{
-            try {{ alert(text); }} catch (e) {{}}
-            if (window.Notification && Notification.permission === 'granted') {{
-              try {{ new Notification('Kanban Gantt — capture', {{ body: text }}); }} catch (e) {{}}
-            }}
-          }}, 700);
-          return true;
+          const d = window.hermesDesktop;
+          if (d && typeof d.notify === 'function') {{
+            try {{ d.notify({{ kind: 'info', message: text }}); return 'host'; }} catch (e) {{}}
+          }}
+          if (window.Notification && Notification.permission === 'granted') {{
+            try {{ new Notification('Kanban Gantt — capture', {{ body: text }}); return 'web'; }} catch (e) {{}}
+          }}
+          return 'none';
         }})()""")
-    except Exception as exc:  # the alert is a courtesy, never a failure
+        print(f"  notified via: {channel}")
+    except Exception as exc:  # a notification is a courtesy, never a failure
         print(f"  (could not raise the notification: {exc})")
 
 
@@ -887,6 +989,8 @@ async def main():
         # English on the remote gateway (the team's is French).
         await ensure_local_gateway(ui)
         await ensure_english(ui)
+        # Stored now, applied by the reloads below — and put back in the `finally`.
+        await hide_other_plugins(ui)
         await ensure_current_board(ui)
         # The capture must not inherit what the last session left on the page. These keys survive a
         # reload, so a run could find a list view instead of the timeline, the "only tasks with
@@ -895,6 +999,8 @@ async def main():
         await reset_view_state(ui)
         await open_plugin(ui)
         await select_board(ui)
+        # After the last reload: the file browser's panel state is restored by the shell on boot.
+        await close_file_explorer(ui)
         await run_scenario(ui, make_gif=not args.no_gif)
     except Dead as exc:
         outcome = f"Capture interrompue : {exc}"
@@ -909,6 +1015,7 @@ async def main():
         # Put the shell back the way the run found it: a capture has no business
         # leaving the user in light mode with a narrower sidebar.
         try:
+            await restore_plugin_decisions(ui)
             if RESTORE.get("sidebar"):
                 await resize_sidebar(ui, int(RESTORE["sidebar"]))
             if RESTORE.get("mode") is not None:
@@ -916,6 +1023,12 @@ async def main():
                   localStorage.setItem('hermes-desktop-mode-v1', {json.dumps(str(RESTORE['mode']))});
                   return true;
                 }})()""")
+                await ui.call("Page.reload", {"ignoreCache": False})
+                await asyncio.sleep(7)
+                RESTORE.pop("needsReload", None)
+            # The plugin switches are only read at boot: without this the sidebar would keep
+            # hiding the neighbours until the user restarted the app themselves.
+            if RESTORE.pop("needsReload", False):
                 await ui.call("Page.reload", {"ignoreCache": False})
                 await asyncio.sleep(7)
         except Exception as exc:
