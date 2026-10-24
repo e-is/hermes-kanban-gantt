@@ -833,7 +833,7 @@ function FilterDropdown({
   // about what the view contains. So it reads unchecked, says why, and clicking it lifts the
   // scope (the inverse of checking a box: it puts the tasks back).
   const hiddenByScope = status => (scope === 'open' ? status === 'done' || status === 'archived' : false)
-  const scopeLabel = { 'running-lineage': i18n.graphScopeRunning, open: i18n.graphScopeOpen, all: i18n.graphScopeAll }
+  const scopeLabel = { running: i18n.graphScopeRunning, blocked: i18n.graphScopeBlocked, open: i18n.graphScopeOpen, all: i18n.graphScopeAll }
   return jsxs(DropdownMenu, {
     children: [
       jsx(DropdownMenuTrigger, {
@@ -929,7 +929,7 @@ function FilterDropdown({
 
 function Legend({ disabledStatuses, onToggleStatus, scope, onScopeChange }) {
   const i18n = useGanttI18n()
-  const scopeLabel = { 'running-lineage': i18n.graphScopeRunning, open: i18n.graphScopeOpen, all: i18n.graphScopeAll }
+  const scopeLabel = { running: i18n.graphScopeRunning, blocked: i18n.graphScopeBlocked, open: i18n.graphScopeOpen, all: i18n.graphScopeAll }
   const item = (statusKey, color, txt) => {
     // Two ways a status can be out of the picture: the reader unchecked it, or the scope rules
     // it out. Both must read the same at the bottom of the chart — a legend that keeps "Done"
@@ -1161,6 +1161,9 @@ export function GraphView({
   zoom = 1,
   onZoom,
   scope = 'all',
+  /** Widen whatever the scope selected to its upstream and downstream closure. Ignored on `all`,
+   *  where the closure of everything is everything — the control hides it there for that reason. */
+  lineage = false,
   onScopeChange,
   selectedId = null,
   showBoardBadge = false,
@@ -1245,9 +1248,9 @@ export function GraphView({
   // The scope is a filter ON TOP of the funnel: `tasks` is already what the funnel, the
   // search and the status chips allow, and this narrows it further.
   const shown = useMemo(() => {
-    const keep = scopeIds(nodes, edges, scope)
+    const keep = scopeIds(nodes, edges, scope, { lineage })
     return nodes.filter(n => keep.has(n.id))
-  }, [nodes, edges, scope])
+  }, [nodes, edges, scope, lineage])
   // Grouping replaces the per-card board badge: in an all-boards graph each board becomes a
   // framed, contiguous block with its name at the top-left — the shape kanban-graph uses, and
   // the only one where "where does this board end?" is answerable at a glance.
@@ -2176,10 +2179,14 @@ export function GraphView({
   })
 }
 
-/** The quick scopes, as a segmented control: Running + lineage / Open / All. Named after the
- *  graph because it was born there, but it is a filter over the same tasks in every mode —
- *  "what is in flight, and what it holds up or waits on" reads the same in a list. */
-function ScopeToggle({ value, onChange }) {
+/** The quick scopes, as a segmented control: Running / Blocked / Open / All, each a single status
+ *  filter, and — right after, as its own switch — the lineage modifier that widens whichever scope
+ *  is chosen to everything that leads to it and everything that follows. Named after the graph
+ *  because it was born there, but it is a filter over the same tasks in every mode.
+ *
+ *  The modifier disappears on All: the closure of everything is everything, so a switch that
+ *  cannot change anything is a lie the reader has to discover by clicking it. */
+function ScopeToggle({ value, onChange, lineage = false, onLineageChange }) {
   const i18n = useGanttI18n()
   const item = (id, label) => jsx('button', {
     type: 'button',
@@ -2197,11 +2204,27 @@ function ScopeToggle({ value, onChange }) {
     role: 'group',
     'aria-label': i18n.graphScopeAria,
     children: [
-      // Same order as kanban-graph's MODES, so the control reads identically in both
-      // plugins; the DEFAULT stays `all` (see SCOPES in graph-core).
-      item('running-lineage', i18n.graphScopeRunning),
+      item('running', i18n.graphScopeRunning),
+      item('blocked', i18n.graphScopeBlocked),
       item('open', i18n.graphScopeOpen),
-      item('all', i18n.graphScopeAll)
+      item('all', i18n.graphScopeAll),
+      value !== 'all' && onLineageChange
+        ? jsx('button', {
+            type: 'button',
+            role: 'switch',
+            'aria-checked': lineage ? 'true' : 'false',
+            onClick: () => onLineageChange(!lineage),
+            title: i18n.graphScopeLineageHint,
+            'data-scope-lineage': lineage ? 'on' : 'off',
+            className: cn(
+              'inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0 whitespace-nowrap',
+              lineage
+                ? 'bg-(--ui-accent)/15 text-(--ui-accent) font-medium'
+                : 'bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)'
+            ),
+            children: [jsx('span', { key: 'sign', children: lineage ? '−' : '+' }), jsx('span', { key: 'label', children: i18n.graphScopeLineage })]
+          })
+        : null
     ]
   })
 }
@@ -3852,13 +3875,24 @@ export function KanbanGanttPage() {
     setArrange(next)
     writePref('arrange', next)
   }
+  // The scope, and the lineage modifier that widens it. A preference stored before the scopes were
+  // split — `running-lineage` — is read as `running` with the modifier on, so a reader who chose
+  // that combination keeps their view instead of being silently moved to All.
   const [graphScope, setGraphScope] = useState(() => {
     const s = readPref('graphScope')
-    return ['all', 'open', 'running-lineage'].includes(s) ? s : 'all'
+    if (s === 'running-lineage') return 'running'
+    return SCOPES.includes(s) ? s : 'all'
   })
+  const [graphLineage, setGraphLineage] = useState(
+    () => readPref('graphScope') === 'running-lineage' || readPref('graphLineage') === '1'
+  )
   const handleGraphScope = next => {
     setGraphScope(next)
     writePref('graphScope', next)
+  }
+  const handleGraphLineage = next => {
+    setGraphLineage(next)
+    writePref('graphLineage', next ? '1' : '0')
   }
   // The selected period shortcut, in seconds (null = the view is the reader's).
   // Decided from storage ALONE, in the initialiser: the stored period is only honoured
@@ -3948,7 +3982,7 @@ export function KanbanGanttPage() {
     // as well would make that count read zero. Same function in both places, so the three
     // views cannot disagree about what "in flight" means.
     if (viewMode !== 'graph' && graphScope !== 'all') {
-      const keep = scopeIds(graphNodes(visible), graphEdges(visible), graphScope)
+      const keep = scopeIds(graphNodes(visible), graphEdges(visible), graphScope, { lineage: graphLineage })
       visible = visible.filter(t => keep.has(t.id))
     }
     // The fold state is applied HERE, after every filter: `buildRows` stays the
@@ -4660,7 +4694,7 @@ export function KanbanGanttPage() {
                     ]
                   })
                 : null,
-              jsx(ScopeToggle, { value: graphScope, onChange: handleGraphScope }),
+              jsx(ScopeToggle, { value: graphScope, onChange: handleGraphScope, lineage: graphLineage, onLineageChange: handleGraphLineage }),
               jsx(FilterDropdown, {
                 assignees: derived?.allAssignees || [],
                 selectedAssignees,
@@ -4917,6 +4951,7 @@ export function KanbanGanttPage() {
             zoom: graphZoomPct / 100,
             onZoom: factor => handleGraphZoomPct(factor * 100),
             scope: graphScope,
+            lineage: graphLineage,
             onScopeChange: handleGraphScope,
             selectedId: openTaskId,
             // The board name earns its place only when several boards share the view, the

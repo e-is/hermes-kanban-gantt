@@ -237,7 +237,10 @@ var GANTT_LOCALES = {
     viewGraph: "Graph",
     graphScopeAll: "All",
     graphScopeOpen: "Open",
-    graphScopeRunning: "Running + lineage",
+    graphScopeRunning: "Running",
+    graphScopeBlocked: "Blocked",
+    graphScopeLineage: "Lineage",
+    graphScopeLineageHint: "Also show what leads to these tasks, and what follows them",
     graphScopeAria: "Which tasks are shown",
     scopeSection: "Scope",
     scopeHides: (label) => `Hidden by the scope “${label}” — click to widen it`,
@@ -500,7 +503,10 @@ var GANTT_LOCALES = {
     viewGraph: "Graphe",
     graphScopeAll: "Tous",
     graphScopeOpen: "Ouverts",
-    graphScopeRunning: "En cours + lignée",
+    graphScopeRunning: "En cours",
+    graphScopeBlocked: "Bloqués",
+    graphScopeLineage: "Lignée",
+    graphScopeLineageHint: "Afficher aussi ce qui mène à ces tâches, et ce qui en découle",
     graphScopeAria: "Quelles tâches sont affichées",
     scopeSection: "Périmètre",
     scopeHides: (label) => `Masqué par le périmètre « ${label} » — cliquer pour l’élargir`,
@@ -762,7 +768,10 @@ var GANTT_LOCALES = {
     viewGraph: "关系图",
     graphScopeAll: "全部",
     graphScopeOpen: "未完成",
-    graphScopeRunning: "进行中 + 血缘",
+    graphScopeRunning: "进行中",
+    graphScopeBlocked: "已阻塞",
+    graphScopeLineage: "血缘",
+    graphScopeLineageHint: "同时显示这些任务的上游与下游",
     graphScopeAria: "显示哪些任务",
     scopeSection: "范围",
     scopeHides: (label) => `被范围“${label}”隐藏 — 点击以扩大范围`,
@@ -2726,21 +2735,28 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     quiet
   };
 }
-var SCOPES = ["running-lineage", "open", "all"];
-function scopeIds(nodes, edges, scope) {
+var SCOPES = ["running", "blocked", "open", "all"];
+function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, status: void 0 } : n);
-  if (scope === "open") {
-    return new Set(list.filter((n) => n.status !== "done" && n.status !== "archived").map((n) => n.id));
+  const ids = new Set(list.map((n) => n.id));
+  let keep;
+  if (scope === "running") {
+    keep = new Set(list.filter((n) => n.status === "running").map((n) => n.id));
+  } else if (scope === "blocked") {
+    keep = new Set(list.filter((n) => n.status === "blocked").map((n) => n.id));
+  } else if (scope === "open") {
+    keep = new Set(list.filter((n) => n.status !== "done" && n.status !== "archived").map((n) => n.id));
+  } else {
+    return ids;
   }
-  if (scope !== "running-lineage") return new Set(list.map((n) => n.id));
-  const running = list.filter((n) => n.status === "running").map((n) => n.id);
-  const keep = new Set(running);
-  for (const id of running) {
-    const { upstream, downstream } = lineage(list, edges, id);
-    for (const u of upstream) keep.add(u);
-    for (const d of downstream) keep.add(d);
+  if (!withLineage) return keep;
+  const grown = new Set(keep);
+  for (const id of keep) {
+    const { upstream, downstream } = lineage(list, (edges || []).filter((e) => ids.has(e.from) && ids.has(e.to)), id);
+    for (const u of upstream) grown.add(u);
+    for (const d of downstream) grown.add(d);
   }
-  return keep;
+  return grown;
 }
 
 // src/main.ts
@@ -3344,7 +3360,7 @@ function FilterDropdown({
   const i18n = useGanttI18n();
   const active = selectedAssignees.size > 0 || disabledStatuses.size > 0 || showArchived || onlyAttachments || scope !== "all";
   const hiddenByScope = (status) => scope === "open" ? status === "done" || status === "archived" : false;
-  const scopeLabel = { "running-lineage": i18n.graphScopeRunning, open: i18n.graphScopeOpen, all: i18n.graphScopeAll };
+  const scopeLabel = { running: i18n.graphScopeRunning, blocked: i18n.graphScopeBlocked, open: i18n.graphScopeOpen, all: i18n.graphScopeAll };
   return jsxs6(DropdownMenu3, {
     children: [
       jsx6(DropdownMenuTrigger3, {
@@ -3439,7 +3455,7 @@ function FilterDropdown({
 }
 function Legend({ disabledStatuses, onToggleStatus, scope, onScopeChange }) {
   const i18n = useGanttI18n();
-  const scopeLabel = { "running-lineage": i18n.graphScopeRunning, open: i18n.graphScopeOpen, all: i18n.graphScopeAll };
+  const scopeLabel = { running: i18n.graphScopeRunning, blocked: i18n.graphScopeBlocked, open: i18n.graphScopeOpen, all: i18n.graphScopeAll };
   const item = (statusKey, color, txt) => {
     const byScope = scope === "open" && (statusKey === "done" || statusKey === "archived");
     const isExcluded = byScope || (disabledStatuses ? disabledStatuses.has(statusKey) : false);
@@ -3623,6 +3639,9 @@ function GraphView({
   zoom = 1,
   onZoom,
   scope = "all",
+  /** Widen whatever the scope selected to its upstream and downstream closure. Ignored on `all`,
+   *  where the closure of everything is everything — the control hides it there for that reason. */
+  lineage: lineage3 = false,
   onScopeChange,
   selectedId = null,
   showBoardBadge = false,
@@ -3689,9 +3708,9 @@ function GraphView({
   const nodes = useMemo2(() => graphNodes(tasks), [tasks]);
   const edges = useMemo2(() => graphEdges(tasks), [tasks]);
   const shown = useMemo2(() => {
-    const keep = scopeIds(nodes, edges, scope);
+    const keep = scopeIds(nodes, edges, scope, { lineage: lineage3 });
     return nodes.filter((n) => keep.has(n.id));
-  }, [nodes, edges, scope]);
+  }, [nodes, edges, scope, lineage3]);
   const grouping = showBoardBadge;
   const nodeH = tallCards ? NODE_H + 34 : NODE_H;
   const nodeW = tallCards ? NODE_W + 48 : NODE_W;
@@ -3701,7 +3720,7 @@ function GraphView({
   );
   const lin = useMemo2(() => {
     if (!selectedId || !shown.some((n) => n.id === selectedId)) return null;
-    const { upstream, downstream } = lineage(shown, edges, selectedId);
+    const { upstream, downstream } = lineage3(shown, edges, selectedId);
     return { up: upstream, down: downstream };
   }, [shown, edges, selectedId]);
   const hiddenByScope = nodes.length - shown.length;
@@ -4514,7 +4533,7 @@ function GraphView({
     ]
   });
 }
-function ScopeToggle({ value, onChange }) {
+function ScopeToggle({ value, onChange, lineage: lineage3 = false, onLineageChange }) {
   const i18n = useGanttI18n();
   const item = (id, label) => jsx6("button", {
     type: "button",
@@ -4532,11 +4551,23 @@ function ScopeToggle({ value, onChange }) {
     role: "group",
     "aria-label": i18n.graphScopeAria,
     children: [
-      // Same order as kanban-graph's MODES, so the control reads identically in both
-      // plugins; the DEFAULT stays `all` (see SCOPES in graph-core).
-      item("running-lineage", i18n.graphScopeRunning),
+      item("running", i18n.graphScopeRunning),
+      item("blocked", i18n.graphScopeBlocked),
       item("open", i18n.graphScopeOpen),
-      item("all", i18n.graphScopeAll)
+      item("all", i18n.graphScopeAll),
+      value !== "all" && onLineageChange ? jsx6("button", {
+        type: "button",
+        role: "switch",
+        "aria-checked": lineage3 ? "true" : "false",
+        onClick: () => onLineageChange(!lineage3),
+        title: i18n.graphScopeLineageHint,
+        "data-scope-lineage": lineage3 ? "on" : "off",
+        className: cn3(
+          "inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0 whitespace-nowrap",
+          lineage3 ? "bg-(--ui-accent)/15 text-(--ui-accent) font-medium" : "bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)"
+        ),
+        children: [jsx6("span", { key: "sign", children: lineage3 ? "−" : "+" }), jsx6("span", { key: "label", children: i18n.graphScopeLineage })]
+      }) : null
     ]
   });
 }
@@ -5932,11 +5963,19 @@ function KanbanGanttPage() {
   };
   const [graphScope, setGraphScope] = useState4(() => {
     const s = readPref("graphScope");
-    return ["all", "open", "running-lineage"].includes(s) ? s : "all";
+    if (s === "running-lineage") return "running";
+    return SCOPES.includes(s) ? s : "all";
   });
+  const [graphLineage, setGraphLineage] = useState4(
+    () => readPref("graphScope") === "running-lineage" || readPref("graphLineage") === "1"
+  );
   const handleGraphScope = (next) => {
     setGraphScope(next);
     writePref("graphScope", next);
+  };
+  const handleGraphLineage = (next) => {
+    setGraphLineage(next);
+    writePref("graphLineage", next ? "1" : "0");
   };
   const [period, setPeriod] = useState4(() => {
     const span = Number(readPref("period"));
@@ -6006,7 +6045,7 @@ function KanbanGanttPage() {
     }
     visible = visible.filter((t) => matchesSearch(t, search));
     if (viewMode !== "graph" && graphScope !== "all") {
-      const keep = scopeIds(graphNodes(visible), graphEdges(visible), graphScope);
+      const keep = scopeIds(graphNodes(visible), graphEdges(visible), graphScope, { lineage: graphLineage });
       visible = visible.filter((t) => keep.has(t.id));
     }
     const rows2 = treeRows(visible, {
@@ -6553,7 +6592,7 @@ function KanbanGanttPage() {
                       jsx6("span", { children: `${blockedCount}` })
                     ]
                   }) : null,
-                  jsx6(ScopeToggle, { value: graphScope, onChange: handleGraphScope }),
+                  jsx6(ScopeToggle, { value: graphScope, onChange: handleGraphScope, lineage: graphLineage, onLineageChange: handleGraphLineage }),
                   jsx6(FilterDropdown, {
                     assignees: derived?.allAssignees || [],
                     selectedAssignees,
@@ -6787,6 +6826,7 @@ function KanbanGanttPage() {
             zoom: graphZoomPct / 100,
             onZoom: (factor) => handleGraphZoomPct(factor * 100),
             scope: graphScope,
+            lineage: graphLineage,
             onScopeChange: handleGraphScope,
             selectedId: openTaskId,
             // The board name earns its place only when several boards share the view, the

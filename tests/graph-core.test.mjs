@@ -458,9 +458,83 @@ test('one node with 200 parents and another with 200 children still lays out', (
 
 // ── quick scopes ────────────────────────────────────────────────────────────
 
-test('the scope list is exactly the three the segmented control offers', () => {
-  // Their order, so the control reads the same in both plugins.
-  assert.deepEqual(SCOPES, ['running-lineage', 'open', 'all'])
+test('the scope list is exactly the four the segmented control offers', () => {
+  // Running and blocked are single statuses; lineage is a modifier on top of the chosen scope,
+  // which is why it is a separate control rather than a fifth scope.
+  assert.deepEqual(SCOPES, ['running', 'blocked', 'open', 'all'])
+})
+
+test('Running and Blocked select by status, Open drops done and archived, All keeps everything', () => {
+  const nodes = [
+    { id: 'run', status: 'running' }, { id: 'blk', status: 'blocked' },
+    { id: 'todo', status: 'todo' }, { id: 'done', status: 'done' }
+  ]
+  const ids = s => [...scopeIds(nodes, [], s)].sort()
+  assert.deepEqual(ids('running'), ['run'])
+  assert.deepEqual(ids('blocked'), ['blk'])
+  assert.deepEqual(ids('open'), ['blk', 'run', 'todo'])
+  assert.deepEqual(ids('all'), ['blk', 'done', 'run', 'todo'])
+})
+
+test('lineage grows a scope to the upstream and downstream closure, and All ignores it', () => {
+  // a -> b -> c, with b running: the closure of {b} is all three.
+  const nodes = [{ id: 'a' }, { id: 'b', status: 'running' }, { id: 'c' }]
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }]
+  assert.deepEqual([...scopeIds(nodes, edges, 'running')], ['b'])
+  assert.deepEqual([...scopeIds(nodes, edges, 'running', { lineage: true })].sort(), ['a', 'b', 'c'])
+  // The closure of everything is everything, so the modifier is a no-op on All — which is why the
+  // control hides it there instead of offering a switch that cannot do anything.
+  assert.deepEqual([...scopeIds(nodes, edges, 'all', { lineage: true })].sort(), ['a', 'b', 'c'])
+})
+
+test('lineage never drags in a task the graph does not hold', () => {
+  // `b` is in the graph, so the closure legitimately reaches it; `ghost` is not, and an edge
+  // pointing at it must not widen the selection to an id that has no card to draw.
+  const nodes = [{ id: 'a', status: 'blocked' }, { id: 'b', status: 'todo' }]
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'ghost' }]
+  const kept = scopeIds(nodes, edges, 'blocked', { lineage: true })
+  assert.deepEqual([...kept].sort(), ['a', 'b'])
+  assert.equal(kept.has('ghost'), false)
+})
+
+// ── alignment ───────────────────────────────────────────────────────────────
+
+// Every card of a row shares one top edge and one height. A drawing whose neighbours sit a pixel
+// apart reads as sloppy, and the reader cannot tell a rendering artefact from a real ordering — so
+// the invariant is asserted where the coordinates are computed, not left to the eye.
+test('in a top-down drawing every card of a row shares its top edge and its height', () => {
+  const nodes = graphNodes(['a', 'b', 'c', 'd', 'solo'].map(id => ({ id })))
+  const edges = graphEdges([
+    { id: 'a', parents: [] }, { id: 'b', parents: ['a'] }, { id: 'c', parents: ['a'] },
+    { id: 'd', parents: ['b', 'c'] }, { id: 'solo', parents: [] }
+  ])
+  const { nodes: placed } = layoutGraph(nodes, edges, { arrangement: 'down' })
+  const rows = new Map()
+  for (const b of placed) {
+    if (!rows.has(b.y)) rows.set(b.y, [])
+    rows.get(b.y).push(b)
+  }
+  assert.ok(rows.size > 1, 'the fixture draws more than one row')
+  for (const [top, row] of rows) {
+    assert.equal(new Set(row.map(b => b.y)).size, 1, `tops differ within the row at y=${top}`)
+    assert.equal(new Set(row.map(b => b.h)).size, 1, `heights differ within the row at y=${top}`)
+  }
+})
+
+test('in a left-to-right drawing every card of a column shares its left edge', () => {
+  const nodes = graphNodes(['a', 'b', 'c'].map(id => ({ id })))
+  const edges = graphEdges([
+    { id: 'a', parents: [] }, { id: 'b', parents: ['a'] }, { id: 'c', parents: ['a'] }
+  ])
+  const { nodes: placed } = layoutGraph(nodes, edges, { arrangement: 'flow' })
+  const cols = new Map()
+  for (const b of placed) {
+    if (!cols.has(b.x)) cols.set(b.x, [])
+    cols.get(b.x).push(b)
+  }
+  for (const [left, col] of cols) {
+    assert.equal(new Set(col.map(b => b.x)).size, 1, `lefts differ within the column at x=${left}`)
+  }
 })
 
 test('Open drops done and archived; All keeps everything', () => {
@@ -480,12 +554,17 @@ test('Running + lineage keeps the running tasks AND their whole lineage', () => 
     { id: 'other', status: 'todo' }
   ]
   const edges = [{ from: 'root', to: 'mid' }, { from: 'mid', to: 'leaf' }]
-  assert.deepEqual([...scopeIds(nodes, edges, 'running-lineage')].sort(), ['leaf', 'mid', 'root'])
+  // The scope alone selects the running work; the lineage modifier adds what leads to it and what
+  // follows — never the unrelated task.
+  assert.deepEqual([...scopeIds(nodes, edges, 'running')].sort(), ['mid'])
+  assert.deepEqual([...scopeIds(nodes, edges, 'running', { lineage: true })].sort(), ['leaf', 'mid', 'root'])
 })
 
-test('Running + lineage on a board with nothing running keeps nothing (an honest empty state)', () => {
+test('a scope that selects nothing keeps nothing, with or without lineage (an honest empty state)', () => {
   const nodes = [{ id: 'a', status: 'todo' }, { id: 'b', status: 'done' }]
-  assert.equal(scopeIds(nodes, [], 'running-lineage').size, 0)
+  assert.equal(scopeIds(nodes, [], 'running').size, 0)
+  assert.equal(scopeIds(nodes, [], 'running', { lineage: true }).size, 0)
+  assert.equal(scopeIds(nodes, [], 'blocked', { lineage: true }).size, 0)
 })
 
 test('nearestInHalo: the nearest card within the halo, measured to the edges', () => {

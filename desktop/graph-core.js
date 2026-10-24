@@ -525,21 +525,28 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     quiet
   };
 }
-var SCOPES = ["running-lineage", "open", "all"];
-function scopeIds(nodes, edges, scope) {
+var SCOPES = ["running", "blocked", "open", "all"];
+function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, status: void 0 } : n);
-  if (scope === "open") {
-    return new Set(list.filter((n) => n.status !== "done" && n.status !== "archived").map((n) => n.id));
+  const ids = new Set(list.map((n) => n.id));
+  let keep;
+  if (scope === "running") {
+    keep = new Set(list.filter((n) => n.status === "running").map((n) => n.id));
+  } else if (scope === "blocked") {
+    keep = new Set(list.filter((n) => n.status === "blocked").map((n) => n.id));
+  } else if (scope === "open") {
+    keep = new Set(list.filter((n) => n.status !== "done" && n.status !== "archived").map((n) => n.id));
+  } else {
+    return ids;
   }
-  if (scope !== "running-lineage") return new Set(list.map((n) => n.id));
-  const running = list.filter((n) => n.status === "running").map((n) => n.id);
-  const keep = new Set(running);
-  for (const id of running) {
-    const { upstream, downstream } = lineage(list, edges, id);
-    for (const u of upstream) keep.add(u);
-    for (const d of downstream) keep.add(d);
+  if (!withLineage) return keep;
+  const grown = new Set(keep);
+  for (const id of keep) {
+    const { upstream, downstream } = lineage(list, (edges || []).filter((e) => ids.has(e.from) && ids.has(e.to)), id);
+    for (const u of upstream) grown.add(u);
+    for (const d of downstream) grown.add(d);
   }
-  return keep;
+  return grown;
 }
 export {
   NODE_GAP,

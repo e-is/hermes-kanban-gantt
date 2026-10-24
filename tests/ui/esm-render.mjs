@@ -438,8 +438,8 @@ if (pageNode) {
   // reader looks for it where the other narrowing controls are.
   check(listFlat.indexOf('"aria-label":"graphScopeAria"') < listFlat.indexOf('"aria-label":"filters"'),
     'the scopes come before the funnel, among the filters')
-  check(['graphScopeRunning', 'graphScopeOpen', 'graphScopeAll'].every(k => listFlat.includes(k)),
-    'all three scopes are offered in list view')
+  check(['graphScopeRunning', 'graphScopeBlocked', 'graphScopeOpen', 'graphScopeAll'].every(k => listFlat.includes(k)),
+    'all four scopes are offered in list view')
   globalThis.__kgView = 'timeline'
   const timelineFlat = JSON.stringify(page.render())
   check(timelineFlat.includes('"aria-label":"graphScopeAria"'), 'timeline view carries the quick scopes too')
@@ -467,7 +467,7 @@ if (typeof pluginModule.GraphView === 'function') {
     mk('c', { status: 'todo', parents: [{ id: 'b' }] })
   ]
   // i18n keys that are plain strings (the rest are the counting functions).
-  const PLAIN = new Set(['nothingToDisplay', 'noTasksMatch', 'viewGraph', 'graphNoActivity', 'graphScopeAria', 'graphScopeAll', 'graphScopeOpen', 'graphScopeRunning'])
+  const PLAIN = new Set(['nothingToDisplay', 'noTasksMatch', 'viewGraph', 'graphNoActivity', 'graphScopeAria', 'graphScopeAll', 'graphScopeOpen', 'graphScopeRunning', 'graphScopeBlocked', 'graphScopeLineage'])
   const gi18n = new Proxy({}, {
     get: (_t, key) => (PLAIN.has(String(key))
       ? String(key)
@@ -513,17 +513,20 @@ if (typeof pluginModule.GraphView === 'function') {
     'each frame names its board at the top-left, through the label resolver')
   check(!framed.includes('"title":"alpha"'), 'no per-card board badge in the frame layout')
 
-  // Scopes: Open drops the done task; Running + lineage keeps the running one AND its
-  // ancestry and descendants.
+  // Scopes: Open drops the done task; Running alone keeps only the running one, and the lineage
+  // modifier is what adds its ancestry and descendants — the two are independent controls.
   const open = JSON.stringify(renderGraph({ scope: 'open' }))
   check((open.match(/"data-graph-node"/g) || []).length === 2, 'the Open scope drops the done task')
-  const running = JSON.stringify(renderGraph({ scope: 'running-lineage' }))
+  const runningOnly = JSON.stringify(renderGraph({ scope: 'running' }))
+  check((runningOnly.match(/"data-graph-node"/g) || []).length === 1,
+    'Running alone keeps only the running task')
+  const running = JSON.stringify(renderGraph({ scope: 'running', lineage: true }))
   check((running.match(/"data-graph-node"/g) || []).length === 3,
     'Running + lineage keeps the running task with its whole lineage')
 
   // A board with nothing running says so honestly rather than drawing an empty frame.
   const nothingRunning = JSON.stringify(pluginModule.GraphView({
-    tasks: [mk('x', { status: 'todo' })], i18n: gi18n, now, scope: 'running-lineage'
+    tasks: [mk('x', { status: 'todo' })], i18n: gi18n, now, scope: 'running'
   }))
   check(nothingRunning.includes('nothingToDisplay'), 'an empty scope renders the empty state, not a bare canvas')
 }

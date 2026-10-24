@@ -739,25 +739,39 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   };
 }
 
-/** The quick scopes, in the order the segmented control shows them — the same order
- *  `kanban-graph` uses (Running + lineage, Open, All), so a reader who knows one plugin
- *  finds the same control in the other. Their DEFAULT is `running`; ours stays `all`,
- *  because a first visit to a board where nothing runs must not open on an empty canvas. */
-export const SCOPES = ['running-lineage', 'open', 'all'];
+/** The quick scopes, in the order the segmented control shows them. Their DEFAULT is `all`,
+ *  because a first visit to a board where nothing runs must not open on an empty canvas.
+ *
+ *  `running` and `blocked` are single statuses; `lineage` is not a scope but a modifier on top of
+ *  whichever scope is chosen (see `scopeIds`), which is why the two are independent controls: a
+ *  reader who wants "blocked, and everything that leads to or follows it" was previously stuck
+ *  with a scope that only knew about running work. */
+export const SCOPES = ['running', 'blocked', 'open', 'all']
 
-/** Which ids a scope keeps. Pure, so the footer's "N hidden" is assertable. */
-export function scopeIds(nodes, edges, scope) {
+/** Which ids a scope keeps. Pure, so the footer's "N hidden" is assertable.
+ *
+ *  With `lineage`, the kept set grows to the full upstream and downstream closure of what the scope
+ *  selected — the same closure a click on a card highlights, applied to the whole selection. `all`
+ *  ignores it: the closure of everything is everything. */
+export function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
   const list = (nodes || []).map(n => (typeof n === 'string' ? { id: n, status: undefined } : n));
-  if (scope === 'open') {
-    return new Set(list.filter(n => n.status !== 'done' && n.status !== 'archived').map(n => n.id));
+  const ids = new Set(list.map(n => n.id));
+  let keep;
+  if (scope === 'running') {
+    keep = new Set(list.filter(n => n.status === 'running').map(n => n.id));
+  } else if (scope === 'blocked') {
+    keep = new Set(list.filter(n => n.status === 'blocked').map(n => n.id));
+  } else if (scope === 'open') {
+    keep = new Set(list.filter(n => n.status !== 'done' && n.status !== 'archived').map(n => n.id));
+  } else {
+    return ids;
   }
-  if (scope !== 'running-lineage') return new Set(list.map(n => n.id));
-  const running = list.filter(n => n.status === 'running').map(n => n.id);
-  const keep = new Set(running);
-  for (const id of running) {
-    const { upstream, downstream } = lineage(list, edges, id);
-    for (const u of upstream) keep.add(u);
-    for (const d of downstream) keep.add(d);
+  if (!withLineage) return keep;
+  const grown = new Set(keep);
+  for (const id of keep) {
+    const { upstream, downstream } = lineage(list, (edges || []).filter(e => ids.has(e.from) && ids.has(e.to)), id);
+    for (const u of upstream) grown.add(u);
+    for (const d of downstream) grown.add(d);
   }
-  return keep;
+  return grown;
 }
