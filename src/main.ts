@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { graphNodes, graphEdges, layoutGraph, lineage, scopeIds, boardScope, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
+import { graphNodes, graphEdges, layoutGraph, lineage as taskLineage, scopeIds, boardScope, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
 import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -1270,7 +1270,7 @@ export function GraphView({
   )
   const lin = useMemo(() => {
     if (!selectedId || !shown.some(n => n.id === selectedId)) return null
-    const { upstream, downstream } = lineage(shown, edges, selectedId)
+    const { upstream, downstream } = taskLineage(shown, edges, selectedId)
     return { up: upstream, down: downstream }
   }, [shown, edges, selectedId])
 

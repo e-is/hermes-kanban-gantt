@@ -559,6 +559,20 @@ if (typeof pluginModule.GraphView === 'function') {
   const withoutCount = JSON.stringify(renderGraph({ scope: 'all' }))
   check(!withoutCount.includes('graphHiddenByScope'),
     'and stays quiet when the page tells it nothing')
+
+  // Selecting a card lights its lineage: the one path that CALLS the core's `lineage` from inside
+  // the component — where a boolean prop of the same name shadows it, which compiles (esbuild does
+  // not typecheck) and then fails at the first click with "lineage is not a function".
+  let selected = ''
+  try {
+    selected = JSON.stringify(renderGraph({ selectedId: 'b' }))
+  } catch (err) {
+    check(false, 'selecting a card in the graph threw: ' + (err && err.message))
+  }
+  if (selected) {
+    check((selected.match(/"data-graph-node"/g) || []).length === 3,
+      'a selection keeps every card, dimming the ones outside the lineage')
+  }
 }
 
 

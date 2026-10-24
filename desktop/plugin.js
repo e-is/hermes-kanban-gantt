@@ -2758,11 +2758,11 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     quiet
   };
 }
-function boardScope(tasks, scope, { lineage: lineage3 = false } = {}) {
+function boardScope(tasks, scope, { lineage: lineage2 = false } = {}) {
   const list = tasks || [];
-  const ids = scopeIds(graphNodes(list), graphEdges(list), scope, { lineage: lineage3 });
+  const ids = scopeIds(graphNodes(list), graphEdges(list), scope, { lineage: lineage2 });
   const active = scope !== "all";
-  return { ids, narrows: active, widens: active && Boolean(lineage3) };
+  return { ids, narrows: active, widens: active && Boolean(lineage2) };
 }
 var SCOPES = ["running", "blocked", "open", "all"];
 function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
@@ -3670,7 +3670,7 @@ function GraphView({
   scope = "all",
   /** Widen whatever the scope selected to its upstream and downstream closure. Ignored on `all`,
    *  where the closure of everything is everything — the control hides it there for that reason. */
-  lineage: lineage3 = false,
+  lineage: lineage2 = false,
   /** How many board tasks the scope is holding back. The page computes it over the WHOLE board;
    *  without it the graph can only compare its own nodes, which is a different number once the
    *  scope is applied before the graph is handed anything. */
@@ -3741,9 +3741,9 @@ function GraphView({
   const nodes = useMemo2(() => graphNodes(tasks), [tasks]);
   const edges = useMemo2(() => graphEdges(tasks), [tasks]);
   const shown = useMemo2(() => {
-    const keep = scopeIds(nodes, edges, scope, { lineage: lineage3 });
+    const keep = scopeIds(nodes, edges, scope, { lineage: lineage2 });
     return nodes.filter((n) => keep.has(n.id));
-  }, [nodes, edges, scope, lineage3]);
+  }, [nodes, edges, scope, lineage2]);
   const grouping = showBoardBadge;
   const nodeH = tallCards ? NODE_H + 34 : NODE_H;
   const nodeW = tallCards ? NODE_W + 48 : NODE_W;
@@ -3753,7 +3753,7 @@ function GraphView({
   );
   const lin = useMemo2(() => {
     if (!selectedId || !shown.some((n) => n.id === selectedId)) return null;
-    const { upstream, downstream } = lineage3(shown, edges, selectedId);
+    const { upstream, downstream } = lineage(shown, edges, selectedId);
     return { up: upstream, down: downstream };
   }, [shown, edges, selectedId]);
   const hiddenByScope = scopeHidden === null ? nodes.length - shown.length : scopeHidden;
@@ -4566,7 +4566,7 @@ function GraphView({
     ]
   });
 }
-function ScopeToggle({ value, onChange, lineage: lineage3 = false, onLineageChange }) {
+function ScopeToggle({ value, onChange, lineage: lineage2 = false, onLineageChange }) {
   const i18n = useGanttI18n();
   const item = (id, label) => jsx6("button", {
     type: "button",
@@ -4591,15 +4591,15 @@ function ScopeToggle({ value, onChange, lineage: lineage3 = false, onLineageChan
       value !== "all" && onLineageChange ? jsx6("button", {
         type: "button",
         role: "switch",
-        "aria-checked": lineage3 ? "true" : "false",
-        onClick: () => onLineageChange(!lineage3),
+        "aria-checked": lineage2 ? "true" : "false",
+        onClick: () => onLineageChange(!lineage2),
         title: i18n.graphScopeLineageHint,
-        "data-scope-lineage": lineage3 ? "on" : "off",
+        "data-scope-lineage": lineage2 ? "on" : "off",
         className: cn3(
           "inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0 whitespace-nowrap",
-          lineage3 ? "bg-(--ui-accent)/15 text-(--ui-accent) font-medium" : "bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)"
+          lineage2 ? "bg-(--ui-accent)/15 text-(--ui-accent) font-medium" : "bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)"
         ),
-        children: [jsx6("span", { key: "sign", children: lineage3 ? "−" : "+" }), jsx6("span", { key: "label", children: i18n.graphScopeLineage })]
+        children: [jsx6("span", { key: "sign", children: lineage2 ? "−" : "+" }), jsx6("span", { key: "label", children: i18n.graphScopeLineage })]
       }) : null
     ]
   });
