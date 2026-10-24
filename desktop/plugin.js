@@ -2735,6 +2735,12 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     quiet
   };
 }
+function boardScope(tasks, scope, { lineage: lineage3 = false } = {}) {
+  const list = tasks || [];
+  const ids = scopeIds(graphNodes(list), graphEdges(list), scope, { lineage: lineage3 });
+  const active = scope !== "all";
+  return { ids, narrows: active, widens: active && Boolean(lineage3) };
+}
 var SCOPES = ["running", "blocked", "open", "all"];
 function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, status: void 0 } : n);
@@ -3642,6 +3648,10 @@ function GraphView({
   /** Widen whatever the scope selected to its upstream and downstream closure. Ignored on `all`,
    *  where the closure of everything is everything — the control hides it there for that reason. */
   lineage: lineage3 = false,
+  /** How many board tasks the scope is holding back. The page computes it over the WHOLE board;
+   *  without it the graph can only compare its own nodes, which is a different number once the
+   *  scope is applied before the graph is handed anything. */
+  scopeHidden = null,
   onScopeChange,
   selectedId = null,
   showBoardBadge = false,
@@ -3723,7 +3733,7 @@ function GraphView({
     const { upstream, downstream } = lineage3(shown, edges, selectedId);
     return { up: upstream, down: downstream };
   }, [shown, edges, selectedId]);
-  const hiddenByScope = nodes.length - shown.length;
+  const hiddenByScope = scopeHidden === null ? nodes.length - shown.length : scopeHidden;
   const groupTally = useMemo2(() => {
     const out = /* @__PURE__ */ new Map();
     const ORDER = ["triage", "todo", "scheduled", "ready", "running", "blocked", "review", "done", "archived"];
@@ -6044,9 +6054,14 @@ function KanbanGanttPage() {
       visible = visible.filter((t) => t.assignee && selectedAssignees.has(t.assignee));
     }
     visible = visible.filter((t) => matchesSearch(t, search));
-    if (viewMode !== "graph" && graphScope !== "all") {
-      const keep = scopeIds(graphNodes(visible), graphEdges(visible), graphScope, { lineage: graphLineage });
-      visible = visible.filter((t) => keep.has(t.id));
+    const scopeSel = boardScope(allTasks, graphScope, { lineage: graphLineage });
+    const scopeHidden = scopeSel.narrows ? allTasks.filter((t) => !scopeSel.ids.has(t.id) && (showArchived || !t.archived)).length : 0;
+    if (scopeSel.narrows) {
+      const kept = new Set(visible.filter((t) => scopeSel.ids.has(t.id)).map((t) => t.id));
+      if (scopeSel.widens) {
+        for (const t of allTasks) if (scopeSel.ids.has(t.id) && (showArchived || !t.archived)) kept.add(t.id);
+      }
+      visible = allTasks.filter((t) => kept.has(t.id));
     }
     const rows2 = treeRows(visible, {
       fold,
@@ -6055,8 +6070,8 @@ function KanbanGanttPage() {
     });
     const domain2 = computeDomain(visible);
     const allAssignees = Array.from(new Set(data.tasks.map((t) => t.assignee).filter(Boolean))).sort();
-    return { rows: rows2, domain: domain2, total: visible.length, tasks: visible, allAssignees };
-  }, [data, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope]);
+    return { rows: rows2, domain: domain2, total: visible.length, tasks: visible, allAssignees, scopeHidden };
+  }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage]);
   const handleToggleAll = () => {
     const parents = (derived?.rows || []).filter((r) => r.hasChildren);
     if (!parents.length) return;
@@ -6827,6 +6842,7 @@ function KanbanGanttPage() {
             onZoom: (factor) => handleGraphZoomPct(factor * 100),
             scope: graphScope,
             lineage: graphLineage,
+            scopeHidden: derived.scopeHidden,
             onScopeChange: handleGraphScope,
             selectedId: openTaskId,
             // The board name earns its place only when several boards share the view, the

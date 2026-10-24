@@ -79,11 +79,25 @@ const gantt = {
   total: 3
 }
 
+// A board for the lineage report, and only for it: a DONE ancestor, the RUNNING task it leads to,
+// and an unrelated task. Filtering the Done status out — which is what the reader did — leaves the
+// running task with no parent in the picture, so a closure read off the visible set has nothing to
+// widen and the modifier appears dead. Read off the whole board, it reaches the ancestor.
+const lineageBoard = {
+  tasks: [
+    { id: 'anc', title: 'ancestor of the running work', status: 'done', created_at: 1_799_000_000, archived: false },
+    { id: 'run', title: 'running child', status: 'running', parents: [{ id: 'anc' }], created_at: 1_799_000_000, archived: false },
+    { id: 'oth', title: 'unrelated task', status: 'todo', created_at: 1_799_000_000, archived: false }
+  ],
+  total: 3
+}
+
 // Query results injected into the generated stub module (the stub runs in a
 // separate module scope and cannot close over this file's variables).
 const stubQueryData = {
   'kanban-gantt|boards': boards,
-  'kanban-gantt|gantt': gantt
+  'kanban-gantt|gantt': gantt,
+  'kanban-gantt|lineage': lineageBoard
 }
 
 const useQueryStubSource = `const stubQueryData = ${JSON.stringify(stubQueryData)}
@@ -91,7 +105,9 @@ export const useQuery = options => {
   const key = options && Array.isArray(options.queryKey) ? options.queryKey.join('|') : ''
   let data
   if (key.includes('|boards')) data = stubQueryData['kanban-gantt|boards']
-  else if (key.includes('|gantt')) data = stubQueryData['kanban-gantt|gantt']
+  else if (key.includes('|gantt')) data = globalThis.__kgBoard === 'lineage'
+    ? stubQueryData['kanban-gantt|lineage']
+    : stubQueryData['kanban-gantt|gantt']
   return { data, isLoading: false, isError: false, error: null, refetch: async () => {} }
 }`
 
@@ -313,6 +329,11 @@ const ctx = {
     if (k === 'board') return 'sumaris-app'
     if (k === 'viewMode' && globalThis.__kgView) return globalThis.__kgView
     if (k === 'onlyAttachments' && globalThis.__kgOnlyAtt) return '1'
+    // The funnel and the quick scope are storage-driven too, so a test can put the reader in the
+    // state they reported: a status filtered out, a scope chosen, the lineage modifier on or off.
+    if (k === 'disabledStatuses' && globalThis.__kgDisabled) return globalThis.__kgDisabled
+    if (k === 'graphScope' && globalThis.__kgScope) return globalThis.__kgScope
+    if (k === 'graphLineage' && globalThis.__kgLineage) return globalThis.__kgLineage
     return fb
   }, set: () => {} },
   i18n: { register: () => {} },
@@ -529,8 +550,58 @@ if (typeof pluginModule.GraphView === 'function') {
     tasks: [mk('x', { status: 'todo' })], i18n: gi18n, now, scope: 'running'
   }))
   check(nothingRunning.includes('nothingToDisplay'), 'an empty scope renders the empty state, not a bare canvas')
+
+  // The footer's "N hidden by this scope" comes from the PAGE now — it counts it over the whole
+  // board, because the graph no longer receives the unfiltered set it used to compare against.
+  const withCount = JSON.stringify(renderGraph({ scope: 'all', scopeHidden: 1 }))
+  check(withCount.includes('graphHiddenByScope(1)'),
+    'the graph says how many tasks the scope holds back, when the page tells it')
+  const withoutCount = JSON.stringify(renderGraph({ scope: 'all' }))
+  check(!withoutCount.includes('graphHiddenByScope'),
+    'and stays quiet when the page tells it nothing')
 }
 
+
+// 4b) the lineage modifier, in ALL THREE modes.
+//
+// The report: with the Done status filtered out, turning lineage on added nothing in the list and
+// the timeline, while the graph made it look as though it worked (the graph lights a click's
+// lineage, so its ancestry was already visible). The cause was that all three paths computed the
+// closure on the set the other filters had already cut down — where the parent is gone and every
+// edge to it has been dropped as dangling — so the modifier had nothing left to widen.
+//
+// The fixture below is that reader's board: a done ancestor, the running task that depends on it,
+// and an unrelated task. The modifier must reach the ancestor in every mode, and must never widen
+// to the whole board.
+globalThis.__kgBoard = 'lineage'
+globalThis.__kgScope = 'running'
+globalThis.__kgDisabled = ['done']
+// Assert on the ROW MARKER, never on a title: a task's title can also appear in another component
+// (a picker, a relation row), and a test that matches prose would pass while the list was wrong.
+const markerOf = mode => (mode === 'graph' ? 'data-graph-node' : 'data-row-id')
+const has = (flat, mode, id) => flat.includes('"' + markerOf(mode) + '":"' + id + '"')
+const lineageByMode = {}
+for (const mode of ['list', 'timeline', 'graph']) {
+  globalThis.__kgView = mode
+  globalThis.__kgLineage = null
+  const off = JSON.stringify(page.render())
+  globalThis.__kgLineage = '1'
+  const on = JSON.stringify(page.render())
+  lineageByMode[mode] = { off, on }
+}
+for (const mode of ['list', 'timeline', 'graph']) {
+  const { off, on } = lineageByMode[mode]
+  check(has(on, mode, 'run'), mode + ': the task the scope selected is there')
+  check(!has(off, mode, 'anc'), mode + ': the filtered-out ancestor stays out while the modifier is off')
+  check(has(on, mode, 'anc'), mode + ': the lineage modifier brings the ancestor back')
+  check(!has(on, mode, 'oth'), mode + ': the modifier widens to the LINEAGE, never to the whole board')
+  check(!has(off, mode, 'oth'), mode + ': a scope narrows even without the modifier')
+}
+globalThis.__kgBoard = null
+globalThis.__kgScope = null
+globalThis.__kgDisabled = null
+globalThis.__kgLineage = null
+globalThis.__kgView = null
 
 // 4) titlebar chrome: switcher contributed to titleBar.center
 const nav = contributions.find(c => c.area === 'sidebar.nav')

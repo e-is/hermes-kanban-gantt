@@ -22,7 +22,7 @@ const core = await import(join(HERE, '..', 'desktop', 'graph-core.js'))
 
 const {
   graphNodes, graphEdges, dedupeEdges, edgesWithin, ranks, orderRanks, rankComparator,
-  reduceEdges, lineage, activityBuckets, activityMap, layoutGraph, scopeIds, SCOPES,
+  reduceEdges, lineage, activityBuckets, activityMap, layoutGraph, scopeIds, boardScope, SCOPES,
   nearestInHalo, arrangeRows, components, NODE_W, NODE_H, SPARK_BAND
 } = core
 
@@ -498,7 +498,6 @@ test('lineage never drags in a task the graph does not hold', () => {
 })
 
 // ── alignment ───────────────────────────────────────────────────────────────
-
 // Every card of a row shares one top edge and one height. A drawing whose neighbours sit a pixel
 // apart reads as sloppy, and the reader cannot tell a rendering artefact from a real ordering — so
 // the invariant is asserted where the coordinates are computed, not left to the eye.
@@ -565,6 +564,33 @@ test('a scope that selects nothing keeps nothing, with or without lineage (an ho
   assert.equal(scopeIds(nodes, [], 'running').size, 0)
   assert.equal(scopeIds(nodes, [], 'running', { lineage: true }).size, 0)
   assert.equal(scopeIds(nodes, [], 'blocked', { lineage: true }).size, 0)
+})
+
+test('boardScope reads the closure off the WHOLE board, not off what survived the funnel', () => {
+  // a (done) -> b (running) -> c (todo), plus an unrelated task. A view that has filtered "done"
+  // out hands `scopeIds` only {b, c} — and `graphEdges` drops a->b as dangling, so the closure it
+  // computes is empty and the lineage switch appears to do nothing. That was the bug: the modifier
+  // was being asked to widen a set from which the thing it widens to had already been removed.
+  const board = [
+    { id: 'a', status: 'done' },
+    { id: 'b', status: 'running', parents: [{ id: 'a' }] },
+    { id: 'c', status: 'todo', parents: [{ id: 'b' }] },
+    { id: 'other', status: 'todo' }
+  ]
+  const filtered = board.filter(t => t.status !== 'done')
+  // On the filtered set the running task still reaches its CHILD (both ends survive), but its
+  // parent is gone and the edge to it was dropped as dangling — which is precisely how the
+  // lineage switch came to do nothing.
+  assert.deepEqual([...boardScope(filtered, 'running', { lineage: true }).ids].sort(), ['b', 'c'])
+  // Told the whole board, the same call reaches the ancestry and the descendants.
+  assert.deepEqual([...boardScope(board, 'running', { lineage: true }).ids].sort(), ['a', 'b', 'c'])
+  // And it says what it is allowed to do, which is how a caller knows to ADD rather than intersect.
+  const scoped = boardScope(board, 'running', { lineage: true })
+  assert.equal(scoped.narrows, true)
+  assert.equal(scoped.widens, true)
+  assert.equal(boardScope(board, 'running', {}).widens, false)
+  assert.equal(boardScope(board, 'all', { lineage: true }).widens, false, 'All cannot be widened')
+  assert.equal(boardScope(board, 'all', {}).narrows, false, 'All narrows nothing')
 })
 
 test('nearestInHalo: the nearest card within the halo, measured to the edges', () => {

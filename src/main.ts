@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { graphNodes, graphEdges, layoutGraph, lineage, scopeIds, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
+import { graphNodes, graphEdges, layoutGraph, lineage, scopeIds, boardScope, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
 import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -1164,6 +1164,10 @@ export function GraphView({
   /** Widen whatever the scope selected to its upstream and downstream closure. Ignored on `all`,
    *  where the closure of everything is everything — the control hides it there for that reason. */
   lineage = false,
+  /** How many board tasks the scope is holding back. The page computes it over the WHOLE board;
+   *  without it the graph can only compare its own nodes, which is a different number once the
+   *  scope is applied before the graph is handed anything. */
+  scopeHidden = null,
   onScopeChange,
   selectedId = null,
   showBoardBadge = false,
@@ -1270,7 +1274,7 @@ export function GraphView({
     return { up: upstream, down: downstream }
   }, [shown, edges, selectedId])
 
-  const hiddenByScope = nodes.length - shown.length
+  const hiddenByScope = scopeHidden === null ? nodes.length - shown.length : scopeHidden
   // Which board the selected card belongs to: its frame is lit, so a reader in an all-boards
   // graph sees WHERE they are, not just which card.
   // What each frame says under its name: the board's own tally, in the board's own vocabulary
@@ -3977,13 +3981,25 @@ export function KanbanGanttPage() {
       visible = visible.filter(t => t.assignee && selectedAssignees.has(t.assignee))
     }
     visible = visible.filter(t => matchesSearch(t, search))
-    // The quick scope, in the modes that are not the graph: the graph narrows its own nodes
-    // (it needs the unfiltered set to say what the scope is holding back), so doing it here
-    // as well would make that count read zero. Same function in both places, so the three
-    // views cannot disagree about what "in flight" means.
-    if (viewMode !== 'graph' && graphScope !== 'all') {
-      const keep = scopeIds(graphNodes(visible), graphEdges(visible), graphScope, { lineage: graphLineage })
-      visible = visible.filter(t => keep.has(t.id))
+    // The quick scope and its lineage modifier, computed over the WHOLE board and in EVERY mode.
+    // The modifier exists to bring back what the other filters removed, so its closure cannot be
+    // read off `visible`: there the parents it should reach are already gone, and every edge that
+    // pointed at them has been dropped as dangling. Doing it here also removes the graph's old
+    // exception — which is exactly why the switch looked like it worked there and did nothing in
+    // the list and the timeline.
+    const scopeSel = boardScope(allTasks, graphScope, { lineage: graphLineage })
+    // What the scope is holding back, so the footer can say it in any mode.
+    const scopeHidden = scopeSel.narrows
+      ? allTasks.filter(t => !scopeSel.ids.has(t.id) && (showArchived || !t.archived)).length
+      : 0
+    if (scopeSel.narrows) {
+      const kept = new Set(visible.filter(t => scopeSel.ids.has(t.id)).map(t => t.id))
+      // A scope narrows what the funnel allows; the lineage modifier deliberately does not, since
+      // the ancestry is precisely what the funnel just removed. Board order holds either way.
+      if (scopeSel.widens) {
+        for (const t of allTasks) if (scopeSel.ids.has(t.id) && (showArchived || !t.archived)) kept.add(t.id)
+      }
+      visible = allTasks.filter(t => kept.has(t.id))
     }
     // The fold state is applied HERE, after every filter: `buildRows` stays the
     // flat projection the tests know, `treeRows` adds the explorer grammar (which
@@ -3995,8 +4011,8 @@ export function KanbanGanttPage() {
     })
     const domain = computeDomain(visible)
     const allAssignees = Array.from(new Set(data.tasks.map(t => t.assignee).filter(Boolean))).sort()
-    return { rows, domain, total: visible.length, tasks: visible, allAssignees }
-  }, [data, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope])
+    return { rows, domain, total: visible.length, tasks: visible, allAssignees, scopeHidden }
+  }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage])
 
   // The header toggle: if anything the user can collapse is open, collapse it all;
   // otherwise open everything. It walks the rows, so it acts on exactly the set
@@ -4952,6 +4968,7 @@ export function KanbanGanttPage() {
             onZoom: factor => handleGraphZoomPct(factor * 100),
             scope: graphScope,
             lineage: graphLineage,
+            scopeHidden: derived.scopeHidden,
             onScopeChange: handleGraphScope,
             selectedId: openTaskId,
             // The board name earns its place only when several boards share the view, the

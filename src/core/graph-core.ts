@@ -739,6 +739,25 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   };
 }
 
+/** The scope as a selection over a WHOLE board, plus what the two halves are allowed to do.
+ *
+ *  `scopeIds` answers "which ids does this scope keep, given these nodes and edges". This answers
+ *  the question a view actually asks: given every task of the board, which ones do the scope and
+ *  its lineage modifier select?
+ *
+ *  The distinction it returns matters because the two halves behave differently against the other
+ *  filters. A scope NARROWS what they allow. The lineage modifier does not: the tasks it brings
+ *  back are exactly the ones the other filters just removed, so a caller that intersects it with
+ *  them — or that computes the closure on an already-filtered set, where `graphEdges` has dropped
+ *  every edge whose other end is gone — will show the switch doing nothing. That was the bug.
+ */
+export function boardScope(tasks, scope, { lineage = false } = {}) {
+  const list = tasks || []
+  const ids = scopeIds(graphNodes(list), graphEdges(list), scope, { lineage })
+  const active = scope !== 'all'
+  return { ids, narrows: active, widens: active && Boolean(lineage) }
+}
+
 /** The quick scopes, in the order the segmented control shows them. Their DEFAULT is `all`,
  *  because a first visit to a board where nothing runs must not open on an empty canvas.
  *

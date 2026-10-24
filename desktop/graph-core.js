@@ -525,6 +525,12 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     quiet
   };
 }
+function boardScope(tasks, scope, { lineage: lineage2 = false } = {}) {
+  const list = tasks || [];
+  const ids = scopeIds(graphNodes(list), graphEdges(list), scope, { lineage: lineage2 });
+  const active = scope !== "all";
+  return { ids, narrows: active, widens: active && Boolean(lineage2) };
+}
 var SCOPES = ["running", "blocked", "open", "all"];
 function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, status: void 0 } : n);
@@ -559,6 +565,7 @@ export {
   activityBuckets,
   activityMap,
   arrangeRows,
+  boardScope,
   components,
   dedupeEdges,
   edgesWithin,
