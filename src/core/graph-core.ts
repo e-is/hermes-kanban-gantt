@@ -546,6 +546,45 @@ export function arrangeRows(list, rankMap, edges, by = 'status', { orderSweeps =
 }
 
 /**
+ * Move each parent onto its children, where there is room for it.
+ *
+ * The sweeps above aim for the same thing, but they aim in fractional slots and they are then
+ * pushed back into line by the row's own no-overlap constraint — so on a busy row a parent can
+ * end up a whole slot away from the children it leads to, and the link between them goes sideways
+ * instead of down. That is what a reader sees as a card that is not above its child.
+ *
+ * This pass runs after them, row by row, and moves a parent to the mean of its children's
+ * positions only when the spot is free AND the move does not cross either neighbour — so it can
+ * only ever remove a sideways link, never introduce an overlapping card or a crossed row. A parent
+ * with a single child therefore lands exactly on it, which is the case the eye judges first.
+ *
+ * Pure and separate from the sweeps so the property itself can be asserted.
+ */
+export function centreOverChildren(rows, pos, edges) {
+  const kids = new Map();
+  for (const e of edges || []) {
+    if (!kids.has(e.from)) kids.set(e.from, []);
+    kids.get(e.from).push(e.to);
+  }
+  const out = new Map(pos);
+  for (const row of rows || []) {
+    for (let i = 0; i < row.length; i++) {
+      const id = row[i].id;
+      const children = (kids.get(id) || []).filter(c => out.has(c));
+      if (!children.length) continue;
+      const want = children.reduce((sum, c) => sum + out.get(c), 0) / children.length;
+      if (!Number.isFinite(want)) continue;
+      const left = i > 0 ? out.get(row[i - 1].id) : -Infinity;
+      const right = i < row.length - 1 ? out.get(row[i + 1].id) : Infinity;
+      // Strictly between its neighbours: the row keeps its order, so no two links cross.
+      if (!(want > left + 1e-9 && want < right - 1e-9)) continue;
+      out.set(id, want);
+    }
+  }
+  return out;
+}
+
+/**
  * Undirected components over the edges, plus the isolated tasks.
  *
  * A board is rarely one tree: it holds a few trees and a tail of tasks nobody has linked yet.
@@ -655,6 +694,10 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     rows = arranged.rows;
     slots = arranged.slots;
   }
+
+  // The last word on where a card sits across its row: a parent goes over its children. Applied
+  // after the sweeps and before the coordinates are handed out, so every arrangement gets it.
+  slots = centreOverChildren(rows, slots, es)
 
   // `flow` and `status` walk the ranks along X and spread a rank along Y; `down` and `compact`
   // do the opposite.

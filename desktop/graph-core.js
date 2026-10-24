@@ -378,6 +378,28 @@ function arrangeRows(list, rankMap, edges, by = "status", { orderSweeps = 4, pla
   const lo = values.length ? Math.min(...values) : 0;
   return { rows, slots: new Map([...pos].map(([id, v]) => [id, v - lo])) };
 }
+function centreOverChildren(rows, pos, edges) {
+  const kids = /* @__PURE__ */ new Map();
+  for (const e of edges || []) {
+    if (!kids.has(e.from)) kids.set(e.from, []);
+    kids.get(e.from).push(e.to);
+  }
+  const out = new Map(pos);
+  for (const row of rows || []) {
+    for (let i = 0; i < row.length; i++) {
+      const id = row[i].id;
+      const children = (kids.get(id) || []).filter((c) => out.has(c));
+      if (!children.length) continue;
+      const want = children.reduce((sum, c) => sum + out.get(c), 0) / children.length;
+      if (!Number.isFinite(want)) continue;
+      const left = i > 0 ? out.get(row[i - 1].id) : -Infinity;
+      const right = i < row.length - 1 ? out.get(row[i + 1].id) : Infinity;
+      if (!(want > left + 1e-9 && want < right - 1e-9)) continue;
+      out.set(id, want);
+    }
+  }
+  return out;
+}
 function components(nodes, edges) {
   const ids = (nodes || []).map((n) => n.id);
   const root = new Map(ids.map((id) => [id, id]));
@@ -454,6 +476,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     rows = arranged.rows;
     slots = arranged.slots;
   }
+  slots = centreOverChildren(rows, slots, es);
   const crossAlongY = arrangement === "flow" || arrangement === "status";
   const rankStep = crossAlongY ? nodeW + RANK_GAP : nodeH + RANK_GAP;
   const crossStep = crossAlongY ? nodeH + NODE_GAP : nodeW + NODE_GAP;
@@ -566,6 +589,7 @@ export {
   activityMap,
   arrangeRows,
   boardScope,
+  centreOverChildren,
   components,
   dedupeEdges,
   edgesWithin,

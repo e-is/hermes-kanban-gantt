@@ -23,6 +23,7 @@ const core = await import(join(HERE, '..', 'desktop', 'graph-core.js'))
 const {
   graphNodes, graphEdges, dedupeEdges, edgesWithin, ranks, orderRanks, rankComparator,
   reduceEdges, lineage, activityBuckets, activityMap, layoutGraph, scopeIds, boardScope, SCOPES,
+  centreOverChildren,
   nearestInHalo, arrangeRows, components, NODE_W, NODE_H, SPARK_BAND
 } = core
 
@@ -591,6 +592,53 @@ test('boardScope reads the closure off the WHOLE board, not off what survived th
   assert.equal(boardScope(board, 'running', {}).widens, false)
   assert.equal(boardScope(board, 'all', { lineage: true }).widens, false, 'All cannot be widened')
   assert.equal(boardScope(board, 'all', {}).narrows, false, 'All narrows nothing')
+})
+
+// ── a parent over its children ──────────────────────────────────────────────
+
+// The reader's complaint, in their words: in top-down mode a parent and its child are not aligned
+// on the left axis. Same-row alignment does not cover it — this is the link between two rows, and
+// a sideways link reads as a card that is "off" even when its row is perfect.
+test('a parent of one child sits exactly over it', () => {
+  const tasks = [{ id: 'p', parents: [] }, { id: 'c', parents: ['p'] }]
+  const { nodes: placed } = layoutGraph(graphNodes(tasks), graphEdges(tasks), { arrangement: 'down' })
+  const at = id => placed.find(b => b.id === id)
+  // In `down` the cross axis is X, so "over" is a comparison of centres.
+  assert.equal(at('p').x + at('p').w / 2, at('c').x + at('c').w / 2)
+})
+
+test('a parent of two children is centred between them', () => {
+  const tasks = [
+    { id: 'p', parents: [] },
+    { id: 'c1', parents: ['p'] }, { id: 'c2', parents: ['p'] }
+  ]
+  const { nodes: placed } = layoutGraph(graphNodes(tasks), graphEdges(tasks), { arrangement: 'down' })
+  const centre = id => { const b = placed.find(x => x.id === id); return b.x + b.w / 2 }
+  assert.ok(Math.abs(centre('p') - (centre('c1') + centre('c2')) / 2) < 1e-6)
+})
+
+test('centring refuses a move that would cross a neighbour, and takes the room it has', () => {
+  const rows = [[{ id: 'a' }, { id: 'p' }, { id: 'b' }], [{ id: 'c' }]]
+  // `p` wants to be over `c`, but `b` sits there: the move would put it past its right-hand
+  // neighbour, so the row is left exactly as it was.
+  const crowded = centreOverChildren(rows, new Map([['a', 0], ['p', 1], ['b', 2], ['c', 2]]), [{ from: 'p', to: 'c' }])
+  assert.equal(crowded.get('p'), 1)
+  // With room between its neighbours, the same parent does move onto its child.
+  const roomy = centreOverChildren(rows, new Map([['a', 0], ['p', 1], ['b', 2], ['c', 1.5]]), [{ from: 'p', to: 'c' }])
+  assert.equal(roomy.get('p'), 1.5)
+})
+
+test('no two cards of a row end up on the same cross coordinate', () => {
+  const tasks = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id }))
+  const { nodes: placed } = layoutGraph(graphNodes(tasks), graphEdges([]), { arrangement: 'down' })
+  const byRow = new Map()
+  for (const b of placed) {
+    if (!byRow.has(b.y)) byRow.set(b.y, [])
+    byRow.get(b.y).push(b.x)
+  }
+  for (const [y, xs] of byRow) {
+    assert.equal(new Set(xs).size, xs.length, `two cards overlap in the row at y=${y}`)
+  }
 })
 
 test('nearestInHalo: the nearest card within the halo, measured to the edges', () => {
