@@ -1,6 +1,7 @@
 # Transport options for the gantt board stream — survey and candidate pick
 
-Card `t_5f577b45` (board `gantt-demo`), 2026-10-26, plugin `1.7.1` at `3aee9c0`.
+Card `t_5f577b45` (board `gantt-demo`), 2026-10-26. Read off the tree at `3aee9c0`
+(plugin `1.7.1`); `1.7.2` is a release-only bump on top of it.
 
 Deliverable of the "survey websocket transport options and pick candidates" step: narrow the
 transport design space to the 1–2 options worth building, against the constraints this stack
