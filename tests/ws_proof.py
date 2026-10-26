@@ -22,12 +22,22 @@ What it asserts (the acceptance criteria of the card):
   P10 reconnect: the first frame after a reconnect is again a full snapshot
   P11 with KANBAN_GANTT_WS off the route does not exist at all (reversibility)
 
-Run (no hermes_cli needed — standalone mode, env-only board paths):
+The fixture board is built through the DOMAIN layer (kanban_db_boards.create_board
++ kanban_db_connect.connect + kanban_db.create_task), never by hand-writing SQL:
+a hand-rolled schema goes stale the moment /gantt grows a table (it did — the
+attachment count and the activity series broke the older fixture with
+`no such table: task_attachments`). The board must also be *registered*: the
+backend refuses a slug whose board.json is absent, and connect() deliberately
+refuses to resurrect a deleted board's DB.
 
-    /tmp/kg-test-venv/bin/python tests/ws_proof.py
+Run (needs hermes_cli from the hermes-agent checkout, and `websockets`):
+
+    PYTHONPATH=$HOME/.hermes/hermes-agent ~/.hermes/hermes-agent/venv/bin/python \
+        tests/ws_proof.py
 
 Exit code 0 = every check passed. Raw output is meant to be kept as evidence:
-    /tmp/kg-test-venv/bin/python tests/ws_proof.py | tee proof.log
+
+    KG_PROOF_LOG=proof.log PYTHONPATH=... python tests/ws_proof.py
 """
 
 from __future__ import annotations
@@ -46,15 +56,41 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "dashboard"))
 
-# The backend reads HERMES_KANBAN_HOME / KANBAN_GANTT_BOARDS only; keep the
-# proof hermetic and hermes_cli-free so it never touches a real board.
-SANDBOX = Path(tempfile.mkdtemp(prefix="kg-ws-proof-"))
-BOARDS = SANDBOX / "kanban" / "boards"
 BOARD = "ws-proof"
 TOKEN = "proof-token"
 
+
+def _sandbox_parent() -> Path:
+    """A temp root the kanban domain layer is allowed to write to.
+
+    Kanban mutations fail closed (PermissionError) under the root a
+    `delegate_task` child is fenced to — `HERMES_DELEGATED_CHILD_CONTEXT`. A
+    worker shell sets TMPDIR *inside* that root, so a sandbox created there
+    could not register its own board; fall back to the platform temp dir.
+    """
+    tmp = Path(tempfile.gettempdir())
+    marker = (os.environ.get("HERMES_DELEGATED_CHILD_CONTEXT") or "").strip()
+    if marker and marker != "1":
+        try:
+            tmp.resolve().relative_to(Path(marker).expanduser().resolve())
+            tmp = Path("/tmp")
+        except ValueError:
+            pass
+    return tmp
+
+
+# The backend reads KANBAN_GANTT_BOARDS / HERMES_KANBAN_HOME; keep the proof
+# hermetic so it never touches a real board.
+SANDBOX = Path(tempfile.mkdtemp(prefix="kg-ws-proof-", dir=str(_sandbox_parent())))
+BOARDS = SANDBOX / "kanban" / "boards"
+
+# A gateway/worker shell pins HERMES_KANBAN_DB to ONE board, and the core
+# resolver then answers every slug with that file — which the backend rightly
+# refuses. Unpinning is what lets the sandbox slug resolve to its own DB.
+os.environ.pop("HERMES_KANBAN_DB", None)
 os.environ["KANBAN_GANTT_BOARDS"] = str(BOARDS)
 os.environ["HERMES_KANBAN_HOME"] = str(SANDBOX)
+os.environ["HERMES_HOME"] = str(SANDBOX)
 os.environ["KANBAN_GANTT_WS"] = "1"
 os.environ["KANBAN_GANTT_WS_TOKEN"] = TOKEN
 os.environ["KANBAN_GANTT_WS_POLL_MS"] = "100"
@@ -65,19 +101,16 @@ import plugin_api  # noqa: E402  (after the env is set up)
 import uvicorn  # noqa: E402
 import websockets  # noqa: E402
 
-SCHEMA = """
-CREATE TABLE tasks (
-    id TEXT PRIMARY KEY, title TEXT, body TEXT, status TEXT, assignee TEXT,
-    priority INTEGER DEFAULT 0, created_at INTEGER, started_at INTEGER,
-    completed_at INTEGER, result TEXT, block_kind TEXT, current_run_id INTEGER,
-    workflow_template_id TEXT, current_step_key TEXT
-);
-CREATE TABLE task_links (parent_id TEXT, child_id TEXT, PRIMARY KEY (parent_id, child_id));
-CREATE TABLE task_runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, profile TEXT, step_key TEXT,
-    status TEXT, outcome TEXT, started_at INTEGER, ended_at INTEGER, error TEXT, summary TEXT
-);
-"""
+try:                                    # the domain layer owns the fixture schema
+    from hermes_cli import kanban_db  # noqa: E402
+    from hermes_cli import kanban_db_boards as board_registry  # noqa: E402
+    from hermes_cli import kanban_db_connect as kbc  # noqa: E402
+except ImportError as _exc:             # pragma: no cover - setup error, not a check
+    sys.exit(
+        f"tests/ws_proof.py needs hermes_cli ({_exc}).\n"
+        "Run it with PYTHONPATH=$HOME/.hermes/hermes-agent and the hermes-agent "
+        "venv (it also provides `websockets`)."
+    )
 
 RESULTS: list[tuple[str, bool, str]] = []
 LATENCIES: list[float] = []
@@ -105,21 +138,24 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 # ---------------------------------------------------------------------------
 
 def make_board(slug: str = BOARD) -> Path:
-    d = BOARDS / slug
-    d.mkdir(parents=True, exist_ok=True)
-    db = d / "kanban.db"
-    conn = sqlite3.connect(db)
+    """Register the sandbox board and create its initial task via the domain.
+
+    Hand-written SQL here is what went stale: `/gantt` grew `task_attachments`
+    and the activity series (`task_events`, `kanban_notify_subs`) and the old
+    fixture crashed with `no such table: task_attachments`. Going through
+    kanban_db keeps the harness current for free, and registering the board
+    first is what stops the backend from refusing the slug (it refuses a DB
+    whose `board.json` is absent, and connect() refuses to resurrect a deleted
+    board).
+    """
+    board_registry.create_board(slug)
+    conn = kbc.connect(board=slug)
     try:
-        conn.executescript(SCHEMA)
-        now = int(time.time())
-        conn.execute(
-            "INSERT INTO tasks (id,title,status,assignee,priority,created_at,started_at) "
-            "VALUES (?,?,?,?,?,?,?)",
-            ("t_root", "root", "running", "default", 1, now, now - 60))
-        conn.commit()
+        kanban_db.create_task(conn, title="[PROOF] root task", priority=1,
+                              assignee="default", created_by="ws-proof")
     finally:
         conn.close()
-    return db
+    return BOARDS / slug / "kanban.db"
 
 
 def write_task(db: Path, n: int) -> float:
@@ -343,12 +379,24 @@ async def run(ws_url_base: str) -> None:
           all(ok is not False for _, ok in rejected),
           ", ".join(f"{k}:{v}" for k, v in rejected))
 
-    # Loopback fallback: with no env token the standalone server accepts a local
-    # client and refuses a non-loopback one (no widening — R16).
+    # Loopback fallback: with no env token the *bare standalone* server (no
+    # host core importable) accepts a local client and refuses a non-loopback
+    # one (no widening — R16). The fixture now imports hermes_cli, so the core
+    # gate would answer first and the fallback would never be reached: hide
+    # the module to stand in for a server started outside the agent tree.
     os.environ.pop("KANBAN_GANTT_WS_TOKEN", None)
     import plugin_ws as _ws
-    ok_loop, how_loop = _ws.authorize(_FakeWs("127.0.0.1"))
-    ok_remote, how_remote = _ws.authorize(_FakeWs("10.1.2.3"))
+    _CORE_MOD = "hermes_cli.web_server_chat"
+    _saved_core = sys.modules.get(_CORE_MOD, ...)
+    sys.modules[_CORE_MOD] = None           # `from ... import` → ImportError  # type: ignore[assignment]
+    try:
+        ok_loop, how_loop = _ws.authorize(_FakeWs("127.0.0.1"))
+        ok_remote, how_remote = _ws.authorize(_FakeWs("10.1.2.3"))
+    finally:
+        if _saved_core is ...:
+            sys.modules.pop(_CORE_MOD, None)
+        else:
+            sys.modules[_CORE_MOD] = _saved_core
     os.environ["KANBAN_GANTT_WS_TOKEN"] = TOKEN
     check("P8 standalone fallback is loopback-only (R16)",
           ok_loop and not ok_remote, f"loopback={how_loop} remote={how_remote}")
