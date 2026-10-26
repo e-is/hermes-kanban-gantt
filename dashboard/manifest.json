@@ -3,7 +3,7 @@
   "label": "Kanban Gantt",
   "description": "Vue Gantt (avancement dans le temps) du board kanban : choix du board, filtrage par label, barres des taches liees, archivees masquees par defaut. L'interface vit dans la page desktop ; ce dashboard n'expose que les routes de donnees du plugin.",
   "icon": "Timeline",
-  "version": "1.0.0",
+  "version": "1.7.2",
   "tab": {
     "path": "/kanban-gantt",
     "position": "after:kanban"

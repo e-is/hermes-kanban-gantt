@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.7.2 — text you can copy, counts on the scopes, and the worker's log
+
+**The detail can be selected again.** A title, a description, a summary, a comment — none of it could
+be selected, because the desktop turns selection off across its own chrome. The panel now turns it
+back on for itself, deliberately for itself alone: dragging rows, cards and the resize handle depends
+on *not* selecting text along the way, and those keep their own `select-none`.
+
+**The quick scope says how much each reading holds.** Every scope — Running, Blocked, Open, All —
+carries the number of tasks it would show, in the same badge the detail's feed tabs already use, so a
+reader sees which reading is worth opening before spending a click on it. The numbers are counted
+over what the *other* filters already allow: a badge that ignored the funnel would promise work the
+view is holding back, and would be distrusted on the first click.
+
+**The worker's log has its tab, and it is the same log the bundled plugin reads.** The feed gains
+*Worker log* beside Comments, Activity and Runs — the fourth tab the official kanban drawer has. It
+is served by `GET /tasks/{id}/log`, built on the same public helpers the core exposes
+(`read_worker_log`, `worker_log_path`) and answering in the same shape, so the two plugins say the
+same thing about the same file, rotated where the core rotates it and truncated only as far as the
+request asks. The task detail carries nothing but whether a log exists and how big it is — the same
+contract as the attachment count — so drawing four tabs never pulls a run's megabytes; the bytes
+arrive when the tab is opened. No tab when there is no log, and no badge on it: a log is there or it
+is not.
+
+**Also:** `dashboard/manifest.json` now moves together with `plugin.yaml`, having been left at 1.0.0
+while the plugin travelled to 1.7.1. Nothing in the plugin read it, but a manifest naming a version
+that never existed is a trap for the next reader, and it is the file a catalogue entry is generated
+from.
+
+Tests, all measured on this commit: 166 assertions across the Node suites — 62 in the graph core
+(the counts on a board with a lineage, with and without the funnel), 81 render checks (the four
+scopes each showing its number, the selection rule on the panel and on the modal, the log tab present
+for a task that has one and absent for a task that never logged), 23 hook-order checks — and 60
+pytest tests, three of them on the new route: the bundled shape, the file read where the core writes
+it with `tail` capping and saying so, and a 404 for an unknown task.
+
 ## 1.7.1 — scopes you can combine, and a graph that reads straight down
 
 **The quick scope becomes four, and gains a modifier.** It was one combined thing — *Running +
