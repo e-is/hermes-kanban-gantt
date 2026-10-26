@@ -93,7 +93,7 @@ const ZOOM_MIN_FACTOR = 0.2
    plain JS (no imports/exports needed). */
 
 
-import { graphNodes, graphEdges, layoutGraph, lineage as taskLineage, scopeIds, boardScope, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
+import { graphNodes, graphEdges, layoutGraph, lineage as taskLineage, scopeIds, boardScope, scopeCounts, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
 import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
@@ -1095,13 +1095,17 @@ function FeedTab({ label, count, ariaLabel, active, onClick }) {
     ),
     children: [
       jsx('span', { className: 'whitespace-nowrap', children: label }),
-      jsx('span', {
-        className: cn(
-          'inline-flex min-w-[1.05rem] items-center justify-center rounded-full px-1 text-[9.5px] font-semibold leading-[1.35] tabular-nums',
-          active ? 'bg-(--ui-accent)/22 text-(--ui-accent)' : 'bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)'
-        ),
-        children: String(count)
-      })
+      // The badge is optional: the worker log is either there or it is not, and a "0" beside it
+      // would read as an invitation to a tab that has nothing in it.
+      count == null
+        ? null
+        : jsx('span', {
+            className: cn(
+              'inline-flex min-w-[1.05rem] items-center justify-center rounded-full px-1 text-[9.5px] font-semibold leading-[1.35] tabular-nums',
+              active ? 'bg-(--ui-accent)/22 text-(--ui-accent)' : 'bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)'
+            ),
+            children: String(count)
+          })
     ]
   })
 }
@@ -2190,18 +2194,36 @@ export function GraphView({
  *
  *  The modifier disappears on All: the closure of everything is everything, so a switch that
  *  cannot change anything is a lie the reader has to discover by clicking it. */
-function ScopeToggle({ value, onChange, lineage = false, onLineageChange }) {
+function ScopeToggle({ value, onChange, lineage = false, onLineageChange, counts = null }) {
   const i18n = useGanttI18n()
   const item = (id, label) => jsx('button', {
     type: 'button',
     onClick: () => onChange(id),
     'aria-pressed': value === id,
+    // A stable hook for the tests and for anything driving the app from outside — the same idiom the
+    // cards use with data-graph-node, so a check never has to match on translated prose.
+    'data-scope': id,
     title: label,
     className: cn(
-      'px-2 py-0.5 text-[11px] rounded cursor-pointer border-0 whitespace-nowrap',
+      'inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0 whitespace-nowrap',
       value === id ? 'bg-(--ui-accent)/15 text-(--ui-accent) font-medium' : 'bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)'
     ),
-    children: label
+    // The count, in the same badge the detail's feed tabs use: the control already trades one
+    // reading of the board for another, and a reader should see how much each one holds before
+    // spending a click on it.
+    children: [
+      jsx('span', { key: 'label', children: label }),
+      counts && counts[id] != null
+        ? jsx('span', {
+            key: 'count',
+            className: cn(
+              'inline-flex min-w-[1.05rem] items-center justify-center rounded-full px-1 text-[9.5px] font-semibold leading-[1.35] tabular-nums',
+              value === id ? 'bg-(--ui-accent)/22 text-(--ui-accent)' : 'bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)'
+            ),
+            children: String(counts[id])
+          })
+        : null
+    ]
   }, id)
   return jsxs('span', {
     className: 'inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5',
@@ -2529,6 +2551,15 @@ async function fetchAttachments(taskId, board) {
     `/tasks/${taskId}/attachments?board=${encodeURIComponent(board || '')}`
   )
   return (payload && payload.attachments) || []
+}
+
+/** The worker's own stdout/stderr for one task, read when its tab is opened.
+ *
+ * Same route and same shape as the bundled kanban plugin's — `/tasks/<id>/log`, which reads the file
+ * the core writes and rotates — so the two plugins answer identically about the same file.
+ */
+async function fetchWorkerLog(taskId, board) {
+  return await apiFetch(`/tasks/${taskId}/log?board=${encodeURIComponent(board || '')}`)
 }
 
 /** Save an attachment to disk.
@@ -2914,6 +2945,13 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   // where the first one gets written; the strip drops Activity and Runs when a task has neither, so
   // a tab never opens on an empty panel.
   const [feedTab, setFeedTab] = useState('comments')
+  // The worker's log, fetched when its tab is opened and never with the detail: a run's output can
+  // be megabytes, and the detail payload carries only whether one exists.
+  const logQuery = useQuery({
+    queryKey: ['kanban-gantt', 'log', apiBase(), board, shownId],
+    queryFn: () => fetchWorkerLog(shownId, board),
+    enabled: Boolean(shownId) && feedTab === 'log' && Boolean(data?.task?.log_exists)
+  })
   // The CLI block's copy button confirms itself for a moment, then goes quiet.
   const [cliCopied, setCliCopied] = useState(false)
   // Parent link awaiting confirmation (the click that asked to remove it).
@@ -3350,10 +3388,14 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 const hiddenCount = totalComments - visibleComments.length
                 const eventsList = data?.task?.events || []
                 const runsList = data?.task?.runs || []
+                // Whether a worker ever wrote a log for this task: the detail payload carries the
+                // fact and the size, the content waits for the tab to be opened.
+                const logExists = Boolean(data?.task?.log_exists)
                 // A task that loses its last event — or the strip rebuilding after a refresh —
                 // must not leave the reader on a tab that is no longer offered.
                 const activeTab = feedTab === 'activity' && eventsList.length === 0 ? 'comments'
                   : feedTab === 'runs' && runsList.length === 0 ? 'comments'
+                  : feedTab === 'log' && !logExists ? 'comments'
                   : feedTab
 
                 return jsxs('div', { className: 'border-t border-(--ui-stroke-tertiary) pt-2 flex flex-col gap-1.5', children: [
@@ -3369,6 +3411,12 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                         : null,
                       runsList.length
                         ? jsx(FeedTab, { label: i18n.tabRuns, count: runsList.length, ariaLabel: i18n.runs(runsList.length), active: activeTab === 'runs', onClick: () => setFeedTab('runs') })
+                        : null,
+                      // The fourth tab the bundled plugin has, and the reason it is worth having:
+                      // when a run misbehaves, the worker's own output is the only place that says
+                      // why. No badge — a log is there or it is not — and no tab when there is none.
+                      logExists
+                        ? jsx(FeedTab, { label: i18n.tabLog, ariaLabel: i18n.tabLog, active: activeTab === 'log', onClick: () => setFeedTab('log') })
                         : null
                     ]
                   }),
@@ -3468,6 +3516,23 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                           ]
                         })
                       }) })
+                    : null,
+                  // The worker's own output: monospaced, wrapped, scrollable — and selectable,
+                  // because a stack trace is exactly the thing a reader wants to copy out of here.
+                  activeTab === 'log'
+                    ? logQuery.data
+                      ? jsxs('div', { className: 'flex flex-col gap-1', children: [
+                          logQuery.data.content
+                            ? jsx('pre', {
+                                className: 'max-h-72 overflow-auto whitespace-pre-wrap break-words rounded border border-(--ui-stroke-tertiary)/60 p-1.5 text-[10px] font-mono text-(--ui-text-secondary)',
+                                children: logQuery.data.content
+                              })
+                            : jsx('div', { className: 'text-[10px] text-(--ui-text-tertiary)', children: i18n.logEmpty }),
+                          logQuery.data.truncated
+                            ? jsx('div', { className: 'text-[9.5px] text-(--ui-text-quaternary)', children: i18n.logTruncated })
+                            : null
+                        ] })
+                      : null
                     : null
                 ] })
               })(),
@@ -3567,8 +3632,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   if (!detailModal) {
     return jsxs('div', {
       className: docked
-        ? 'relative flex flex-col h-full min-h-0 border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) pt-3.5 px-4'
-        : 'absolute inset-y-0 right-0 z-50 max-w-full border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) shadow-xl flex flex-col pt-3.5 px-4',
+        ? 'kg-selectable relative flex flex-col h-full min-h-0 border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) pt-3.5 px-4'
+        : 'kg-selectable absolute inset-y-0 right-0 z-50 max-w-full border-l border-(--ui-stroke-secondary) bg-(--ui-bg-elevated) shadow-xl flex flex-col pt-3.5 px-4',
       'data-glass-opaque': true,
       role: 'dialog',
       'aria-label': i18n.taskDetail,
@@ -3593,7 +3658,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     open: true,
     onOpenChange: next => { if (!next) onClose() },
     children: jsx(DialogContent, {
-      className: 'flex max-h-[min(84vh,54rem)] w-[min(62rem,94vw)] max-w-none flex-col overflow-hidden',
+      className: 'kg-selectable flex max-h-[min(84vh,54rem)] w-[min(62rem,94vw)] max-w-none flex-col overflow-hidden',
       children: jsxs('div', { className: 'flex min-h-0 flex-1 gap-4', children: [
         jsx('div', { className: 'min-w-0 flex-1 overflow-y-auto pr-1', children: inner }),
         jsxs('aside', {
@@ -3988,6 +4053,12 @@ export function KanbanGanttPage() {
     // exception — which is exactly why the switch looked like it worked there and did nothing in
     // the list and the timeline.
     const scopeSel = boardScope(allTasks, graphScope, { lineage: graphLineage })
+    // The badges the scope control carries: counted on what the FUNNEL already allows, so a number
+    // never promises work the view is holding back.
+    const scopeCount = scopeCounts(allTasks, {
+      lineage: graphLineage,
+      only: new Set(visible.map(t => t.id))
+    })
     // What the scope is holding back, so the footer can say it in any mode.
     const scopeHidden = scopeSel.narrows
       ? allTasks.filter(t => !scopeSel.ids.has(t.id) && (showArchived || !t.archived)).length
@@ -4011,7 +4082,7 @@ export function KanbanGanttPage() {
     })
     const domain = computeDomain(visible)
     const allAssignees = Array.from(new Set(data.tasks.map(t => t.assignee).filter(Boolean))).sort()
-    return { rows, domain, total: visible.length, tasks: visible, allAssignees, scopeHidden }
+    return { rows, domain, total: visible.length, tasks: visible, allAssignees, scopeHidden, scopeCount }
   }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage])
 
   // The header toggle: if anything the user can collapse is open, collapse it all;
@@ -4710,7 +4781,13 @@ export function KanbanGanttPage() {
                     ]
                   })
                 : null,
-              jsx(ScopeToggle, { value: graphScope, onChange: handleGraphScope, lineage: graphLineage, onLineageChange: handleGraphLineage }),
+              jsx(ScopeToggle, {
+                value: graphScope,
+                onChange: handleGraphScope,
+                lineage: graphLineage,
+                onLineageChange: handleGraphLineage,
+                counts: derived?.scopeCount || null
+              }),
               jsx(FilterDropdown, {
                 assignees: derived?.allAssignees || [],
                 selectedAssignees,
@@ -5303,6 +5380,12 @@ const plugin = {
       // the same — a 4px rounded pill inside the 10px hit strip, lit on hover and
       // kept lit while dragging.
       handleStyle.textContent = `
+/* Selection: the detail is prose — a title, a description, a summary, a log — and a reader must be
+   able to copy it. The shell turns selection off for the app's chrome, so the panel turns it back
+   on for itself. Deliberately scoped to the panel rather than global: dragging rows, cards and the
+   resize handle depends on not selecting text along the way, and those keep their own select-none. */
+.kg-selectable { user-select: text; -webkit-user-select: text; }
+.kg-selectable { user-select: text !important; -webkit-user-select: text !important; }
 .kg-resize-handle { display: flex; align-items: stretch; justify-content: center; }
 /* Same two layers the shell's own sash draws (measured on the left panel's
    resizer): a 1px line in --ui-stroke-secondary sitting at 10% opacity at rest,

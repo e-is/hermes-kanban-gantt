@@ -554,6 +554,19 @@ function boardScope(tasks, scope, { lineage: lineage2 = false } = {}) {
   const active = scope !== "all";
   return { ids, narrows: active, widens: active && Boolean(lineage2) };
 }
+function scopeCounts(tasks, { lineage: lineage2 = false, only = null } = {}) {
+  const list = tasks || [];
+  const nodes = graphNodes(list);
+  const edges = graphEdges(list);
+  const out = {};
+  for (const scope of SCOPES) {
+    const ids = scopeIds(nodes, edges, scope, { lineage: lineage2 });
+    let n = 0;
+    for (const t of list) if (ids.has(t.id) && (!only || only.has(t.id))) n++;
+    out[scope] = n;
+  }
+  return out;
+}
 var SCOPES = ["running", "blocked", "open", "all"];
 function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, status: void 0 } : n);
@@ -602,5 +615,6 @@ export {
   rankComparator,
   ranks,
   reduceEdges,
+  scopeCounts,
   scopeIds
 };

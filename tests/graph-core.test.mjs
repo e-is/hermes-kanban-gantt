@@ -23,7 +23,7 @@ const core = await import(join(HERE, '..', 'desktop', 'graph-core.js'))
 const {
   graphNodes, graphEdges, dedupeEdges, edgesWithin, ranks, orderRanks, rankComparator,
   reduceEdges, lineage, activityBuckets, activityMap, layoutGraph, scopeIds, boardScope, SCOPES,
-  centreOverChildren,
+  centreOverChildren, scopeCounts,
   nearestInHalo, arrangeRows, components, NODE_W, NODE_H, SPARK_BAND
 } = core
 
@@ -592,6 +592,23 @@ test('boardScope reads the closure off the WHOLE board, not off what survived th
   assert.equal(boardScope(board, 'running', {}).widens, false)
   assert.equal(boardScope(board, 'all', { lineage: true }).widens, false, 'All cannot be widened')
   assert.equal(boardScope(board, 'all', {}).narrows, false, 'All narrows nothing')
+})
+
+test('scopeCounts counts what each scope would show, over the tasks a view may draw', () => {
+  const board = [
+    { id: 'run', status: 'running', children: [{ id: 'kid' }] },
+    { id: 'kid', status: 'todo', parents: [{ id: 'run' }] },
+    { id: 'blk', status: 'blocked' },
+    { id: 'done', status: 'done' }
+  ]
+  assert.deepEqual(scopeCounts(board), { running: 1, blocked: 1, open: 3, all: 4 })
+  // The lineage modifier widens what a scope would show, and the number says so.
+  assert.equal(scopeCounts(board, { lineage: true }).running, 2)
+  // Counted over the funnel, a badge never promises work the view is holding back.
+  assert.deepEqual(
+    scopeCounts(board, { only: new Set(['run', 'kid']) }),
+    { running: 1, blocked: 0, open: 2, all: 2 }
+  )
 })
 
 // ── a parent over its children ──────────────────────────────────────────────

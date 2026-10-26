@@ -92,12 +92,22 @@ const lineageBoard = {
   total: 3
 }
 
+// A task detail that carries a worker log, served only when a check asks for it: the log tab must
+// appear for a task that has one and stay away for a task that does not.
+const detailWithLog = {
+  task: {
+    id: 't_1', title: 'Epic — first task', status: 'running',
+    log_exists: true, log_size_bytes: 4096, comments: [], events: [], runs: []
+  }
+}
+
 // Query results injected into the generated stub module (the stub runs in a
 // separate module scope and cannot close over this file's variables).
 const stubQueryData = {
   'kanban-gantt|boards': boards,
   'kanban-gantt|gantt': gantt,
-  'kanban-gantt|lineage': lineageBoard
+  'kanban-gantt|lineage': lineageBoard,
+  'kanban-gantt|task': detailWithLog
 }
 
 const useQueryStubSource = `const stubQueryData = ${JSON.stringify(stubQueryData)}
@@ -108,6 +118,7 @@ export const useQuery = options => {
   else if (key.includes('|gantt')) data = globalThis.__kgBoard === 'lineage'
     ? stubQueryData['kanban-gantt|lineage']
     : stubQueryData['kanban-gantt|gantt']
+  else if (key.includes('|task')) data = globalThis.__kgLogDetail ? stubQueryData['kanban-gantt|task'] : undefined
   return { data, isLoading: false, isError: false, error: null, refetch: async () => {} }
 }`
 
@@ -423,6 +434,21 @@ if (pageNode) {
   const modalFlat = JSON.stringify(page.render())
   check(modalFlat.includes('detailMeta'), 'the modal renders its right-hand information column')
   check(modalFlat.includes('metaPriority'), 'the modal column carries the priority row')
+
+  // Selection: the detail is prose — a title, a description, a summary, a log — and the panel turns
+  // selection back on for itself, because the shell turns it off for the app's chrome.
+  check(detailFlat.includes('kg-selectable'), 'the detail panel allows text selection')
+  check(modalFlat.includes('kg-selectable'), 'and so does the modal, on its own content column')
+
+  // The feed's fourth tab, the one the bundled plugin has: offered when the task has a worker log,
+  // absent when it has none. Asserted on the TAB MARKER, never on a label, which is translated.
+  globalThis.__kgLogDetail = true
+  const withLog = JSON.stringify(page.render())
+  check((withLog.match(/"role":"tab"/g) || []).length === 2,
+    'a task with a worker log offers its tab, beside Comments')
+  globalThis.__kgLogDetail = null
+  check((detailFlat.match(/"role":"tab"/g) || []).length === 1,
+    'a task that never logged anything is offered Comments alone')
   pluginModule.$detailModal.set(false)
   pluginModule.$openTaskId.set(null)
 
@@ -461,6 +487,17 @@ if (pageNode) {
     'the scopes come before the funnel, among the filters')
   check(['graphScopeRunning', 'graphScopeBlocked', 'graphScopeOpen', 'graphScopeAll'].every(k => listFlat.includes(k)),
     'all four scopes are offered in list view')
+  // Each scope carries its count, in the badge the detail's feed tabs use: the control already
+  // trades one reading of the board for another, so a reader should see how much each one holds
+  // before spending a click on it. On the fixture that is 1 running, 1 blocked, 2 open, 3 in all.
+  for (const [id, n] of [['running', 1], ['blocked', 1], ['open', 2], ['all', 3]]) {
+    const at = listFlat.indexOf('"data-scope":"' + id + '"')
+    check(at >= 0, 'the scope strip offers ' + id)
+    if (at >= 0) {
+      check(listFlat.slice(at, at + 900).includes('"children":"' + n + '"'),
+        'the ' + id + ' scope shows its count (' + n + ')')
+    }
+  }
   globalThis.__kgView = 'timeline'
   const timelineFlat = JSON.stringify(page.render())
   check(timelineFlat.includes('"aria-label":"graphScopeAria"'), 'timeline view carries the quick scopes too')

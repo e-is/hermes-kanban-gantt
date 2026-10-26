@@ -1118,3 +1118,51 @@ def test_move_keeps_the_task_id_unless_the_target_already_uses_it(client):
     src = open_board(board["slug"])
     assert src.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (board["solo"],)).fetchone()[0] == 0
     src.close()
+
+
+# ── the worker log ──────────────────────────────────────────────────────────────
+
+def test_task_log_route_answers_in_the_bundled_shape(client):
+    """The same keys as the bundled kanban plugin's /tasks/{id}/log, so both read alike.
+
+    A reader who knows one plugin should not have to learn a second vocabulary for the same file on
+    disk — and a task that never spawned says so rather than pretending to have a log.
+    """
+    http, board = client
+    r = http.get(f"/tasks/{board['solo']}/log?board={board['slug']}")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["task_id"] == board["solo"]
+    assert data["board"] == board["slug"]
+    for key in ("path", "exists", "size_bytes", "content", "truncated"):
+        assert key in data, f"the bundled shape carries {key}"
+    assert data["exists"] is False, "a task that never ran has no log, and says so"
+    assert data["content"] == ""
+
+
+def test_task_log_route_reads_the_log_the_core_writes(client):
+    http, board = client
+    # Write it where the CORE looks for it, not where this test would prefer it: that path is the
+    # contract, and a plugin that invented its own would read an empty file forever.
+    from hermes_cli import kanban_db
+    path = kanban_db.worker_log_path(board["solo"], board=board["slug"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("first line\nsecond line\n", encoding="utf-8")
+
+    r = http.get(f"/tasks/{board['solo']}/log?board={board['slug']}")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["exists"] is True
+    assert "second line" in data["content"]
+    assert data["size_bytes"] == path.stat().st_size
+    assert data["truncated"] is False
+
+    # `tail` caps the bytes returned, and admits that it did.
+    data = http.get(f"/tasks/{board['solo']}/log?board={board['slug']}&tail=4").json()
+    assert data["truncated"] is True
+    assert len(data["content"]) <= 4
+
+
+def test_task_log_route_404_for_an_unknown_task(client):
+    http, board = client
+    assert http.get(f"/tasks/t_nope/log?board={board['slug']}").status_code == 404

@@ -801,6 +801,27 @@ export function boardScope(tasks, scope, { lineage = false } = {}) {
   return { ids, narrows: active, widens: active && Boolean(lineage) }
 }
 
+/** How many tasks each scope would show, so the control can carry the number instead of asking the
+ *  reader to click through four views to find out which one is worth opening.
+ *
+ *  Counted over `only` when given — the tasks the other filters already allow — because a badge that
+ *  ignores the funnel would promise work the view is holding back, and the reader would learn to
+ *  distrust it on the first click. Pure, so the promise is assertable.
+ */
+export function scopeCounts(tasks, { lineage = false, only = null } = {}) {
+  const list = tasks || []
+  const nodes = graphNodes(list)
+  const edges = graphEdges(list)
+  const out = {}
+  for (const scope of SCOPES) {
+    const ids = scopeIds(nodes, edges, scope, { lineage })
+    let n = 0
+    for (const t of list) if (ids.has(t.id) && (!only || only.has(t.id))) n++
+    out[scope] = n
+  }
+  return out
+}
+
 /** The quick scopes, in the order the segmented control shows them. Their DEFAULT is `all`,
  *  because a first visit to a board where nothing runs must not open on an empty canvas.
  *

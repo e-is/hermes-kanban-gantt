@@ -617,6 +617,12 @@ def get_task(task_id: str, board: Optional[str] = Query(None)):
             {"id": cid, "title": _short_title(conn, cid), "relation": "child"}
             for cid in detail["children"]
         ]
+        # The worker log: only whether one exists, and how big — the same contract as the
+        # attachment count, for the same reason. The bytes are served by /tasks/{id}/log when the
+        # reader opens that tab, so drawing a strip of four tabs never pulls a run's megabytes.
+        log_path = kanban_db.worker_log_path(task_id, board=slug)
+        detail["log_exists"] = log_path.exists()
+        detail["log_size_bytes"] = log_path.stat().st_size if detail["log_exists"] else 0
         # Attachments: the rows only. The bytes are served one at a time by
         # /attachments/{id}/content so a drawer never pulls every blob to show a list,
         # and so `stored_path` can be validated before anything is read.
@@ -664,6 +670,46 @@ def list_task_attachments(task_id: str, board: Optional[str] = Query(None)) -> d
         "attachments": [
             {"id": r[0], "filename": r[1], "content_type": r[2], "size": r[3]} for r in rows
         ],
+    }
+
+
+@router.get("/tasks/{task_id}/log")
+def get_task_log(
+    task_id: str,
+    tail: Optional[int] = Query(None, ge=1, le=2_000_000),
+    board: Optional[str] = Query(None),
+) -> dict[str, Any]:
+    """The worker's own stdout/stderr for one task, read when its tab is opened.
+
+    Deliberately the same shape as the bundled kanban plugin's route and built on the same public
+    helpers (`kanban_db.read_worker_log` / `worker_log_path`), so the log stays where the core puts
+    it, rotated by the core, and a reader who knows one plugin finds the same answer in the other.
+    """
+    slug = _resolve_board(board)
+    if slug in ("all", "*"):
+        slug = _find_task_board(task_id) or _resolve_board(None)
+        if slug in ("all", "*"):
+            slug = "default"
+    conn = _connect(slug, ro=True)
+    try:
+        known = conn.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    finally:
+        conn.close()
+    if known is None:
+        raise HTTPException(404, f"no such task: {task_id}")
+
+    from hermes_cli import kanban_db
+    path = kanban_db.worker_log_path(task_id, board=slug)
+    content = kanban_db.read_worker_log(task_id, tail_bytes=tail, board=slug)
+    size = path.stat().st_size if path.exists() else 0
+    return {
+        "task_id": task_id,
+        "board": slug,
+        "path": str(path),
+        "exists": content is not None,
+        "size_bytes": size,
+        "content": content or "",
+        "truncated": bool(tail and size > tail),
     }
 
 
