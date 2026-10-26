@@ -1090,22 +1090,16 @@ function FeedTab({ label, count, ariaLabel, active, onClick }) {
     'aria-label': ariaLabel,
     onClick,
     className: cn(
-      'inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0',
-      active ? 'bg-(--ui-accent)/15 text-(--ui-accent) font-medium' : 'bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)'
+      // The SDK SegmentedControl's own chip, which is what the bundled drawer's tabs look like:
+      // flat, on the track's tint, with the active one raised.
+      'flex min-w-0 items-center justify-center gap-1 rounded-[3px] px-2.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap transition-colors cursor-pointer border-0',
+      active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
     ),
     children: [
-      jsx('span', { className: 'whitespace-nowrap', children: label }),
-      // The badge is optional: the worker log is either there or it is not, and a "0" beside it
-      // would read as an invitation to a tab that has nothing in it.
-      count == null
-        ? null
-        : jsx('span', {
-            className: cn(
-              'inline-flex min-w-[1.05rem] items-center justify-center rounded-full px-1 text-[9.5px] font-semibold leading-[1.35] tabular-nums',
-              active ? 'bg-(--ui-accent)/22 text-(--ui-accent)' : 'bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)'
-            ),
-            children: String(count)
-          })
+      // The count rides in the label, exactly as the bundled drawer writes it (`Comments · 2`) —
+      // one text node, no badge. A pill with a background competes with the raised active segment
+      // for the eye, and the number was never a separate thing to click.
+      jsx('span', { className: 'whitespace-nowrap', children: count == null ? label : `${label} · ${count}` })
     ]
   })
 }
@@ -1119,13 +1113,17 @@ function ViewToggle({ value, onChange }) {
     'aria-label': label,
     'aria-pressed': value === mode,
     className: cn(
-      'inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded cursor-pointer',
-      value === mode ? 'bg-(--ui-accent)/15 text-(--ui-accent) font-medium' : 'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)'
+      // Same chip as the SDK SegmentedControl the bundled plugin uses, so a segmented control looks
+      // the same wherever it appears in the app.
+      'flex min-w-0 items-center justify-center gap-1 rounded-[3px] px-2.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap transition-colors cursor-pointer border-0',
+      value === mode ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
     ),
     children: [jsx(Codicon, { key: 'i', name: icon, size: '0.8rem' }), jsx('span', { key: 'l', children: label })]
   }, mode)
   return jsxs('span', {
-    className: 'inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5',
+    // The official track: a tinted, inset-looking strip the options sit on. Ours had a border and no
+    // background, which is why the buttons had nothing darker around them to sit in.
+    className: 'inline-grid w-fit auto-cols-fr grid-flow-col gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5',
     role: 'group',
     children: [
       item('list', 'list-flat', i18n.viewList),
@@ -2205,28 +2203,25 @@ function ScopeToggle({ value, onChange, lineage = false, onLineageChange, counts
     'data-scope': id,
     title: label,
     className: cn(
-      'inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0 whitespace-nowrap',
-      value === id ? 'bg-(--ui-accent)/15 text-(--ui-accent) font-medium' : 'bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)'
+      // The SDK SegmentedControl's chip, chip for chip: flat on the track's tint, the chosen one
+      // raised. (Kept as our own markup rather than the SDK component because these carry a count
+      // badge, which the component has no slot for.)
+      'flex min-w-0 items-center justify-center gap-1 rounded-[3px] px-2.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap transition-colors cursor-pointer border-0',
+      value === id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
     ),
-    // The count, in the same badge the detail's feed tabs use: the control already trades one
-    // reading of the board for another, and a reader should see how much each one holds before
-    // spending a click on it.
-    children: [
-      jsx('span', { key: 'label', children: label }),
-      counts && counts[id] != null
-        ? jsx('span', {
-            key: 'count',
-            className: cn(
-              'inline-flex min-w-[1.05rem] items-center justify-center rounded-full px-1 text-[9.5px] font-semibold leading-[1.35] tabular-nums',
-              value === id ? 'bg-(--ui-accent)/22 text-(--ui-accent)' : 'bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)'
-            ),
-            children: String(counts[id])
-          })
-        : null
-    ]
+    // The count rides in the label, the way the bundled drawer writes its own tabs (`Comments · 2`):
+    // one text node, no badge, so the raised active segment stays the only thing that reads as
+    // "chosen". The number is also what tells a reader how much each reading holds before spending a
+    // click on it.
+    children: jsx('span', {
+      className: 'whitespace-nowrap',
+      children: counts && counts[id] != null ? `${label} · ${counts[id]}` : label
+    })
   }, id)
   return jsxs('span', {
-    className: 'inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5',
+    // The official track (a tinted strip), kept as inline-flex rather than the grid so the lineage
+    // switch beside the four scopes does not get stretched to a segment's width.
+    className: 'inline-flex items-center gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5',
     role: 'group',
     'aria-label': i18n.graphScopeAria,
     children: [
@@ -3411,7 +3406,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                   // its count, so the reader knows there is something to see before clicking.
                   jsxs('span', {
                     role: 'group',
-                    className: 'inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5 self-start',
+                    className: 'inline-flex items-center gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5 self-start',
                     children: [
                       jsx(FeedTab, { label: i18n.tabComments, count: totalComments, ariaLabel: i18n.comments(totalComments), active: activeTab === 'comments', onClick: () => setFeedTab('comments') }),
                       eventsList.length
@@ -4881,21 +4876,24 @@ export function KanbanGanttPage() {
                     title: i18n.refreshWhy,
                     children: jsx(Button, {
                       size: 'xs',
+                      variant: 'ghost',
                       onClick: () => void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] }),
                       children: jsxs('span', { className: 'flex items-center gap-1', children: [
-                        jsx(Codicon, { name: 'refresh', size: '0.85rem' }),
+                        jsx(Codicon, { name: 'refresh', size: '0.75rem' }),
                         i18n.refresh
                       ] })
                     })
                   })
                 : null,
-              // Far right: the board's only creation verb.
+              // Far right: the board's only creation verb — the bundled board's own shape for it,
+              // `sm` rather than `xs`, with the `add` glyph at 0.8rem. A creation verb that is the
+              // same height as the small controls beside it does not read as the primary action.
               jsx(Button, {
-                size: 'xs',
+                size: 'sm',
                 variant: 'default',
                 onClick: () => $newTask.set({ parentId: '' }),
                 children: jsxs('span', { className: 'flex items-center gap-1', children: [
-                  jsx(Codicon, { name: 'add', size: '0.85rem' }),
+                  jsx(Codicon, { name: 'add', size: '0.8rem' }),
                   i18n.newTask
                 ] })
               }),
@@ -4903,12 +4901,16 @@ export function KanbanGanttPage() {
               jsxs(DropdownMenu, { children: [
                 jsx(DropdownMenuTrigger, {
                   asChild: true,
-                  children: jsx('button', {
+                  children: jsx(Button, {
+                    // The bundled board's own menu trigger: a real icon Button on the ghost variant,
+                    // not a hand-rolled square — so it inherits the theme's radius, hit box and focus
+                    // ring instead of approximating them.
                     type: 'button',
-                    className: 'inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent',
+                    size: 'icon-xs',
+                    variant: 'ghost',
                     'aria-label': i18n.viewOptions,
                     title: i18n.viewOptions,
-                    children: jsx(Codicon, { name: 'kebab-vertical', size: '0.9rem' })
+                    children: jsx(Codicon, { name: 'kebab-vertical', size: '0.85rem' })
                   })
                 }),
                 jsxs(DropdownMenuContent, {
@@ -5102,7 +5104,7 @@ export function KanbanGanttPage() {
                 variant: 'default',
                 onClick: () => $newTask.set({ parentId: '' }),
                 children: jsxs('span', { className: 'flex items-center gap-1', children: [
-                  jsx(Codicon, { name: 'add', size: '0.85rem' }),
+                  jsx(Codicon, { name: 'add', size: '0.8rem' }),
                   i18n.newTask
                 ] })
               })

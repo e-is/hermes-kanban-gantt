@@ -198,16 +198,17 @@ var GANTT_LOCALES = {
     discardChanges: "Discard changes",
     result: "Result",
     latestSummary: "Latest summary",
-    runs: (n) => `Runs (${n})`,
+    runs: (n) => `Runs · ${n}`,
     show: "Show",
     hide: "Hide",
-    comments: (n) => `Comments (${n})`,
+    comments: (n) => `Comments · ${n}`,
     showPreviousComments: (n) => `Show ${n} previous comment${n > 1 ? "s" : ""}`,
     addCommentPlaceholder: "Add a comment…",
     send: "Send",
-    activity: (n) => `Activity (${n})`,
-    // The tab labels, WITHOUT the count: the count is a badge beside them, so a reader
-    // sees "Comments 3" rather than parsing a number out of a sentence.
+    activity: (n) => `Activity · ${n}`,
+    // The tab labels carry their count the way the bundled drawer's do: `Comments · 2`, one string,
+    // no badge. `tabComments` and friends stay count-less: they are the plain names, used where the
+    // number would be noise.
     tabComments: "Comments",
     tabActivity: "Activity",
     tabRuns: "Runs",
@@ -469,15 +470,16 @@ var GANTT_LOCALES = {
     discardChanges: "Abandonner les modifications",
     result: "Résultat",
     latestSummary: "Dernier résumé",
-    runs: (n) => `Exécutions (${n})`,
+    runs: (n) => `Exécutions · ${n}`,
     show: "Afficher",
     hide: "Masquer",
-    comments: (n) => `Commentaires (${n})`,
+    comments: (n) => `Commentaires · ${n}`,
     showPreviousComments: (n) => `Afficher les ${n} commentaires précédents`,
     addCommentPlaceholder: "Ajouter un commentaire…",
     send: "Envoyer",
-    activity: (n) => `Activité (${n})`,
-    // Les libellés SANS le compte : le compte est un badge à côté.
+    activity: (n) => `Activité · ${n}`,
+    // Les libellés portent leur compte comme ceux du tiroir officiel : `Commentaires · 2`, une seule
+    // chaîne, pas de badge. Les clés `tabXxx` restent sans compte : ce sont les noms nus.
     tabComments: "Commentaires",
     tabActivity: "Activité",
     tabRuns: "Exécutions",
@@ -738,14 +740,14 @@ var GANTT_LOCALES = {
     discardChanges: "放弃修改",
     result: "结果",
     latestSummary: "最新摘要",
-    runs: (n) => `运行记录（${n}）`,
+    runs: (n) => `运行记录 · ${n}`,
     show: "展开",
     hide: "收起",
-    comments: (n) => `评论（${n}）`,
+    comments: (n) => `评论 · ${n}`,
     showPreviousComments: (n) => `显示前 ${n} 条评论`,
     addCommentPlaceholder: "添加评论…",
     send: "发送",
-    activity: (n) => `活动（${n}）`,
+    activity: (n) => `活动 · ${n}`,
     tabComments: "评论",
     tabActivity: "活动",
     tabRuns: "运行记录",
@@ -2005,7 +2007,7 @@ function NewTaskDialog({
       ] })
     ] }),
     /* @__PURE__ */ jsxs2(DialogFooter, { className: "gap-2", children: [
-      /* @__PURE__ */ jsx2(Button2, { variant: "ghost", onClick: onClose, disabled: busy, children: i18n.cancel }),
+      /* @__PURE__ */ jsx2(Button2, { variant: "text", onClick: onClose, disabled: busy, children: i18n.cancel }),
       /* @__PURE__ */ jsx2(Button2, { onClick: submit, disabled: !canSubmit, children: busy ? i18n.creating : i18n.create })
     ] })
   ] }) });
@@ -2075,8 +2077,8 @@ function MoveTaskDialog({ open, task, boards, currentBoard, i18n, onClose, onMov
     ] }),
     error ? /* @__PURE__ */ jsx3("span", { className: "text-[0.75rem] text-destructive", children: error }) : null,
     /* @__PURE__ */ jsxs3(DialogFooter2, { children: [
-      /* @__PURE__ */ jsx3(Button3, { disabled: busy, onClick: onClose, size: "sm", variant: "ghost", children: i18n.cancel }),
-      /* @__PURE__ */ jsx3(Button3, { disabled: !target || busy, onClick: () => void submit(), size: "sm", children: busy ? /* @__PURE__ */ jsxs3(Fragment, { children: [
+      /* @__PURE__ */ jsx3(Button3, { disabled: busy, onClick: onClose, variant: "text", children: i18n.cancel }),
+      /* @__PURE__ */ jsx3(Button3, { disabled: !target || busy, onClick: () => void submit(), children: busy ? /* @__PURE__ */ jsxs3(Fragment, { children: [
         /* @__PURE__ */ jsx3(Codicon3, { name: "loading", size: "0.75rem", spinning: true }),
         i18n.moving
       ] }) : i18n.moveConfirm })
@@ -3639,20 +3641,16 @@ function FeedTab({ label, count, ariaLabel, active, onClick }) {
     "aria-label": ariaLabel,
     onClick,
     className: cn3(
-      "inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0",
-      active ? "bg-(--ui-accent)/15 text-(--ui-accent) font-medium" : "bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)"
+      // The SDK SegmentedControl's own chip, which is what the bundled drawer's tabs look like:
+      // flat, on the track's tint, with the active one raised.
+      "flex min-w-0 items-center justify-center gap-1 rounded-[3px] px-2.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap transition-colors cursor-pointer border-0",
+      active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
     ),
     children: [
-      jsx6("span", { className: "whitespace-nowrap", children: label }),
-      // The badge is optional: the worker log is either there or it is not, and a "0" beside it
-      // would read as an invitation to a tab that has nothing in it.
-      count == null ? null : jsx6("span", {
-        className: cn3(
-          "inline-flex min-w-[1.05rem] items-center justify-center rounded-full px-1 text-[9.5px] font-semibold leading-[1.35] tabular-nums",
-          active ? "bg-(--ui-accent)/22 text-(--ui-accent)" : "bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)"
-        ),
-        children: String(count)
-      })
+      // The count rides in the label, exactly as the bundled drawer writes it (`Comments · 2`) —
+      // one text node, no badge. A pill with a background competes with the raised active segment
+      // for the eye, and the number was never a separate thing to click.
+      jsx6("span", { className: "whitespace-nowrap", children: count == null ? label : `${label} · ${count}` })
     ]
   });
 }
@@ -3665,13 +3663,17 @@ function ViewToggle({ value, onChange }) {
     "aria-label": label,
     "aria-pressed": value === mode,
     className: cn3(
-      "inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded cursor-pointer",
-      value === mode ? "bg-(--ui-accent)/15 text-(--ui-accent) font-medium" : "text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)"
+      // Same chip as the SDK SegmentedControl the bundled plugin uses, so a segmented control looks
+      // the same wherever it appears in the app.
+      "flex min-w-0 items-center justify-center gap-1 rounded-[3px] px-2.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap transition-colors cursor-pointer border-0",
+      value === mode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
     ),
     children: [jsx6(Codicon5, { key: "i", name: icon, size: "0.8rem" }), jsx6("span", { key: "l", children: label })]
   }, mode);
   return jsxs6("span", {
-    className: "inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5",
+    // The official track: a tinted, inset-looking strip the options sit on. Ours had a border and no
+    // background, which is why the buttons had nothing darker around them to sit in.
+    className: "inline-grid w-fit auto-cols-fr grid-flow-col gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5",
     role: "group",
     children: [
       item("list", "list-flat", i18n.viewList),
@@ -4601,26 +4603,25 @@ function ScopeToggle({ value, onChange, lineage: lineage2 = false, onLineageChan
     "data-scope": id,
     title: label,
     className: cn3(
-      "inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] rounded cursor-pointer border-0 whitespace-nowrap",
-      value === id ? "bg-(--ui-accent)/15 text-(--ui-accent) font-medium" : "bg-transparent text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover)"
+      // The SDK SegmentedControl's chip, chip for chip: flat on the track's tint, the chosen one
+      // raised. (Kept as our own markup rather than the SDK component because these carry a count
+      // badge, which the component has no slot for.)
+      "flex min-w-0 items-center justify-center gap-1 rounded-[3px] px-2.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap transition-colors cursor-pointer border-0",
+      value === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
     ),
-    // The count, in the same badge the detail's feed tabs use: the control already trades one
-    // reading of the board for another, and a reader should see how much each one holds before
-    // spending a click on it.
-    children: [
-      jsx6("span", { key: "label", children: label }),
-      counts && counts[id] != null ? jsx6("span", {
-        key: "count",
-        className: cn3(
-          "inline-flex min-w-[1.05rem] items-center justify-center rounded-full px-1 text-[9.5px] font-semibold leading-[1.35] tabular-nums",
-          value === id ? "bg-(--ui-accent)/22 text-(--ui-accent)" : "bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)"
-        ),
-        children: String(counts[id])
-      }) : null
-    ]
+    // The count rides in the label, the way the bundled drawer writes its own tabs (`Comments · 2`):
+    // one text node, no badge, so the raised active segment stays the only thing that reads as
+    // "chosen". The number is also what tells a reader how much each reading holds before spending a
+    // click on it.
+    children: jsx6("span", {
+      className: "whitespace-nowrap",
+      children: counts && counts[id] != null ? `${label} · ${counts[id]}` : label
+    })
   }, id);
   return jsxs6("span", {
-    className: "inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5",
+    // The official track (a tinted strip), kept as inline-flex rather than the grid so the lineage
+    // switch beside the four scopes does not get stretched to a segment's width.
+    className: "inline-flex items-center gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5",
     role: "group",
     "aria-label": i18n.graphScopeAria,
     children: [
@@ -5629,7 +5630,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
           // its count, so the reader knows there is something to see before clicking.
           jsxs6("span", {
             role: "group",
-            className: "inline-flex items-center gap-0.5 rounded-md border border-(--ui-stroke-secondary) p-0.5 self-start",
+            className: "inline-flex items-center gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5 self-start",
             children: [
               jsx6(FeedTab, { label: i18n.tabComments, count: totalComments, ariaLabel: i18n.comments(totalComments), active: activeTab === "comments", onClick: () => setFeedTab("comments") }),
               eventsList.length ? jsx6(FeedTab, { label: i18n.tabActivity, count: eventsList.length, ariaLabel: i18n.activity(eventsList.length), active: activeTab === "activity", onClick: () => setFeedTab("activity") }) : null,
@@ -6785,20 +6786,23 @@ function KanbanGanttPage() {
                     title: i18n.refreshWhy,
                     children: jsx6(Button5, {
                       size: "xs",
+                      variant: "ghost",
                       onClick: () => void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] }),
                       children: jsxs6("span", { className: "flex items-center gap-1", children: [
-                        jsx6(Codicon5, { name: "refresh", size: "0.85rem" }),
+                        jsx6(Codicon5, { name: "refresh", size: "0.75rem" }),
                         i18n.refresh
                       ] })
                     })
                   }) : null,
-                  // Far right: the board's only creation verb.
+                  // Far right: the board's only creation verb — the bundled board's own shape for it,
+                  // `sm` rather than `xs`, with the `add` glyph at 0.8rem. A creation verb that is the
+                  // same height as the small controls beside it does not read as the primary action.
                   jsx6(Button5, {
-                    size: "xs",
+                    size: "sm",
                     variant: "default",
                     onClick: () => $newTask.set({ parentId: "" }),
                     children: jsxs6("span", { className: "flex items-center gap-1", children: [
-                      jsx6(Codicon5, { name: "add", size: "0.85rem" }),
+                      jsx6(Codicon5, { name: "add", size: "0.8rem" }),
                       i18n.newTask
                     ] })
                   }),
@@ -6806,12 +6810,16 @@ function KanbanGanttPage() {
                   jsxs6(DropdownMenu3, { children: [
                     jsx6(DropdownMenuTrigger3, {
                       asChild: true,
-                      children: jsx6("button", {
+                      children: jsx6(Button5, {
+                        // The bundled board's own menu trigger: a real icon Button on the ghost variant,
+                        // not a hand-rolled square — so it inherits the theme's radius, hit box and focus
+                        // ring instead of approximating them.
                         type: "button",
-                        className: "inline-flex items-center justify-center rounded-md p-1 hover:bg-(--chrome-action-hover) cursor-pointer text-(--ui-text-secondary) border-0 bg-transparent",
+                        size: "icon-xs",
+                        variant: "ghost",
                         "aria-label": i18n.viewOptions,
                         title: i18n.viewOptions,
-                        children: jsx6(Codicon5, { name: "kebab-vertical", size: "0.9rem" })
+                        children: jsx6(Codicon5, { name: "kebab-vertical", size: "0.85rem" })
                       })
                     }),
                     jsxs6(DropdownMenuContent3, {
@@ -6986,7 +6994,7 @@ function KanbanGanttPage() {
                 variant: "default",
                 onClick: () => $newTask.set({ parentId: "" }),
                 children: jsxs6("span", { className: "flex items-center gap-1", children: [
-                  jsx6(Codicon5, { name: "add", size: "0.85rem" }),
+                  jsx6(Codicon5, { name: "add", size: "0.8rem" }),
                   i18n.newTask
                 ] })
               })

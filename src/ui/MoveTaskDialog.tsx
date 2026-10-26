@@ -136,10 +136,10 @@ export function MoveTaskDialog({ open, task, boards, currentBoard, i18n, onClose
           {error ? <span className="text-[0.75rem] text-destructive">{error}</span> : null}
 
           <DialogFooter>
-            <Button disabled={busy} onClick={onClose} size="sm" variant="ghost">
+            <Button disabled={busy} onClick={onClose} variant="text">
               {i18n.cancel}
             </Button>
-            <Button disabled={!target || busy} onClick={() => void submit()} size="sm">
+            <Button disabled={!target || busy} onClick={() => void submit()}>
               {busy ? (
                 <>
                   <Codicon name="loading" size="0.75rem" spinning />

@@ -419,14 +419,15 @@ if (pageNode) {
     'the feed offers Comments alone when a task has neither events nor runs')
   check(detailFlat.includes('"aria-selected":"true"'),
     'the feed opens on the first tab rather than on nothing')
-  // The count is a badge beside the label, not "Comments (0)" inside it: the label is its
-  // own span fed by the plain key, the badge is a second span carrying the number, and the
-  // screen reader still gets the counting form through aria-label. (The harness's i18n stub
-  // returns keys, so "tabComments" and "comments" below ARE those two call sites.)
-  check(detailFlat.includes('"children":"tabComments"'), 'the tab label comes from the plain key')
+  // The count rides in the label, the way the bundled drawer writes its own tabs: one text node
+  // reading "Comments · 2", no badge. The screen reader gets the same counting form through
+  // aria-label. (The harness's i18n stub returns keys, so "tabComments" and "comments" below ARE
+  // those two call sites.)
+  check(detailFlat.includes('"children":"tabComments · 0"'),
+    'the tab label carries its count after a dot, as the bundled drawer does')
   check(detailFlat.includes('"aria-label":"comments"'), 'the counting form survives, for a screen reader')
-  check(detailFlat.includes('tabular-nums'), 'the count renders as a badge beside the label')
-  check(detailFlat.includes('"children":"0"'), 'the badge carries the count itself')
+  // The pill is gone for good: its geometry must not reappear in this strip.
+  check(!detailFlat.includes('min-w-[1.05rem]'), 'and no count is a badge pill any more')
   // The CLI block: kanban-graph closes its detail with a copyable command, and it is the
   // one thing a shell-first reader wants from a GUI. The board comes from the task (or
   // the selected board), the id from the drawer.
@@ -505,17 +506,33 @@ if (pageNode) {
     'the total-count badge is gone from the title row')
   check(listFlat.includes('"data-scope-badge":"blocked"'),
     'the blocked count is a control now, not a label')
-  // Each scope carries its count, in the badge the detail's feed tabs use: the control already
-  // trades one reading of the board for another, so a reader should see how much each one holds
-  // before spending a click on it. On the fixture that is 1 running, 1 blocked, 2 open, 3 in all.
+  // One segmented control, one look: the SDK SegmentedControl's tinted track and raised active pill
+  // — the bundled plugin's own chip. The old shape (a bordered group with no background) must not
+  // come back, since that is exactly what made ours look unlike the official one.
+  check(listFlat.includes('rounded-[5px] bg-(--ui-bg-tertiary) p-0.5'),
+    'the segmented tracks carry the SDK track tint')
+  check(!listFlat.includes('border border-(--ui-stroke-secondary) p-0.5'),
+    'and none of them is still the old bordered group')
+  // Buttons follow the bundled plugin's own sizing: the creation verb is `sm` (the same as the
+  // official board's "New task"), and the view menu is a real ghost icon Button rather than a
+  // hand-rolled square — so it takes the theme's radius, hit box and focus ring.
+  check(listFlat.includes('"size":"sm"'), 'the creation verb is sized like the official one')
+  check(listFlat.includes('"size":"icon-xs"'), 'the view menu is an icon Button, not a bare div')
+  // Each scope carries its count inside its label, as the bundled drawer's tabs do ("Comments · 2"):
+  // the control already trades one reading of the board for another, so a reader should see how much
+  // each one holds before spending a click on it. On the fixture that is 1 running, 1 blocked,
+  // 2 open, 3 in all.
   for (const [id, n] of [['running', 1], ['blocked', 1], ['open', 2], ['all', 3]]) {
     const at = listFlat.indexOf('"data-scope":"' + id + '"')
     check(at >= 0, 'the scope strip offers ' + id)
     if (at >= 0) {
-      check(listFlat.slice(at, at + 900).includes('"children":"' + n + '"'),
-        'the ' + id + ' scope shows its count (' + n + ')')
+      check(listFlat.slice(at, at + 900).includes('"children":"graphScope' + id.charAt(0).toUpperCase() + id.slice(1) + ' · ' + n + '"'),
+        'the ' + id + ' scope carries its count in the label (' + n + ')')
     }
   }
+  // And no count is a pill any more: the badge's geometry must not come back into these controls.
+  check(!listFlat.includes('min-w-[1.05rem]'),
+    'no segmented count is a badge pill')
   globalThis.__kgView = 'timeline'
   const timelineFlat = JSON.stringify(page.render())
   check(timelineFlat.includes('"aria-label":"graphScopeAria"'), 'timeline view carries the quick scopes too')

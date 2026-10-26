@@ -457,7 +457,7 @@ export function NewTaskDialog({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={busy}>{i18n.cancel}</Button>
+          <Button variant="text" onClick={onClose} disabled={busy}>{i18n.cancel}</Button>
           <Button onClick={submit} disabled={!canSubmit}>
             {busy ? i18n.creating : i18n.create}
           </Button>
