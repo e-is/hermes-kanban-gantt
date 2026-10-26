@@ -2,7 +2,8 @@
 
 Card `t_9332b1e2` (board `gantt-demo`), 2026-10-26. Tree: plugin `1.7.2`, `main` @ `4db0f39`.
 Companions: `websocket-options.md` (the survey and the pick), `polling-loop-audit.md` (what
-the poll does today), `websocket-protocol-design.md` (R1–R20).
+the poll does today), `websocket-protocol-design.md` (R1–R20), and the go/no-go these results
+feed: `websocket-migration-recommendation.md`.
 
 **Status: spike.** The code lives in `docs/spikes/ws-poc/` and is not imported by the plugin;
 no production route, module or build step changed. It boots the *shipped* transport —

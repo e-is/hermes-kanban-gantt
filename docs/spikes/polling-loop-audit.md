@@ -8,6 +8,7 @@ reference so it can be checked against the tree, not against this prose.
 Companion, older and partly stale: `docs/spikes/websocket-migration.md` (inventory written at
 `e3cd500`; its line numbers no longer match and two of its behavioural claims are corrected in
 §7 here). This file is the current, verified statement of what runs today.
+Decision taken from it and from the PoC: `websocket-migration-recommendation.md`.
 
 ---
 

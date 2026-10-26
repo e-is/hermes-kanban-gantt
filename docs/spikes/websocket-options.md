@@ -16,6 +16,7 @@ two purposes: the audit trail for the shipped choice (§4), and the constraint l
 hardening items in `../TODO.md` have to respect (§5).
 
 Companions: `websocket-recommendation.md` (go/no-go and end-to-end numbers),
+`websocket-migration-recommendation.md` (the current go/no-go, from this round's measurements),
 `websocket-protocol-design.md` (wire contract, R1–R20), `websocket-migration.md` (loop inventory),
 `../TODO.md` (hardening backlog).
 

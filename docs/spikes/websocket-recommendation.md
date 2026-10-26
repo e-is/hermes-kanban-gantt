@@ -14,6 +14,11 @@ numbers below keep their values, and the raw runs that back them are in `results
 > re-arms itself every 5 min after giving up. A defect remains, found on re-check: after a
 > gateway restart the client discards the new process's snapshots as stale and quietly stays on
 > the 300 s poll (`websocket-protocol-design.md` §0.3 (4)). §5–§7 are annotated accordingly.
+>
+> **Superseded on status by `websocket-migration-recommendation.md` (2026-10-26, plugin 1.7.2).**
+> The restart defect above is fixed (`src/core/ws-core.ts:70-80`: a lower version is a new stream,
+> not a stale frame); the numbers and the verdict are re-derived there from this round's PoC.
+> Read this file for the gateway probe and the September history.
 
 ## 1. Verdict — **GO**, behind the flag, for loopback/token desktops only
 
