@@ -87,9 +87,13 @@ Four options, one row per design question. "Native WS" = what shipped.
   that exists (`../TODO.md`, "Observability"), "did push break?" is answered by a user complaint.
   The `GET /gantt` poll keeps working underneath, so a push failure looks like *slow*, not *down* —
   which hides failures even better.
-* **Silent staleness.** Recovery depends on the on-connect snapshot; a client that misses a frame
-  without dropping the connection stays stale until the next change or the 300 s poll. Version
-  monotonicity makes a *dropped stream* detectable, not a *skipped frame*.
+* **"Live" is narrower than the UI.** Every frame is a whole snapshot, so a dropped frame costs
+  latency and never correctness (a version jump > 1 triggers a REST re-validation). What push does
+  *not* cover is everything else on screen: the task drawer's `GET /tasks/<id>`, the board list, the
+  project/profile pickers — those keep their own fetches, so users learn to trust the bars and not
+  the drawer. The version counter is also per-process: a gateway restart legitimately restarts it
+  at 1 and the client must treat that as a new stream (it does), which means a *restart* and a
+  *counter reset* are indistinguishable on the client.
 
 ## 4. Recommendation
 
