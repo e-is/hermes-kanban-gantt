@@ -126,6 +126,7 @@ const useValueImplSrc = useValueImpl.toString()
 
 const sdkStub = {
   Badge: 'Badge',
+  Textarea: 'Textarea',
   Button: 'Button',
   cn: (...parts) => parts.filter(Boolean).join(' '),
   Codicon: 'Codicon',
@@ -440,6 +441,16 @@ if (pageNode) {
   check(detailFlat.includes('kg-selectable'), 'the detail panel allows text selection')
   check(modalFlat.includes('kg-selectable'), 'and so does the modal, on its own content column')
 
+  // The comment composer, in the official drawer's own geometry: a real control (the SDK Textarea,
+  // whose focus ring is the theme's — the hand-rolled input is what had swallowed the blue outline),
+  // room on the right for the action, growth with the text, and the action inside the field as an
+  // arrow rather than a labelled button beside it.
+  check(detailFlat.includes('"type":"Textarea"'), 'the comment field is the SDK control, not a bare input')
+  check(detailFlat.includes('field-sizing-content'), 'it grows with the text')
+  check(detailFlat.includes('pr-9'), 'it reserves the room the inset action needs')
+  check(detailFlat.includes('"name":"arrow-up"'), 'the send action is the arrow, inside the field')
+  check(detailFlat.includes('"size":"icon-xs"'), 'and it is sized as an inset icon action')
+
   // The feed's fourth tab, the one the bundled plugin has: offered when the task has a worker log,
   // absent when it has none. Asserted on the TAB MARKER, never on a label, which is translated.
   globalThis.__kgLogDetail = true
@@ -487,6 +498,13 @@ if (pageNode) {
     'the scopes come before the funnel, among the filters')
   check(['graphScopeRunning', 'graphScopeBlocked', 'graphScopeOpen', 'graphScopeAll'].every(k => listFlat.includes(k)),
     'all four scopes are offered in list view')
+  // The title row: the redundant total-count badge is gone (its number already lives on the "All"
+  // scope), and the blocked count became a control that applies the very filter the segment beside
+  // it applies — a count you cannot click is a number, not a control.
+  check(!listFlat.includes('nTasksTotal'),
+    'the total-count badge is gone from the title row')
+  check(listFlat.includes('"data-scope-badge":"blocked"'),
+    'the blocked count is a control now, not a label')
   // Each scope carries its count, in the badge the detail's feed tabs use: the control already
   // trades one reading of the board for another, so a reader should see how much each one holds
   // before spending a click on it. On the fixture that is 1 running, 1 blocked, 2 open, 3 in all.

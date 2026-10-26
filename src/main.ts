@@ -2978,6 +2978,14 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     onSuccess: () => { void refetch() },
     onError: error => toast('error', String(error?.message || error))
   })
+  // Sending a comment, in one place: the Enter key and the inset arrow must do exactly the same
+  // thing, and neither may send an empty body or double-send while a write is in flight.
+  const sendComment = () => {
+    const body = comment.trim()
+    if (!body || commentMutation.isPending) return
+    commentMutation.mutate({ body })
+    setComment('')
+  }
   const assignMutation = useMutation({
     mutationFn: profile => apiFetch(
       `/tasks/${encodeURIComponent(shownId)}/assignee${board ? `?board=${encodeURIComponent(board)}` : ''}`,
@@ -3443,25 +3451,38 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                         ]
                       })
                     }),
-                    jsxs('div', { className: 'flex gap-1.5 mt-1', children: [
-                      jsx('input', {
-                        type: 'text',
+                    // The composer takes the official drawer's own geometry: the SDK Textarea gives
+                    // the standard control (its 4rem floor is the taller input that was asked for,
+                    // and its focus ring is the theme's own — no hand-rolled classes, which is what
+                    // had swallowed the blue outline here). field-sizing-content lets it grow with
+                    // the text, pr-9 reserves the room for the action, and the action sits INSIDE
+                    // the field as an arrow instead of a labelled button beside it.
+                    jsx('div', { className: 'relative mt-1', children: [
+                      jsx(Textarea, {
                         value: comment,
                         placeholder: i18n.addCommentPlaceholder,
-                        className: 'flex-1 bg-transparent border border-(--ui-stroke-tertiary) rounded px-1.5 py-0.5 text-[11px]',
-                        onInput: event => setComment(event.target.value),
+                        className: 'field-sizing-content max-h-40 resize-none pr-9 text-[0.8125rem]',
+                        onChange: event => setComment(event.target.value),
                         onKeyDown: event => {
-                          if (event.key === 'Enter' && comment.trim()) {
-                            commentMutation.mutate({ body: comment.trim() })
-                            setComment('')
+                          // Enter sends, Shift+Enter keeps the line — and never while an IME is
+                          // composing, or a Japanese or Chinese comment would submit itself mid-word.
+                          const composing = event.isComposing || event.nativeEvent?.isComposing
+                          if (event.key === 'Enter' && !event.shiftKey && !composing) {
+                            event.preventDefault()
+                            sendComment()
                           }
                         }
                       }),
                       jsx(Button, {
-                        size: 'xs',
+                        type: 'button',
+                        variant: 'ghost',
+                        size: 'icon-xs',
+                        'aria-label': i18n.send,
+                        title: i18n.send,
                         disabled: !comment.trim() || commentMutation.isPending,
-                        onClick: () => { commentMutation.mutate({ body: comment.trim() }); setComment('') },
-                        children: i18n.send
+                        className: 'absolute top-1 right-1 text-(--ui-text-tertiary) hover:text-(--ui-text-primary)',
+                        onClick: sendComment,
+                        children: jsx(Codicon, { name: 'arrow-up', size: '0.85rem' })
                       })
                     ] })
                   ] }) : null,
@@ -4700,17 +4721,7 @@ export function KanbanGanttPage() {
   }, row.secondary ? `${row.task.id}@${row.parentId}` : row.task.id))
 
   // Determine dominant status priority for the top task count badge:
-  // blocked > running > review > ready > scheduled > todo > triage > done > archived
-  const STATUS_PRIORITY = ['blocked', 'running', 'review', 'ready', 'scheduled', 'todo', 'triage', 'done', 'archived']
   const blockedCount = (derived?.tasks || []).filter(t => t.status === 'blocked').length
-  const dominantStatus = (() => {
-    const present = new Set((derived?.tasks || []).map(t => t.status))
-    for (const s of STATUS_PRIORITY) {
-      if (present.has(s)) return s
-    }
-    return 'todo'
-  })()
-  const dominantTone = statusTone(dominantStatus)
 
   const dockDrawer = Boolean(openTaskId && drawerDocked)
 
@@ -4760,21 +4771,28 @@ export function KanbanGanttPage() {
             className: 'inline-flex items-center gap-2 text-sm font-medium',
             children: [
               jsx('span', { className: 'font-semibold', children: i18n.title }),
-              jsx('span', {
-                className: 'inline-flex items-center justify-center rounded-full px-2 py-0.2 text-[10.5px] font-semibold tracking-tight shadow-xs cursor-help',
-                title: i18n.nTasksTotal(derived?.total || 0, dominantStatus),
-                style: {
-                  backgroundColor: `color-mix(in srgb, ${dominantTone} 18%, transparent)`,
-                  borderColor: `color-mix(in srgb, ${dominantTone} 40%, transparent)`,
-                  borderWidth: '1px',
-                  color: dominantTone
-                },
-                children: `${derived?.total || 0}`
-              }),
+              // The total-count badge used to sit here. It went: the count is already on the "All"
+              // scope, one word away, so a second copy of the same number only pushed the real
+              // controls further from the title.
               blockedCount > 0
-                ? jsxs('span', {
-                    className: 'inline-flex items-center gap-1 rounded-full px-2 py-0.2 text-[10.5px] font-semibold tracking-tight shadow-xs text-[#f87171] border border-[#f87171]/40 bg-[#f87171]/18 cursor-help',
+                ? jsxs('button', {
+                    type: 'button',
+                    // A count of blocked work you cannot click is a number, not a control. This is
+                    // the same filter the segment beside it applies, one gesture closer.
+                    'data-scope-badge': 'blocked',
+                    'aria-pressed': graphScope === 'blocked',
+                    onClick: () => handleGraphScope('blocked'),
                     title: i18n.nBlockedWarning(blockedCount),
+                    className: cn(
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.2 text-[10.5px] font-semibold',
+                      'tracking-tight shadow-xs cursor-pointer border',
+                      graphScope === 'blocked' ? 'ring-1 ring-current/40' : ''
+                    ),
+                    style: {
+                      color: statusTone('blocked'),
+                      borderColor: `color-mix(in srgb, ${statusTone('blocked')} 40%, transparent)`,
+                      backgroundColor: `color-mix(in srgb, ${statusTone('blocked')} 18%, transparent)`
+                    },
                     children: [
                       jsx(Codicon, { name: 'warning', size: '0.8rem' }),
                       jsx('span', { children: `${blockedCount}` })
