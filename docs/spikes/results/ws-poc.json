@@ -1,0 +1,237 @@
+{
+  "started_at": "2026-10-26T15:35:31+0100",
+  "python": "3.11.16",
+  "host": "fixe13.e-is",
+  "sections": {
+    "auth": {
+      "absent": "InvalidStatus: server rejected WebSocket connection: HTTP 403",
+      "wrong": "InvalidStatus: server rejected WebSocket connection: HTTP 403",
+      "valid": "ACCEPTED v1 20 tasks"
+    },
+    "latency_default": {
+      "config": {
+        "KANBAN_GANTT_WS_HEARTBEAT_S": "5"
+      },
+      "e2e_write_to_client_ms": {
+        "n": 20,
+        "p50": 499.3,
+        "p95": 540.39,
+        "max": 540.39,
+        "mean": 499.85
+      },
+      "coarse_generated_at_age_ms": {
+        "n": 20,
+        "p50": 515.02,
+        "p95": 959.8,
+        "max": 959.8,
+        "mean": 532.53
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "frame_bytes": 7492
+    },
+    "latency_tuned": {
+      "config": {
+        "KANBAN_GANTT_WS_POLL_MS": "50",
+        "KANBAN_GANTT_WS_DEBOUNCE_MS": "100",
+        "KANBAN_GANTT_WS_HEARTBEAT_S": "5"
+      },
+      "e2e_write_to_client_ms": {
+        "n": 20,
+        "p50": 146.7,
+        "p95": 153.22,
+        "max": 153.22,
+        "mean": 145.41
+      },
+      "coarse_generated_at_age_ms": {
+        "n": 20,
+        "p50": 496.27,
+        "p95": 986.54,
+        "max": 986.54,
+        "mean": 493.04
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "frame_bytes": 7492
+    },
+    "throughput_default": {
+      "config": {
+        "KANBAN_GANTT_WS_HEARTBEAT_S": "5"
+      },
+      "writers": 4,
+      "seconds": 10.07,
+      "writes": 3551,
+      "writes_per_s": 352.6,
+      "frames": 20,
+      "frames_per_s": 1.99,
+      "writes_per_frame": 177.6,
+      "frame_bytes": 7500,
+      "bytes_per_s": 14893.0,
+      "versions": [
+        [
+          1,
+          2
+        ],
+        [
+          19,
+          20
+        ]
+      ]
+    },
+    "throughput_tuned": {
+      "config": {
+        "KANBAN_GANTT_WS_POLL_MS": "50",
+        "KANBAN_GANTT_WS_DEBOUNCE_MS": "100",
+        "KANBAN_GANTT_WS_HEARTBEAT_S": "5"
+      },
+      "writers": 4,
+      "seconds": 10.1,
+      "writes": 2066,
+      "writes_per_s": 204.6,
+      "frames": 67,
+      "frames_per_s": 6.64,
+      "writes_per_frame": 30.8,
+      "frame_bytes": 7500,
+      "bytes_per_s": 49772.0,
+      "versions": [
+        [
+          1,
+          2
+        ],
+        [
+          66,
+          67
+        ]
+      ]
+    },
+    "frame_ceiling": {
+      "config": {
+        "KANBAN_GANTT_WS_POLL_MS": "25",
+        "KANBAN_GANTT_WS_DEBOUNCE_MS": "0",
+        "KANBAN_GANTT_WS_HEARTBEAT_S": "5"
+      },
+      "writers": 1,
+      "seconds": 5.0,
+      "writes": 1869,
+      "writes_per_s": 373.6,
+      "frames": 188,
+      "frames_per_s": 37.58,
+      "writes_per_frame": 9.9,
+      "frame_bytes": 7501,
+      "bytes_per_s": 281936.0,
+      "versions": [
+        [
+          1,
+          2
+        ],
+        [
+          187,
+          188
+        ]
+      ]
+    },
+    "fanout_20": {
+      "clients": 20,
+      "writes": 93,
+      "writes_per_s": 15.4,
+      "frames_per_client": {
+        "n": 20,
+        "p50": 34.0,
+        "p95": 34.0,
+        "max": 34.0,
+        "mean": 34.0
+      },
+      "client_msgs_per_s": 112.8,
+      "single_reader": true,
+      "server_rss_kb": {
+        "before": 80948,
+        "after": 83008
+      }
+    },
+    "memory": {
+      "samples": [
+        {
+          "clients": 0,
+          "rss_kb": 76540,
+          "threads": 6,
+          "fds": 15
+        },
+        {
+          "clients": 10,
+          "rss_kb": 79148,
+          "threads": 7,
+          "fds": 29
+        },
+        {
+          "clients": 25,
+          "rss_kb": 82124,
+          "threads": 7,
+          "fds": 44
+        },
+        {
+          "clients": 50,
+          "rss_kb": 86876,
+          "threads": 7,
+          "fds": 69
+        }
+      ],
+      "kb_per_client": 206.7,
+      "fds_per_client": 1.08
+    },
+    "drop_rst": {
+      "version_before_drop": 1,
+      "version_after_reconnect": 2,
+      "snapshot_on_reconnect": true,
+      "detect_and_reconnect_ms": 46.4,
+      "retry_delays_ms": [
+        44
+      ],
+      "frame_after_write": true,
+      "post_write_latency_ms": 478.6
+    },
+    "restart_term": {
+      "signal": "SIGTERM",
+      "version_before": 1,
+      "version_after_restart": 1,
+      "snapshot_after_restart": true,
+      "detect_ms": 4940.0,
+      "recovery_after_server_up_ms": 403.0,
+      "retry_delays_ms": [
+        160,
+        630,
+        1125,
+        2943
+      ],
+      "connects": 2,
+      "gave_up": false
+    },
+    "restart_kill": {
+      "signal": "SIGKILL",
+      "version_before": 1,
+      "version_after_restart": 1,
+      "snapshot_after_restart": true,
+      "detect_ms": 5023.0,
+      "recovery_after_server_up_ms": 1409.0,
+      "retry_delays_ms": [
+        32,
+        322,
+        992,
+        3611
+      ],
+      "connects": 2,
+      "gave_up": false
+    }
+  }
+}

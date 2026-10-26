@@ -1,0 +1,30 @@
+[15:35:31] ===== auth =====
+[15:35:32] [auth] absent=InvalidStatus: server rejected WebSocket connection: HTTP 403 wrong=InvalidStatus: server rejected WebSocket connection: HTTP 403 valid=ACCEPTED v1 20 tasks
+[15:35:32] ===== latency_default =====
+[15:35:33] [latency/default] first frame: v1 20 tasks 7492 B
+[15:35:44] [latency/default] e2e write→client p50=499.3 ms p95=540.39 ms max=540.39 ms
+[15:35:49] ===== latency_tuned =====
+[15:35:50] [latency/tuned] first frame: v1 20 tasks 7492 B
+[15:35:54] [latency/tuned] e2e write→client p50=146.7 ms p95=153.22 ms max=153.22 ms
+[15:35:59] ===== throughput_default =====
+[15:36:11] [throughput] 3551 writes in 10.1s (352.6/s) → 20 frames (1.99/s, 177.6 writes/frame), 14893 B/s
+[15:36:16] ===== throughput_tuned =====
+[15:36:27] [throughput] 2066 writes in 10.1s (204.6/s) → 67 frames (6.64/s, 30.8 writes/frame), 49772 B/s
+[15:36:32] ===== frame_ceiling =====
+[15:36:38] [throughput] 1869 writes in 5.0s (373.6/s) → 188 frames (37.58/s, 9.9 writes/frame), 281936 B/s
+[15:36:43] ===== fanout_20 =====
+[15:36:49] [fanout] 20 clients × 34.0 frames = 112.8 client-msgs/s (93 writes at 20/s)
+[15:36:54] ===== memory =====
+[15:36:55] [memory] 0 clients → RSS 76540 KB, fds 15, threads 6
+[15:36:56] [memory] 10 clients → RSS 79148 KB, fds 29, threads 7
+[15:36:57] [memory] 25 clients → RSS 82124 KB, fds 44, threads 7
+[15:36:58] [memory] 50 clients → RSS 86876 KB, fds 69, threads 7
+[15:36:58] [memory] ≈ 206.7 KB and 1.08 fd per connected client
+[15:37:03] ===== drop_rst =====
+[15:37:04] [drop/rst] auto-reconnect in 46.4 ms, v1 → v2 (snapshot=True), post-write frame=True in 478.6 ms
+[15:37:09] ===== restart_term =====
+[15:37:10] [restart-term] server SIGTERM at v1; down for 3.0s
+[15:37:15] [restart-term] reconnect 4940.0 ms after the kill (403.0 ms after the server was back), snapshot v1, retry ladder [160, 630, 1125, 2943] ms
+[15:37:15] ===== restart_kill =====
+[15:37:17] [restart-kill] server SIGKILL at v1; down for 3.0s
+[15:37:22] [restart-kill] reconnect 5023.0 ms after the kill (1409.0 ms after the server was back), snapshot v1, retry ladder [32, 322, 992, 3611] ms
