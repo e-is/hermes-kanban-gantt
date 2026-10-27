@@ -1,5 +1,48 @@
 # Changelog
 
+## 1.7.3 — controls that match the bundled plugin, and a prefix that is styled rather than deleted
+
+**The comment field is the official control.** It was a bare input with hand-written classes, which is
+exactly why the theme's focus ring was missing: there was nothing to inherit from. It is the SDK
+`Textarea` now, sized like the bundled drawer's (`field-sizing-content max-h-40 resize-none pr-9`), so
+it is taller and grows with the text. The send action sits inside the field as an arrow rather than a
+labelled button beside it, and Enter sends while Shift+Enter keeps the line — guarded against IME
+composition, so a Chinese or Japanese comment cannot submit itself mid-word.
+
+**The segmented controls ride the SDK's own track.** `SegmentedControl`, the component the bundled
+drawer uses for its tabs, is a flat chip on a tinted track with the chosen option raised. Ours was a
+bordered row with no background — the buttons had nothing darker to sit in. All three (view toggle,
+quick scopes, feed tabs) now carry that track and that chip.
+
+**Counts ride in the label.** The bundled drawer's tabs read `Comments · 2`: one string, no badge. We
+had a pill with a background of its own, competing with the raised active segment for the eye. The
+count is part of the label now, in all three locale bundles.
+
+**Buttons take the SDK's sizes and variants**, as the bundled plugin uses them: the creation verb is
+`sm` (its own "New task", `add` glyph at 0.8rem), the refresh beside it is a ghost so the creation
+verb is the only filled thing on that row, the view menu is a real icon Button rather than a
+hand-rolled square (so it inherits the theme's radius, hit box and focus ring), and both dialogs'
+Cancel is a text-variant action with a default-sized submit.
+
+**The title prefix is only styled, never deleted.** Unchecking *Show title prefixes as tags* removed
+the `[EPIC]` from the title instead of un-styling it — an unchecked box silently deleting part of the
+reader's own text — while the option's own hint had said all along that the title is always shown as
+written. Three places had each decided it differently: the list row and the drawer dropped the prefix
+when the option was off, and the graph card chipped it whatever the option said *and* left it in the
+text, saying it twice. The rule is now a pure function in the core (`titleParts`) that all three
+consume.
+
+**Also:** the redundant total-count badge left the title row (the count already sits on the "All"
+scope), and the blocked count became a control that applies the blocked scope rather than a number you
+could not click.
+
+Tests, all measured on this commit: 257 assertions across the Node suites — 62 in the graph core, 80
+in the gantt core (the new one holds `titleParts` to the same edges as the splitter: both tag modes, a
+prefix that is not at the start, degenerate brackets, a missing title), 92 render checks (the
+composer's geometry and its inset action, the SDK track and chip on every segmented control, the dot
+form of every count plus a guard against the badge returning, the creation verb's size, the prefix
+rule), 23 hook-order checks — and 60 pytest tests.
+
 ## 1.7.2 — text you can copy, counts on the scopes, and the worker's log
 
 **The detail can be selected again.** A title, a description, a summary, a comment — none of it could

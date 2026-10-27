@@ -1,5 +1,5 @@
 name: kanban-gantt
-version: "1.7.2"
+version: "1.7.3"
 description: "Gantt timeline view for the Hermes kanban boards — a full /kanban-gantt desktop page with board switching, real-time status bars (created/started/done timestamps), dependencies, filters, bulk actions and a task detail drawer. The interface is the desktop page; the web dashboard serves the plugin's data routes and a page that points to it. Zero API keys."
 author: e-is
 kind: standalone
