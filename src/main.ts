@@ -94,7 +94,7 @@ const ZOOM_MIN_FACTOR = 0.2
 
 
 import { graphNodes, graphEdges, layoutGraph, lineage as taskLineage, scopeIds, boardScope, scopeCounts, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, splitTitlePrefix, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
+import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, titleParts, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -384,7 +384,7 @@ function Bar({ task, bar, pxPerSec, min, onOpen }) {
  * A leading `[EPIC]` is part of what the user typed: stripping it here (which this
  * function used to do) made the same task read differently in the timeline and on
  * the board. The prefix is only *presented* separately when the reader asks for
- * tags — see `$titlePrefixTags` and `splitTitlePrefix`.
+ * tags — see `$titlePrefixTags` and `titleParts`.
  */
 function titleText(title) {
   return typeof title === 'string' ? title.trim() : ''
@@ -458,8 +458,10 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
   const bars = taskBars(task, now)
   const label = task.label ? `[${task.label}]` : ''
   const showPrefixTags = useValue($titlePrefixTags)
-  const { prefix, rest } = splitTitlePrefix(task.title)
-  const name = rest || titleText(task.title) || i18n.untitled
+  // The prefix is only styled, never subtracted — `titleParts` owns that rule for all three views,
+  // so an unchecked "show prefixes as tags" can no longer delete part of the title.
+  const shown = titleParts(task.title, showPrefixTags)
+  const name = shown.text || i18n.untitled
 
   // Explorer connectors, in front of the checkbox and left of the fold square.
   // All the geometry comes from the core (`treeMarks`) so it can be unit-tested:
@@ -660,7 +662,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               task.status === 'running'
                 ? jsx('div', { className: 'kg-arc', style: { '--kanban-tone': dotColor } })
                 : null,
-              showPrefixTags && prefix
+              shown.prefix
                 ? jsx('span', {
                     className: 'shrink-0 mr-1 rounded-sm font-semibold',
                     style: {
@@ -1203,6 +1205,9 @@ export function GraphView({
   arrangement = 'down',
   sortBy = 'status'
 }) {
+  // The graph card obeys the same tag preference as the list row and the drawer: read here, because
+  // this component is reached from the page rather than from those two.
+  const showPrefixTags = useValue($titlePrefixTags)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(null)
   // Proximity drop: while a card is being dragged, the NEAREST valid card within NEAR_PX is the
@@ -2000,7 +2005,7 @@ export function GraphView({
               const isSelected = node.id === selectedId
               const inLineage = lin ? (lin.up.has(node.id) || lin.down.has(node.id)) : false
               const faded = Boolean(lin) && !isSelected && !inLineage
-              const prefix = splitTitlePrefix(node.title).prefix
+              const shown = titleParts(node.title, showPrefixTags)
               const drop = dropMap && node.id !== dragId ? dropMap.get(node.id) : null
               return jsxs('div', {
                 key: node.id,
@@ -2108,12 +2113,12 @@ export function GraphView({
                             : {})
                         },
                         children: [
-                          prefix ? jsx('span', {
+                          shown.prefix ? jsx('span', {
                             className: 'mr-1 rounded-sm px-0.5 text-[8.5px] font-semibold text-(--ui-text-secondary)',
                             style: { backgroundColor: 'var(--ui-bg-tertiary)', border: '1px solid var(--ui-stroke-tertiary)' },
-                            children: prefix
+                            children: shown.prefix
                           }) : null,
-                          node.title || node.id
+                          shown.text || node.id
                         ]
                       }),
                       failed
@@ -3040,9 +3045,12 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
 
   // The title is shown verbatim; its `[PREFIX]` becomes a tag only on request — the
   // same rule the rows follow.
-  const drawerTitle = splitTitlePrefix(data?.task?.title)
-  const drawerName = drawerTitle.rest || titleText(data?.task?.title) || i18n.untitled
   const showPrefixTags = useValue($titlePrefixTags)
+  // Same rule as the list row and the graph card: the prefix is styled or shown plainly, never
+  // removed. The chip's condition is the prefix the helper returned, so the option is read in one
+  // place and cannot drift from the text beside it.
+  const shownTitle = titleParts(data?.task?.title, showPrefixTags)
+  const drawerName = shownTitle.text || i18n.untitled
 
   // The same task, for a reader who would rather stay in a shell. Built from the task's
   // OWN board: the selected board is not necessarily the one this task lives on (the
@@ -3221,7 +3229,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
           jsxs('div', {
             className: 'flex flex-wrap items-start gap-1.5 text-base font-semibold leading-snug',
             children: [
-              showPrefixTags && drawerTitle.prefix
+              shownTitle.prefix
                 ? jsx('span', {
                     className: 'shrink-0 rounded-sm font-semibold',
                     style: {

@@ -355,6 +355,11 @@ function splitTitlePrefix(title) {
   if (!prefix) return { prefix: null, rest: text };
   return { prefix, rest: text.slice(end + 1).trim() };
 }
+function titleParts(title, asTags) {
+  const full = typeof title === "string" ? title.trim() : "";
+  const { prefix, rest } = splitTitlePrefix(full);
+  return asTags && prefix ? { prefix, text: rest } : { prefix: null, text: full };
+}
 function matchesSearch(task, query) {
   const q = (query || "").trim().toLowerCase();
   if (!q) return true;
@@ -606,6 +611,7 @@ export {
   taskBars,
   tickUnit,
   ticks,
+  titleParts,
   treeMarks,
   treeRows,
   visibleWindow,

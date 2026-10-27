@@ -538,6 +538,24 @@ export function splitTitlePrefix(title) {
   return { prefix, rest: text.slice(end + 1).trim() }
 }
 
+/**
+ * How a title is shown, given the reader's tag preference — the ONE place that decides it.
+ *
+ * The prefix is only ever *styled*, never subtracted: with the tags off, the title is shown exactly
+ * as written (which is what the option's own hint promises). With them on, the chip carries the
+ * prefix and the text drops it, so it is not said twice.
+ *
+ * This exists because three call sites — the list row, the detail drawer and the graph card — each
+ * decided it for themselves and each got a different part of it wrong: the first two dropped the
+ * prefix entirely when the option was off (an unchecked box deleted part of the reader's title), the
+ * third chipped it whatever the option said and left it in the text as well.
+ */
+export function titleParts(title, asTags) {
+  const full = typeof title === 'string' ? title.trim() : ''
+  const { prefix, rest } = splitTitlePrefix(full)
+  return asTags && prefix ? { prefix, text: rest } : { prefix: null, text: full }
+}
+
 export function matchesSearch(task, query) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return true;

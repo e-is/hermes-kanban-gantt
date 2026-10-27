@@ -1040,3 +1040,24 @@ test('a title with no prefix comes back whole — this is the regression that ma
   assert.deepEqual(splitTitlePrefix('  [EPIC]  padded  '), { prefix: 'EPIC', rest: 'padded' })
   assert.deepEqual(splitTitlePrefix('[EPIC]'), { prefix: 'EPIC', rest: '' })
 })
+
+/* ── how a title is shown, and who decides ──────────────────────────────────── */
+
+test('titleParts styles the prefix or shows it plainly — it never subtracts it', () => {
+  const { titleParts } = core
+  // Tags OFF: the title is exactly what the reader typed. This is the reported bug — unchecking
+  // "show prefixes as tags" DELETED the `[EPIC]` from the title instead of un-styling it.
+  assert.deepEqual(titleParts('[EPIC] Ship the thing', false),
+    { prefix: null, text: '[EPIC] Ship the thing' })
+  // Tags ON: the chip carries the prefix and the text drops it, so it is not said twice.
+  assert.deepEqual(titleParts('[EPIC] Ship the thing', true),
+    { prefix: 'EPIC', text: 'Ship the thing' })
+  // Nothing to chip: the text is untouched in both modes, and a missing title stays empty.
+  for (const asTags of [true, false]) {
+    assert.deepEqual(titleParts('Ship [EPIC] the thing', asTags),
+      { prefix: null, text: 'Ship [EPIC] the thing' }, 'a prefix is only a prefix at the start')
+    assert.deepEqual(titleParts('[unclosed', asTags), { prefix: null, text: '[unclosed' })
+    assert.deepEqual(titleParts(null, asTags), { prefix: null, text: '' })
+    assert.deepEqual(titleParts('  padded  ', asTags), { prefix: null, text: 'padded' })
+  }
+})

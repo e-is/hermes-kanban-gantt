@@ -921,10 +921,10 @@ var GANTT_LOCALES = {
     }
   }
 };
-function bindI18n(t, template, prefix = "") {
+function bindI18n(t, template, prefix2 = "") {
   const out = {};
   for (const [key, value] of Object.entries(template)) {
-    const path = prefix ? `${prefix}.${key}` : key;
+    const path = prefix2 ? `${prefix2}.${key}` : key;
     out[key] = typeof value === "function" ? (...args) => t(path, ...args) : value && typeof value === "object" ? bindI18n(t, value, path) : t(path);
   }
   return out;
@@ -1520,9 +1520,14 @@ function splitTitlePrefix(title) {
   if (!text.startsWith("[")) return { prefix: null, rest: text };
   const end = text.indexOf("]");
   if (end < 2) return { prefix: null, rest: text };
-  const prefix = text.slice(1, end).trim();
-  if (!prefix) return { prefix: null, rest: text };
-  return { prefix, rest: text.slice(end + 1).trim() };
+  const prefix2 = text.slice(1, end).trim();
+  if (!prefix2) return { prefix: null, rest: text };
+  return { prefix: prefix2, rest: text.slice(end + 1).trim() };
+}
+function titleParts(title, asTags) {
+  const full = typeof title === "string" ? title.trim() : "";
+  const { prefix: prefix2, rest: rest2 } = splitTitlePrefix(full);
+  return asTags && prefix2 ? { prefix: prefix2, text: rest2 } : { prefix: null, text: full };
 }
 function matchesSearch(task, query) {
   const q = (query || "").trim().toLowerCase();
@@ -3028,9 +3033,6 @@ function Bar({ task, bar, pxPerSec, min, onOpen }) {
   }
   return jsxs6("div", { className: "absolute rounded-sm kg-bar hover:brightness-110 transition-all", style, title, onClick, children });
 }
-function titleText(title) {
-  return typeof title === "string" ? title.trim() : "";
-}
 function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection = "right" }) {
   const drag = useRef2(null);
   const elRef = useRef2(null);
@@ -3091,8 +3093,8 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
   const bars = taskBars(task, now);
   const label = task.label ? `[${task.label}]` : "";
   const showPrefixTags = useValue2($titlePrefixTags);
-  const { prefix, rest: rest2 } = splitTitlePrefix(task.title);
-  const name = rest2 || titleText(task.title) || i18n.untitled;
+  const shown = titleParts(task.title, showPrefixTags);
+  const name = shown.text || i18n.untitled;
   const marks = treeMarks(depth, continuation, lastSibling);
   const line = "var(--ui-stroke-secondary)";
   const connectors = marks.guides.map((x) => jsx6("span", {
@@ -3259,7 +3261,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
             },
             children: [
               task.status === "running" ? jsx6("div", { className: "kg-arc", style: { "--kanban-tone": dotColor } }) : null,
-              showPrefixTags && prefix ? jsx6("span", {
+              shown.prefix ? jsx6("span", {
                 className: "shrink-0 mr-1 rounded-sm font-semibold",
                 style: {
                   padding: "0 3px",
@@ -3734,6 +3736,7 @@ function GraphView({
   arrangement = "down",
   sortBy = "status"
 }) {
+  const showPrefixTags = useValue2($titlePrefixTags);
   const [pan, setPan] = useState4({ x: 0, y: 0 });
   const [dragging, setDragging] = useState4(null);
   const NEAR_PX = 64;
@@ -4424,7 +4427,7 @@ function GraphView({
               const isSelected = node.id === selectedId;
               const inLineage = lin ? lin.up.has(node.id) || lin.down.has(node.id) : false;
               const faded = Boolean(lin) && !isSelected && !inLineage;
-              const prefix = splitTitlePrefix(node.title).prefix;
+              const shown2 = titleParts(node.title, showPrefixTags);
               const drop = dropMap && node.id !== dragId ? dropMap.get(node.id) : null;
               return jsxs6("div", {
                 key: node.id,
@@ -4525,12 +4528,12 @@ function GraphView({
                           } : {}
                         },
                         children: [
-                          prefix ? jsx6("span", {
+                          shown2.prefix ? jsx6("span", {
                             className: "mr-1 rounded-sm px-0.5 text-[8.5px] font-semibold text-(--ui-text-secondary)",
                             style: { backgroundColor: "var(--ui-bg-tertiary)", border: "1px solid var(--ui-stroke-tertiary)" },
-                            children: prefix
+                            children: shown2.prefix
                           }) : null,
-                          node.title || node.id
+                          shown2.text || node.id
                         ]
                       }),
                       failed ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0 text-[#f87171]", title: i18n.runs((node.runs || []).length) }) : node.status === "blocked" ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0", style: { color: statusTone("blocked") }, title: node.status }) : null
@@ -5309,9 +5312,9 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const matrix = ACTION_MATRIX[st] || { primary: [], more: [] };
   const more = matrix.more || [];
   const actionLabel = (a) => i18n.actions?.[a] || a;
-  const drawerTitle = splitTitlePrefix(data?.task?.title);
-  const drawerName = drawerTitle.rest || titleText(data?.task?.title) || i18n.untitled;
   const showPrefixTags = useValue2($titlePrefixTags);
+  const shownTitle = titleParts(data?.task?.title, showPrefixTags);
+  const drawerName = shownTitle.text || i18n.untitled;
   const cliBoard = data?.task?.board || board || "";
   const cliCommand = cliBoard ? `hermes kanban --board ${cliBoard} show ${shownId}` : `hermes kanban show ${shownId}`;
   const inner = [
@@ -5473,7 +5476,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
         jsxs6("div", {
           className: "flex flex-wrap items-start gap-1.5 text-base font-semibold leading-snug",
           children: [
-            showPrefixTags && drawerTitle.prefix ? jsx6("span", {
+            shownTitle.prefix ? jsx6("span", {
               className: "shrink-0 rounded-sm font-semibold",
               style: {
                 padding: "0 4px",
