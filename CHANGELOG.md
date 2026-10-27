@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+### Added — i18n bundles for the 16 Hermes desktop locales (af, ar, de, es, fr, ga, hu, it, ja, ko, pt, ru, tr, uk, zh, zh-hant), at key parity with the English bundle, plus a parity test.
+
 ## 1.7.3 — controls that match the bundled plugin, and a prefix that is styled rather than deleted
 
 **The comment field is the official control.** It was a bare input with hand-written classes, which is
