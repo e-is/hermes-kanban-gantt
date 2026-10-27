@@ -1,8 +1,23 @@
 # Changelog
 
-## [Unreleased]
+## 1.8.0 — the page speaks the 16 desktop languages
 
-### Added — i18n bundles for the 16 Hermes desktop locales (af, ar, de, es, fr, ga, hu, it, ja, ko, pt, ru, tr, uk, zh, zh-hant), at key parity with the English bundle, plus a parity test.
+**One module per language, not one monolith.** The bundle was 871 lines in a single
+`src/i18n.ts`; it is now `src/locales/<lang>.ts`, one file per language, and `i18n.ts`
+does nothing but import them and register the map. A language is edited without
+touching another, and a new one is a file plus one line.
+
+**The ids are the desktop's own.** `ctx.i18n.register(LOCALES)` resolves the app
+language by id, so the bundles are keyed exactly as Hermes keys them — `af`, `ar`,
+`de`, `es`, `fr`, `ga`, `hu`, `it`, `ja`, `ko`, `pt`, `ru`, `tr`, `uk`, `zh`,
+`zh-hant` — on top of `en`, 17 bundles in all.
+
+**A test holds them together.** `tests/i18n-parity.test.mjs` compares every bundle to
+`en` and fails on a missing key, an extra key, a value of another kind, a different
+function arity or an empty string: 267 leaves per bundle, no drift possible.
+
+**English is unchanged.** Nothing moves on screen while the desktop is in `en`; the
+page follows the desktop language the moment it changes.
 
 ## 1.7.3 — controls that match the bundled plugin, and a prefix that is styled rather than deleted
 
