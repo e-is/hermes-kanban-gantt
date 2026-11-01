@@ -293,18 +293,39 @@ def list_boards():
     boards: list[dict] = []
     if root.is_dir():
         for d in sorted(p for p in root.iterdir() if p.is_dir()):
-            if not (d / "kanban.db").is_file():
+            # `_archived/` holds archived boards; underscore dirs are never boards.
+            if d.name.startswith("_"):
                 continue
             label = d.name
             board_file = d / "board.json"
             if board_file.is_file():
                 try:
                     data = json.loads(board_file.read_text(encoding="utf-8"))
-                    if isinstance(data, dict) and data.get("name"):
-                        label = str(data["name"])
+                    if isinstance(data, dict):
+                        # Archived boards leave a tombstone board.json behind.
+                        if data.get("archived"):
+                            continue
+                        if data.get("name"):
+                            label = str(data["name"])
                 except Exception:
                     pass
+            # `default` keeps its DB at <root>/kanban.db, not boards/default/ —
+            # resolve through the same path logic the readers use.
+            if d.name == "default":
+                try:
+                    _board_db_path("default")
+                except HTTPException:
+                    continue
+            elif not (d / "kanban.db").is_file():
+                continue
             boards.append({"slug": d.name, "label": label})
+    # Stock layouts may have no boards/default/ dir at all; the DB is at <root>/kanban.db.
+    if not any(b["slug"] == "default" for b in boards) and not (root / "default" / "board.json").is_file():
+        try:
+            _board_db_path("default")
+            boards.insert(0, {"slug": "default", "label": "Default"})
+        except HTTPException:
+            pass
     return {"boards": boards, "current": _resolve_board(None)}
 
 
