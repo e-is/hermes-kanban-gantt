@@ -35,12 +35,10 @@
         tl.from(q("p"), { autoAlpha: 0, y: 22, duration: 0.55, ease: "power2.out" }, 0.5);
         tl.from(q(".board"), { autoAlpha: 0, scale: 0.985, duration: 0.6, ease: "power2.out" }, 0.35);
         tl.fromTo(q(".cursor"), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.25 }, 1.0);
-        tl.to(q(".cursor"), { x: 1199, y: 497, duration: 0.9, ease: "power2.inOut" }, 1.2);
-        tl.to(q(".cursor"), { scale: 0.86, duration: 0.1 }, 2.12);
-        tl.set(q(".ring"), { x: 1199, y: 497 }, 2.2);
-        tl.fromTo(q(".ring"), { autoAlpha: 0.9, scale: 0.5 }, { autoAlpha: 0, scale: 1.9, duration: 0.55, ease: "power2.out" }, 2.22);
-        tl.to(q(".cursor"), { scale: 1, duration: 0.12 }, 2.24);
-        tl.to(q(".cursor"), { x: 1080, y: 680, duration: 0.7, ease: "power2.out" }, 2.6);
+        tl.to(q(".cursor"), { x: 830, y: 660, duration: 0.95, ease: "power2.inOut" }, 1.15);
+        tl.to(q(".cursor"), { scale: 0.9, duration: 0.12 }, 2.12);
+        tl.to(q(".cursor"), { scale: 1, duration: 0.14 }, 2.26);
+        tl.to(q(".cursor"), { x: 690, y: 730, duration: 0.7, ease: "power2.out" }, 2.6);
         window.__timelines = window.__timelines || {};
         window.__timelines["s6"] = tl;
       })();
