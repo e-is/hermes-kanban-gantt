@@ -1,0 +1,55 @@
+<template id="s1-template">
+  <div data-composition-id="s1" data-width="1920" data-height="1080">
+    <div class="frame">
+      <div class="topbar">
+        <span class="label">Hermes Desktop · Plugin</span>
+        <span class="label dim">/kanban-gantt</span>
+      </div>
+      <h1 class="l1">Your kanban board,</h1>
+      <h1 class="l2">on a timeline.</h1>
+      <div class="axis">
+        <div class="ticks"><span>MON 7</span><span>TUE 8</span><span>WED 9</span><span>THU 10</span><span>FRI 11</span></div>
+        <div class="baseline"></div>
+        <div class="rows">
+          <div class="row"><span class="name">Epic X</span><span class="track"><i class="bar running" style="left:4%;width:62%"></i></span></div>
+          <div class="row"><span class="name">Sub-task A</span><span class="track"><i class="bar done" style="left:16%;width:26%"></i></span></div>
+          <div class="row"><span class="name">Sub-task B</span><span class="track"><i class="bar done" style="left:34%;width:30%"></i></span></div>
+          <div class="row"><span class="name">Review pass</span><span class="track"><i class="bar live" style="left:58%;width:22%"></i></span></div>
+        </div>
+      </div>
+    </div>
+    <style>
+      [data-composition-id="s1"] { width: 100%; height: 100%; background: #efe9dc; color: #16130f; }
+      [data-composition-id="s1"] .frame { width: 100%; height: 100%; padding: 84px 96px 88px; display: flex; flex-direction: column; }
+      [data-composition-id="s1"] .topbar { display: flex; justify-content: space-between; align-items: baseline; }
+      [data-composition-id="s1"] .label { font-family: "JetBrains Mono", monospace; font-size: 21px; letter-spacing: 0.16em; text-transform: uppercase; color: #16130f; }
+      [data-composition-id="s1"] .label.dim { color: rgba(22,19,15,0.75); }
+      [data-composition-id="s1"] h1 { font-family: "Playfair Display", Georgia, serif; font-weight: 900; font-size: 152px; line-height: 0.98; letter-spacing: -0.025em; }
+      [data-composition-id="s1"] .l1 { margin-top: 96px; }
+      [data-composition-id="s1"] .l2 { color: #1f2be0; }
+      [data-composition-id="s1"] .axis { margin-top: auto; position: relative; padding-top: 18px; border-top: 1px solid rgba(22,19,15,0.22); }
+      [data-composition-id="s1"] .ticks { display: grid; grid-template-columns: repeat(5, 1fr); padding-left: 218px; font-family: "JetBrains Mono", monospace; font-size: 19px; letter-spacing: 0.18em; color: rgba(22,19,15,0.72); }
+      [data-composition-id="s1"] .rows { margin-top: 26px; display: flex; flex-direction: column; gap: 18px; }
+      [data-composition-id="s1"] .row { display: flex; align-items: center; gap: 28px; }
+      [data-composition-id="s1"] .name { width: 190px; font-family: "JetBrains Mono", monospace; font-size: 19px; letter-spacing: 0.04em; }
+      [data-composition-id="s1"] .track { position: relative; flex: 1; height: 26px; background: rgba(22,19,15,0.06); }
+      [data-composition-id="s1"] .bar { position: absolute; top: 0; height: 26px; display: block; }
+      [data-composition-id="s1"] .bar.running { background: #1f2be0; }
+      [data-composition-id="s1"] .bar.done { background: rgba(22,19,15,0.35); }
+      [data-composition-id="s1"] .bar.live { background: #de5a38; }
+    </style>
+    <script>
+      (function () {
+        const tl = gsap.timeline({ paused: true });
+        tl.from('[data-composition-id="s1"] .l1', { y: 74, autoAlpha: 0, duration: 0.9, ease: "power3.out" }, 0.26);
+        tl.from('[data-composition-id="s1"] .l2', { y: 74, autoAlpha: 0, duration: 0.95, ease: "power3.out" }, 0.44);
+        tl.from('[data-composition-id="s1"] .baseline', { scaleX: 0, transformOrigin: "left center", duration: 0.9, ease: "power2.inOut" }, 1.12);
+        tl.from('[data-composition-id="s1"] .ticks span', { autoAlpha: 0, y: 10, duration: 0.35, stagger: 0.07, ease: "power1.out" }, 1.3);
+        tl.from('[data-composition-id="s1"] .row', { autoAlpha: 0, x: -26, duration: 0.5, stagger: 0.1, ease: "power2.out" }, 1.55);
+        tl.from('[data-composition-id="s1"] .bar', { scaleX: 0, transformOrigin: "left center", duration: 0.95, stagger: 0.13, ease: "power3.out" }, 1.8);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["s1"] = tl;
+      })();
+    </script>
+  </div>
+</template>

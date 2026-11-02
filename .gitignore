@@ -17,3 +17,9 @@ tests/ui/.stubs/
 .agents/plans/
 .junie/*
 !.junie/skills
+
+# promo video (sources are tracked, renders are not)
+video/*.mp4
+video/.raw.mp4
+video/assets/shots/raw/
+video/.hyperframes/

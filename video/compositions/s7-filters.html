@@ -1,0 +1,46 @@
+<template id="s7-template">
+  <div data-composition-id="s7" data-width="1920" data-height="1080">
+    <div class="frame">
+      <span class="label">Scope</span>
+      <h2>Running, blocked, open, all.</h2>
+      <p>One click narrows the graph, the timeline and the list through the same rule.</p>
+      <div class="strip">
+        <img src="../assets/shots/filters.png" alt="Quick filters" />
+        <div class="cursor">
+          <svg viewBox="0 0 28 36" width="34" height="44"><path d="M2 2 L2 28 L9.5 21.5 L14.5 33 L19 31 L14 19.5 L24 19.5 Z" fill="#16130f" stroke="#efe9dc" stroke-width="1.6"/></svg>
+        </div>
+        <div class="ring"></div>
+      </div>
+    </div>
+    <style>
+      [data-composition-id="s7"] { width: 100%; height: 100%; background: #efe9dc; color: #16130f; }
+      [data-composition-id="s7"] .frame { width: 100%; height: 100%; padding: 96px; display: flex; flex-direction: column; justify-content: center; }
+      [data-composition-id="s7"] .label { font-family: "JetBrains Mono", monospace; font-size: 21px; letter-spacing: 0.18em; text-transform: uppercase; color: #1f2be0; }
+      [data-composition-id="s7"] h2 { margin-top: 22px; font-family: "Playfair Display", Georgia, serif; font-weight: 900; font-size: 96px; line-height: 1; letter-spacing: -0.03em; }
+      [data-composition-id="s7"] p { margin-top: 24px; font-family: "Archivo", Helvetica, sans-serif; font-size: 26px; line-height: 1.45; color: rgba(22,19,15,0.85); max-width: 900px; }
+      [data-composition-id="s7"] .strip { position: relative; margin-top: 52px; width: 1728px; height: 238px; }
+      [data-composition-id="s7"] .strip img { width: 100%; height: 100%; display: block; border: 1px solid rgba(22,19,15,0.22); background: #fff; }
+      [data-composition-id="s7"] .cursor { position: absolute; left: 0; top: 0; transform: translate(980px, 420px); }
+      [data-composition-id="s7"] .ring { position: absolute; left: 0; top: 0; width: 56px; height: 56px; margin: -28px 0 0 -28px; border: 2px solid #1f2be0; border-radius: 50%; opacity: 0; }
+    </style>
+    <script>
+      (function () {
+        const tl = gsap.timeline({ paused: true });
+        const q = (sel) => '[data-composition-id="s7"] ' + sel;
+        tl.from(q(".label"), { autoAlpha: 0, y: -14, duration: 0.4, ease: "power2.out" }, 0.12);
+        tl.from(q("h2"), { autoAlpha: 0, y: 34, duration: 0.6, ease: "power3.out" }, 0.24);
+        tl.from(q("p"), { autoAlpha: 0, y: 22, duration: 0.5, ease: "power2.out" }, 0.45);
+        tl.from(q(".strip"), { autoAlpha: 0, y: 40, duration: 0.65, ease: "power2.out" }, 0.5);
+        tl.fromTo(q(".cursor"), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.22 }, 1.1);
+        tl.to(q(".cursor"), { x: 250, y: 112, duration: 0.7, ease: "power2.inOut" }, 1.25);
+        tl.to(q(".cursor"), { scale: 0.86, duration: 0.1 }, 1.95);
+        tl.set(q(".ring"), { x: 250, y: 112 }, 2.02);
+        tl.fromTo(q(".ring"), { autoAlpha: 0.9, scale: 0.5 }, { autoAlpha: 0, scale: 2.0, duration: 0.5, ease: "power2.out" }, 2.04);
+        tl.to(q(".cursor"), { scale: 1, duration: 0.12 }, 2.06);
+        tl.to(q(".cursor"), { x: 620, y: 140, duration: 0.6, ease: "power2.out" }, 2.5);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["s7"] = tl;
+      })();
+    </script>
+  </div>
+</template>

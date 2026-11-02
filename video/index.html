@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Playfair Display"; src: url("assets/fonts/PlayfairDisplay-900.ttf") format("truetype"); font-weight: 900; font-style: normal; }
+      @font-face { font-family: "Archivo"; src: url("assets/fonts/Archivo.ttf") format("truetype"); font-weight: 100 900; font-style: normal; }
+      @font-face { font-family: "JetBrains Mono"; src: url("assets/fonts/JetBrainsMono.ttf") format("truetype"); font-weight: 100 800; font-style: normal; }
+
+      :root {
+        --paper: #efe9dc;
+        --ink: #16130f;
+        --cobalt: #1f2be0;
+        --sun: #f2e51f;
+        --ember: #de5a38;
+        --display: "Playfair Display", Georgia, serif;
+        --body: "Archivo", Helvetica, sans-serif;
+        --mono: "JetBrains Mono", monospace;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--paper); }
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--paper); }
+      .layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+      #grain {
+        position: absolute; inset: 0; z-index: 60; pointer-events: none; opacity: 0.34;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='260' height='260' filter='url(%23n)' opacity='0.3'/></svg>");
+        background-size: 260px 260px; mix-blend-mode: multiply;
+      }
+      #wipe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 80; background: var(--cobalt); transform: translateY(100%); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="root" data-start="0" data-duration="46" data-width="1920" data-height="1080">
+      <div id="s1-layer" class="layer" data-composition-id="s1" data-composition-src="compositions/s1-title.html" data-start="0" data-duration="5.4" data-track-index="1"></div>
+      <div id="s2-layer" class="layer" data-composition-id="s2" data-composition-src="compositions/s2-statement.html" data-start="5" data-duration="5.4" data-track-index="2"></div>
+      <div id="s3-layer" class="layer" data-composition-id="s3" data-composition-src="compositions/s3-proof.html" data-start="10" data-duration="7.4" data-track-index="3"></div>
+      <div id="s4-layer" class="layer" data-composition-id="s4" data-composition-src="compositions/s4-views.html" data-start="17" data-duration="6.4" data-track-index="4"></div>
+      <div id="s5-layer" class="layer" data-composition-id="s5" data-composition-src="compositions/s5-links.html" data-start="23" data-duration="6.4" data-track-index="5"></div>
+      <div id="s6-layer" class="layer" data-composition-id="s6" data-composition-src="compositions/s6-attachments.html" data-start="29" data-duration="6.4" data-track-index="6"></div>
+      <div id="s7-layer" class="layer" data-composition-id="s7" data-composition-src="compositions/s7-filters.html" data-start="35" data-duration="4.4" data-track-index="7"></div>
+      <div id="s8-layer" class="layer" data-composition-id="s8" data-composition-src="compositions/s8-install.html" data-start="39" data-duration="4.4" data-track-index="8"></div>
+      <div id="s9-layer" class="layer" data-composition-id="s9" data-composition-src="compositions/s9-outro.html" data-start="43" data-duration="3.0" data-track-index="9"></div>
+
+      <audio id="bgm" data-timeline-role="music" src="assets/music/bed-ai.mp3" data-start="0" data-duration="46" data-volume="0.9" data-track-index="20"></audio>
+      <audio id="impact-open" src="assets/sfx/impact-bass-1.mp3" data-start="0" data-duration="1.8" data-volume="0.15" data-track-index="21"></audio>
+      <audio id="whoosh-1" src="assets/sfx/whoosh.mp3" data-start="4.84" data-duration="0.6" data-volume="0.6" data-track-index="22"></audio>
+      <audio id="whoosh-2" src="assets/sfx/whoosh.mp3" data-start="9.84" data-duration="0.6" data-volume="0.6" data-track-index="22"></audio>
+      <audio id="whoosh-3" src="assets/sfx/whoosh.mp3" data-start="16.84" data-duration="0.6" data-volume="0.6" data-track-index="22"></audio>
+      <audio id="riser-links" src="assets/sfx/riser.mp3" data-media-start="3.6" data-start="21.6" data-duration="1.4" data-volume="0.3" data-track-index="23"></audio>
+      <audio id="whoosh-4" src="assets/sfx/whoosh.mp3" data-start="22.84" data-duration="0.6" data-volume="0.6" data-track-index="22"></audio>
+      <audio id="whoosh-5" src="assets/sfx/whoosh.mp3" data-start="28.84" data-duration="0.6" data-volume="0.6" data-track-index="22"></audio>
+      <audio id="whoosh-6" src="assets/sfx/whoosh.mp3" data-start="34.84" data-duration="0.6" data-volume="0.55" data-track-index="22"></audio>
+      <audio id="whoosh-7" src="assets/sfx/whoosh.mp3" data-start="38.84" data-duration="0.6" data-volume="0.55" data-track-index="22"></audio>
+      <audio id="whoosh-8" src="assets/sfx/whoosh.mp3" data-start="42.84" data-duration="0.6" data-volume="0.55" data-track-index="22"></audio>
+      <audio id="key-1" src="assets/sfx/key-press.mp3" data-start="39.95" data-duration="0.4" data-volume="0.35" data-track-index="24"></audio>
+      <audio id="key-2" src="assets/sfx/key-press.mp3" data-start="40.25" data-duration="0.4" data-volume="0.3" data-track-index="25"></audio>
+      <audio id="key-3" src="assets/sfx/key-press.mp3" data-start="40.55" data-duration="0.4" data-volume="0.35" data-track-index="26"></audio>
+      <audio id="key-4" src="assets/sfx/key-press.mp3" data-start="40.85" data-duration="0.4" data-volume="0.3" data-track-index="27"></audio>
+
+      <div id="grain"></div>
+      <div id="wipe"></div>
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const bounds = [5, 10, 17, 23, 29, 35, 39, 43];
+      const colors = ["#1f2be0", "#f2e51f", "#16130f", "#1f2be0", "#f2e51f", "#16130f", "#1f2be0", "#f2e51f"];
+      bounds.forEach((t, i) => {
+        const start = Math.max(0, t - 0.33);
+        tl.set("#wipe", { backgroundColor: colors[i], yPercent: 100 }, start);
+        tl.to("#wipe", { yPercent: 0, duration: 0.33, ease: "power2.in" }, start);
+        tl.to("#wipe", { yPercent: -100, duration: 0.35, ease: "power2.out" }, t);
+        tl.set("#wipe", { yPercent: 100 }, t + 0.36);
+      });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["root"] = tl;
+    </script>
+  </body>
+</html>

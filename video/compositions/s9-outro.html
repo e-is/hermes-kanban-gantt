@@ -1,0 +1,34 @@
+<template id="s9-template">
+  <div data-composition-id="s9" data-width="1920" data-height="1080">
+    <div class="frame">
+      <span class="label">Kanban Gantt · Hermes Desktop</span>
+      <h1>Put your board<br />on a timeline.</h1>
+      <div class="foot">
+        <span class="cmd">hermes plugins install e-is/hermes-kanban-gantt</span>
+        <span class="who">e-is · @blavenie</span>
+      </div>
+    </div>
+    <style>
+      [data-composition-id="s9"] { width: 100%; height: 100%; background: #efe9dc; color: #16130f; }
+      [data-composition-id="s9"] .frame { width: 100%; height: 100%; padding: 84px 96px 88px; display: flex; flex-direction: column; }
+      [data-composition-id="s9"] .label { font-family: "JetBrains Mono", monospace; font-size: 17px; letter-spacing: 0.18em; text-transform: uppercase; color: #1f2be0; }
+      [data-composition-id="s9"] h1 { margin-top: 120px; font-family: "Playfair Display", Georgia, serif; font-weight: 900; font-size: 150px; line-height: 0.98; letter-spacing: -0.03em; }
+      [data-composition-id="s9"] .foot { margin-top: auto; display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid rgba(22,19,15,0.22); padding-top: 22px; }
+      [data-composition-id="s9"] .cmd { font-family: "JetBrains Mono", monospace; font-size: 22px; letter-spacing: 0.02em; color: #16130f; }
+      [data-composition-id="s9"] .who { font-family: "JetBrains Mono", monospace; font-size: 20px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(22,19,15,0.8); }
+    </style>
+    <script>
+      (function () {
+        const tl = gsap.timeline({ paused: true });
+        const q = (sel) => '[data-composition-id="s9"] ' + sel;
+        tl.from(q(".label"), { autoAlpha: 0, y: -14, duration: 0.45, ease: "power2.out" }, 0.15);
+        tl.from(q("h1"), { y: 70, autoAlpha: 0, duration: 0.85, ease: "power3.out" }, 0.3);
+        tl.from(q(".cmd"), { autoAlpha: 0, y: 18, duration: 0.5, ease: "power2.out" }, 0.9);
+        tl.from(q(".who"), { autoAlpha: 0, y: 18, duration: 0.5, ease: "power2.out" }, 1.05);
+        tl.to(q(".frame"), { autoAlpha: 0, duration: 0.35, ease: "power1.inOut" }, 2.6);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["s9"] = tl;
+      })();
+    </script>
+  </div>
+</template>

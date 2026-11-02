@@ -1,0 +1,37 @@
+<template id="s8-template">
+  <div data-composition-id="s8" data-width="1920" data-height="1080">
+    <div class="frame">
+      <div class="card">
+        <span class="label">Install</span>
+        <div class="term"><span class="prompt">$</span><span class="cmd"><span class="c">h</span><span class="c">e</span><span class="c">r</span><span class="c">m</span><span class="c">e</span><span class="c">s</span><span class="c">&nbsp;</span><span class="c">p</span><span class="c">l</span><span class="c">u</span><span class="c">g</span><span class="c">i</span><span class="c">n</span><span class="c">s</span><span class="c">&nbsp;</span><span class="c">i</span><span class="c">n</span><span class="c">s</span><span class="c">t</span><span class="c">a</span><span class="c">l</span><span class="c">l</span><span class="c">&nbsp;</span><span class="c">e</span><span class="c">-</span><span class="c">i</span><span class="c">s</span><span class="c">/</span><span class="c">h</span><span class="c">e</span><span class="c">r</span><span class="c">m</span><span class="c">e</span><span class="c">s</span><span class="c">-</span><span class="c">k</span><span class="c">a</span><span class="c">n</span><span class="c">b</span><span class="c">a</span><span class="c">n</span><span class="c">-</span><span class="c">g</span><span class="c">a</span><span class="c">n</span><span class="c">t</span><span class="c">t</span><span class="cursor"></span></span></div>
+        <div class="meta">Zero API keys · GPL-3.0 · EN / FR</div>
+      </div>
+    </div>
+    <style>
+      [data-composition-id="s8"] { width: 100%; height: 100%; background: #efe9dc; }
+      [data-composition-id="s8"] .frame { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+      [data-composition-id="s8"] .card { width: 1520px; background: #16130f; padding: 72px 80px 64px; }
+      [data-composition-id="s8"] .label { font-family: "JetBrains Mono", monospace; font-size: 20px; letter-spacing: 0.2em; text-transform: uppercase; color: #f2e51f; }
+      [data-composition-id="s8"] .term { margin-top: 34px; display: flex; align-items: center; gap: 16px; font-family: "JetBrains Mono", monospace; font-size: 42px; letter-spacing: -0.01em; color: #efe9dc; white-space: nowrap; }
+      [data-composition-id="s8"] .prompt { color: #f2e51f; }
+      [data-composition-id="s8"] .cmd { display: inline-flex; }
+      [data-composition-id="s8"] .cursor { display: inline-block; width: 18px; height: 42px; margin-left: 6px; background: #f2e51f; }
+      [data-composition-id="s8"] .meta { margin-top: 40px; font-family: "JetBrains Mono", monospace; font-size: 20px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(239,233,220,0.8); }
+    </style>
+    <script>
+      (function () {
+        const tl = gsap.timeline({ paused: true });
+        const q = (sel) => '[data-composition-id="s8"] ' + sel;
+        tl.from(q(".card"), { y: 46, autoAlpha: 0, duration: 0.6, ease: "power3.out" }, 0.15);
+        tl.from(q(".label"), { autoAlpha: 0, y: -12, duration: 0.4, ease: "power2.out" }, 0.4);
+        tl.from(q(".prompt"), { autoAlpha: 0, duration: 0.2 }, 0.62);
+        tl.from(q(".c"), { autoAlpha: 0, duration: 0.01, stagger: 0.028, ease: "none" }, 0.78);
+        tl.from(q(".cursor"), { autoAlpha: 0, duration: 0.2 }, 2.1);
+        tl.to(q(".cursor"), { autoAlpha: 0, duration: 0.34, repeat: 5, yoyo: true, ease: "none" }, 2.4);
+        tl.from(q(".meta"), { autoAlpha: 0, y: 16, duration: 0.5, ease: "power2.out" }, 2.35);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["s8"] = tl;
+      })();
+    </script>
+  </div>
+</template>
