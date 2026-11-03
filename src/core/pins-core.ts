@@ -1,11 +1,10 @@
 /**
- * Pin/tab logic for the board quick-switch tabs — pure, no React, so
+ * Pin/tab logic for the board tab strip — pure, no React, so
  * `tests/pins-core.test.mjs` exercises the shipped code (built artifact).
  *
  * Mirrors the desktop's `$pinnedBoards` rules (hermes-agent e032228,
- * "feat(desktop): pin Kanban boards as quick-switch tabs"): pins are slugs in
- * tab order, a pin for a board that no longer exists keeps its slot but is not
- * rendered, and reordering never changes the selection.
+ * "feat(desktop): pin Kanban boards as quick-switch tabs"): a pin is a board
+ * slug, pins are ordered, and reordering never changes the selection.
  */
 
 /** Ordered board slugs. */
@@ -26,7 +25,7 @@ export function togglePin(pins: PinList, slug: string, pinned: boolean): string[
   return pinned ? [...pins, slug] : pins.filter(item => item !== slug)
 }
 
-/** Move `slug` into `target`'s slot — what a drop and Alt+Left/Right both land on. */
+/** Move `slug` into `target`'s slot — what Alt+Left/Right lands on. */
 export function movePin(pins: PinList, slug: string, target: string): string[] {
   const next = [...pins]
   const from = next.indexOf(slug)
@@ -40,28 +39,6 @@ export function movePin(pins: PinList, slug: string, target: string): string[] {
   next.splice(to, 0, slug)
 
   return next
-}
-
-/** Pins that still resolve to a board, in tab order. */
-export function visiblePins<T extends { slug: string }>(pins: PinList, boards: readonly T[]): T[] {
-  const bySlug = new Map(boards.map(board => [board.slug, board]))
-
-  return pins.flatMap(slug => {
-    const board = bySlug.get(slug)
-
-    return board ? [board] : []
-  })
-}
-
-/** The tab `slug` swaps with for Alt+Left/Right, or null at either end. */
-export function pinNeighbour<T extends { slug: string }>(visible: readonly T[], slug: string, step: number): T | null {
-  const index = visible.findIndex(board => board.slug === slug)
-
-  if (index < 0 || !step) {
-    return null
-  }
-
-  return visible[index + step] || null
 }
 
 /** Whatever storage handed back, as a clean slug list (strings, de-duplicated). */

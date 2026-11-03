@@ -20,20 +20,6 @@ function movePin(pins, slug, target) {
   next.splice(to, 0, slug);
   return next;
 }
-function visiblePins(pins, boards) {
-  const bySlug = new Map(boards.map((board) => [board.slug, board]));
-  return pins.flatMap((slug) => {
-    const board = bySlug.get(slug);
-    return board ? [board] : [];
-  });
-}
-function pinNeighbour(visible, slug, step) {
-  const index = visible.findIndex((board) => board.slug === slug);
-  if (index < 0 || !step) {
-    return null;
-  }
-  return visible[index + step] || null;
-}
 function normalizePins(raw) {
   if (!Array.isArray(raw)) {
     return [];
@@ -43,7 +29,5 @@ function normalizePins(raw) {
 export {
   movePin,
   normalizePins,
-  pinNeighbour,
-  togglePin,
-  visiblePins
+  togglePin
 };

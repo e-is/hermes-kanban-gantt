@@ -3,7 +3,6 @@ import { Button, cn, Codicon, DropdownMenu, DropdownMenuContent, DropdownMenuIte
 import { togglePin } from '../core/pins-core'
 import { $boardSlug, $pinnedBoards, apiBase, apiFetch, boardStorageKey, getStorage, savePins } from '../state'
 import { useGanttI18n } from '../i18n'
-import { PinnedBoardTabs } from './PinnedBoardTabs'
 
 /**
  * Board switcher projected into the desktop titlebar band (titleBar.center)
@@ -27,7 +26,6 @@ export function TitlebarBoardSwitcher() {
   const current = isAllBoards
     ? { slug: 'all', label: i18n.allBoards }
     : boards.find(b => b.slug === (board || data?.current))
-  const currentSlug = isAllBoards ? 'all' : board || data?.current || ''
   const isPinned = !isAllBoards && !!current && pinned.includes(current.slug)
   const setBoard = (slug: string) => {
     $boardSlug.set(slug)
@@ -111,12 +109,6 @@ export function TitlebarBoardSwitcher() {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      <PinnedBoardTabs
-        boards={boards}
-        currentSlug={currentSlug}
-        onSwitch={setBoard}
-        serverCurrent={data?.current || ''}
-      />
     </div>
   )
 }
