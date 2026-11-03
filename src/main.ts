@@ -63,7 +63,8 @@ import {
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
   $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $detailModal, $titlePrefixTags, $openTaskId,
   $openAttachment,
-  $newTask, $moveUnderId, $wsEnabled, $connectionScope, $openBoards,
+  $newTask, $moveUnderId, $wsEnabled, $connectionScope, $openBoards, $pinnedBoards,
+  boardStorageKey, readStoredPins,
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
   createTask, fetchProjects, fetchProfiles,
   setParent, removeParent, applyBase
@@ -139,11 +140,6 @@ function connectionScope() {
     /* no desktop bridge (standalone server): one scope, one key */
     return ''
   }
-}
-
-function boardStorageKey() {
-  const scope = connectionScope()
-  return scope ? `${BOARD_KEY}.${scope}` : BOARD_KEY
 }
 
 function openBoardsKey() {
@@ -5359,12 +5355,16 @@ const plugin = {
     // make the push client re-subscribe, rather than keeping the previous
     // backend's board and a socket to a dead port.
     $connectionScope.set(connectionScope())
+    // Pinned tabs are read AFTER the scope: the key is per connection, so
+    // reading it before would hand this gateway the previous one's pins.
+    $pinnedBoards.set(readStoredPins())
     try {
       const conn = host && host.state && host.state.connectionId
       if (conn && typeof conn.listen === 'function' && typeof ctx.onDispose === 'function') {
         ctx.onDispose(conn.listen(() => {
           $connectionScope.set(connectionScope())
           $boardSlug.set(readStoredBoard(ctx.storage))
+          $pinnedBoards.set(readStoredPins())
         }))
       }
     } catch {

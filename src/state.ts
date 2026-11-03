@@ -3,6 +3,8 @@
 
 import { atom } from '@hermes/plugin-sdk'
 
+import { normalizePins } from './core/pins-core'
+
 export const LABEL_W = 300 // px — default width of the sticky label column
 /* ──────────────────────────────── data doors ──────────────────────────────── */
 
@@ -23,6 +25,13 @@ export const $boardSlug = atom('')
  *  `host.state.connectionId`.
  */
 export const $connectionScope = atom('')
+/** Slugs of the boards pinned as quick-switch tabs, in tab order.
+ *
+ *  Connection-scoped like the remembered board (see `boardStorageKey`): a pin
+ *  belongs to the gateway that owns the board, so a gateway switch re-reads
+ *  this list instead of showing the other gateway's tabs.
+ */
+export const $pinnedBoards = atom<string[]>([])
 /** Width (px) of the sticky task-name column — resizable via its drag handle. */
 export const $labelW = atom(LABEL_W)
 /** Width (px) of the task drawer — resizable via its left-edge handle. */
@@ -127,6 +136,39 @@ export function setPluginDoors(restFn, storageObj, socketFn) {
 export const getStorage = () => storage
 /** The SDK's `ctx.socket` door, or null when the host doesn't provide one. */
 export const getSocket = () => socket
+
+/* ───────────────────────────── pinned board tabs ──────────────────────────── */
+
+/** Storage key of the remembered board — bare for a single backend, suffixed by
+ *  connection id for remotes (byte-identical storage for local users). */
+export const boardStorageKey = () => {
+  const scope = $connectionScope.get()
+  return scope ? `board.${scope}` : 'board'
+}
+
+/** Storage key of the pinned tab list — scoped exactly like the remembered board. */
+const PINS_KEY = 'pinnedBoards'
+
+export const pinsStorageKey = () => {
+  const scope = $connectionScope.get()
+  return scope ? `${PINS_KEY}.${scope}` : PINS_KEY
+}
+
+/** Pins this connection remembers, sanitized — a hand-edited value must not
+ *  take the page down. */
+export function readStoredPins(): string[] {
+  if (!storage) return []
+  try {
+    return normalizePins(storage.get(pinsStorageKey(), []))
+  } catch {
+    return []
+  }
+}
+
+/** Persist the tab order for the active connection. */
+export function savePins(pins: string[]) {
+  if (storage) storage.set(pinsStorageKey(), pins)
+}
 
 export {
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
