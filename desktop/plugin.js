@@ -9337,7 +9337,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 backgroundColor: "var(--ui-bg-tertiary)",
                 border: "1px solid var(--ui-stroke-tertiary)"
               },
-              children: drawerTitle.prefix
+              children: shownTitle.prefix
             }) : null,
             jsx6("span", { className: "min-w-0", children: drawerName })
           ]
