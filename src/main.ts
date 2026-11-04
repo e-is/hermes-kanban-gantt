@@ -673,7 +673,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
                       backgroundColor: 'var(--ui-bg-tertiary)',
                       border: '1px solid var(--ui-stroke-tertiary)'
                     },
-                    children: prefix
+                    children: shown.prefix
                   })
                 : null,
               name
@@ -3742,7 +3742,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
 // can drive them directly instead of hunting for a row node to click — which the stub cannot even
 // reach. Without this, the whole detail body is untestable, and it is where a temporal-dead-zone
 // crash hid for a full evening while sixteen checks stayed green.
-export { $openTaskId, $detailModal } from './state'
+export { $openTaskId, $detailModal, $titlePrefixTags } from './state'
 
 /** The modifier this platform uses for a wheel zoom: Hermes prints ⌘ on macOS, Ctrl
  *  elsewhere, so the hint says what the reader's own keyboard shows. */

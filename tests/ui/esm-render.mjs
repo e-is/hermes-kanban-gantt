@@ -101,13 +101,33 @@ const detailWithLog = {
   }
 }
 
+// A board of prefixed titles, and only for the prefix chip: the preference turns the leading
+// [olio] into a chip, in the row and in the drawer. Both sites once read a variable that was never
+// declared, and the crash only fires when the preference is on — so nothing here could see it.
+const prefixedBoard = {
+  tasks: [
+    { id: 'p1', title: '[olio] Prefixed task', status: 'todo', created_at: 1_799_000_000, archived: false }
+  ],
+  total: 1
+}
+
+// The same task, opened in the drawer, whose title carries the prefix the chip renders.
+const prefixedDetail = {
+  task: {
+    id: 'p1', title: '[olio] Prefixed task', status: 'todo',
+    comments: [], events: [], runs: []
+  }
+}
+
 // Query results injected into the generated stub module (the stub runs in a
 // separate module scope and cannot close over this file's variables).
 const stubQueryData = {
   'kanban-gantt|boards': boards,
   'kanban-gantt|gantt': gantt,
   'kanban-gantt|lineage': lineageBoard,
-  'kanban-gantt|task': detailWithLog
+  'kanban-gantt|task': detailWithLog,
+  'kanban-gantt|prefixedTask': prefixedDetail,
+  'kanban-gantt|prefixedBoard': prefixedBoard
 }
 
 const useQueryStubSource = `const stubQueryData = ${JSON.stringify(stubQueryData)}
@@ -117,8 +137,12 @@ export const useQuery = options => {
   if (key.includes('|boards')) data = stubQueryData['kanban-gantt|boards']
   else if (key.includes('|gantt')) data = globalThis.__kgBoard === 'lineage'
     ? stubQueryData['kanban-gantt|lineage']
-    : stubQueryData['kanban-gantt|gantt']
-  else if (key.includes('|task')) data = globalThis.__kgLogDetail ? stubQueryData['kanban-gantt|task'] : undefined
+    : globalThis.__kgBoard === 'prefixed'
+      ? stubQueryData['kanban-gantt|prefixedBoard']
+      : stubQueryData['kanban-gantt|gantt']
+  else if (key.includes('|task')) data = globalThis.__kgLogDetail
+    ? stubQueryData['kanban-gantt|task']
+    : globalThis.__kgPrefixedDetail ? stubQueryData['kanban-gantt|prefixedTask'] : undefined
   return { data, isLoading: false, isError: false, error: null, refetch: async () => {} }
 }`
 
@@ -688,6 +712,31 @@ globalThis.__kgScope = null
 globalThis.__kgDisabled = null
 globalThis.__kgLineage = null
 globalThis.__kgView = null
+
+// 4c) the prefix chip, in the row AND in the drawer.
+//
+// `git grep drawerTitle src/` found one reference and no declaration: the drawer's chip read a
+// variable that does not exist, and the list row did the same with `prefix`. Both only evaluate
+// when the title has a prefix AND the preference is on, which is why the page rendered fine for
+// months and then took the whole plugin down on a board whose titles are all prefixed.
+pluginModule.$titlePrefixTags.set(true)
+pluginModule.$detailModal.set(false)
+globalThis.__kgBoard = 'prefixed'
+globalThis.__kgPrefixedDetail = true
+
+const prefixRow = JSON.stringify(page.render())
+check(!prefixRow.includes('renderError'), 'a prefixed title renders instead of taking the page down')
+check(prefixRow.includes('"children":"olio"'), 'the list row shows the prefix as its own chip')
+
+pluginModule.$openTaskId.set('p1')
+const prefixDrawer = JSON.stringify(page.render())
+check(!prefixDrawer.includes('renderError'), 'the drawer on a prefixed title renders')
+check(prefixDrawer.includes('"children":"olio"'), 'the drawer shows the prefix chip too')
+
+pluginModule.$openTaskId.set(null)
+pluginModule.$titlePrefixTags.set(false)
+globalThis.__kgPrefixedDetail = null
+globalThis.__kgBoard = null
 
 // 4) titlebar chrome: switcher contributed to titleBar.center
 const nav = contributions.find(c => c.area === 'sidebar.nav')

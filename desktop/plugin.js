@@ -4772,10 +4772,10 @@ var GANTT_LOCALES = {
   tr,
   uk
 };
-function bindI18n(t, template, prefix2 = "") {
+function bindI18n(t, template, prefix = "") {
   const out = {};
   for (const [key, value] of Object.entries(template)) {
-    const path = prefix2 ? `${prefix2}.${key}` : key;
+    const path = prefix ? `${prefix}.${key}` : key;
     out[key] = typeof value === "function" ? (...args) => t(path, ...args) : value && typeof value === "object" ? bindI18n(t, value, path) : t(path);
   }
   return out;
@@ -5371,14 +5371,14 @@ function splitTitlePrefix(title) {
   if (!text.startsWith("[")) return { prefix: null, rest: text };
   const end = text.indexOf("]");
   if (end < 2) return { prefix: null, rest: text };
-  const prefix2 = text.slice(1, end).trim();
-  if (!prefix2) return { prefix: null, rest: text };
-  return { prefix: prefix2, rest: text.slice(end + 1).trim() };
+  const prefix = text.slice(1, end).trim();
+  if (!prefix) return { prefix: null, rest: text };
+  return { prefix, rest: text.slice(end + 1).trim() };
 }
 function titleParts(title, asTags) {
   const full = typeof title === "string" ? title.trim() : "";
-  const { prefix: prefix2, rest: rest2 } = splitTitlePrefix(full);
-  return asTags && prefix2 ? { prefix: prefix2, text: rest2 } : { prefix: null, text: full };
+  const { prefix, rest: rest2 } = splitTitlePrefix(full);
+  return asTags && prefix ? { prefix, text: rest2 } : { prefix: null, text: full };
 }
 function matchesSearch(task, query) {
   const q = (query || "").trim().toLowerCase();
@@ -7122,7 +7122,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
                   backgroundColor: "var(--ui-bg-tertiary)",
                   border: "1px solid var(--ui-stroke-tertiary)"
                 },
-                children: prefix
+                children: shown.prefix
               }) : null,
               name
             ]
@@ -11203,6 +11203,7 @@ var main_default = plugin;
 export {
   $detailModal,
   $openTaskId,
+  $titlePrefixTags,
   GraphView,
   KanbanGanttPage,
   KanbanGanttRoute,
