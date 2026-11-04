@@ -393,13 +393,18 @@ function centreOverChildren(rows, pos, edges) {
     if (!parents.has(e.to)) parents.set(e.to, []);
     parents.get(e.to).push(e.from);
   }
-  const free = (id, want) => {
+  const room = (id) => {
     const spot = where.get(id);
-    if (!spot) return false;
+    if (!spot) return null;
     const row = list[spot.r];
     const left = spot.i > 0 ? out.get(row[spot.i - 1].id) : -Infinity;
     const right = spot.i < row.length - 1 ? out.get(row[spot.i + 1].id) : Infinity;
-    return want > left + 1e-9 && want < right - 1e-9;
+    return left + 1 <= right - 1 ? { lo: left + 1, hi: right - 1 } : null;
+  };
+  const fit = (id, want) => {
+    const r = room(id);
+    if (!r) return null;
+    return Math.min(Math.max(want, r.lo), r.hi);
   };
   for (let r = list.length - 1; r >= 0; r--) {
     const row = list[r];
@@ -409,8 +414,9 @@ function centreOverChildren(rows, pos, edges) {
       if (!children.length) continue;
       const want = children.reduce((sum, c) => sum + out.get(c), 0) / children.length;
       if (!Number.isFinite(want)) continue;
-      if (!free(id, want)) continue;
-      out.set(id, want);
+      const target = fit(id, want);
+      if (target === null) continue;
+      out.set(id, target);
     }
   }
   for (const row of list) {
@@ -419,11 +425,11 @@ function centreOverChildren(rows, pos, edges) {
       const children = (kids.get(id) || []).filter((c) => out.has(c));
       if (children.length !== 1) continue;
       const child = children[0];
-      const target = out.get(id);
-      if (out.get(child) === target) continue;
+      if (out.get(child) === out.get(id)) continue;
       if ((kids.get(child) || []).length) continue;
       if ((parents.get(child) || []).length !== 1) continue;
-      if (!free(child, target)) continue;
+      const target = fit(child, out.get(id));
+      if (target === null) continue;
       out.set(child, target);
     }
   }

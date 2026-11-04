@@ -640,9 +640,30 @@ test('centring refuses a move that would cross a neighbour, and takes the room i
   // neighbour, so the row is left exactly as it was.
   const crowded = centreOverChildren(rows, new Map([['a', 0], ['p', 1], ['b', 2], ['c', 2]]), [{ from: 'p', to: 'c' }])
   assert.equal(crowded.get('p'), 1)
-  // With room between its neighbours, the same parent does move onto its child.
+  // With room between its neighbours, the same parent slides as close to its child as the row
+  // allows — and no closer than ONE SLOT, which is the spacing the sweeps themselves keep. The old
+  // expectation here was 1.5, i.e. 0.5 slots from `b`: that is 86px between two 172px cards, and it
+  // is exactly the overlap that was reported on the demo board.
   const roomy = centreOverChildren(rows, new Map([['a', 0], ['p', 1], ['b', 2], ['c', 1.5]]), [{ from: 'p', to: 'c' }])
-  assert.equal(roomy.get('p'), 1.5)
+  assert.equal(roomy.get('p'), 1, 'b leaves exactly one slot, so p cannot use 1.5')
+  const wider = centreOverChildren(rows, new Map([['a', 0], ['p', 1], ['b', 3], ['c', 2]]), [{ from: 'p', to: 'c' }])
+  assert.equal(wider.get('p'), 2, 'with two slots between its neighbours it reaches the child exactly')
+})
+
+test('no pass ever puts two cards of a row closer than one slot', () => {
+  // The invariant the sweeps keep and that a later pass must not break: `x = slot × step`, so a gap
+  // below 1 means two 172px cards drawn over each other.
+  const rows = [[{ id: 'a' }, { id: 'p' }, { id: 'b' }], [{ id: 'c' }, { id: 'd' }, { id: 'e' }]]
+  const slots = new Map([['a', 0], ['p', 1], ['b', 2], ['c', 0.4], ['d', 1.6], ['e', 2.8]])
+  const edges = [{ from: 'p', to: 'c' }, { from: 'p', to: 'e' }]
+  const out = centreOverChildren(rows, slots, edges)
+  for (const row of rows) {
+    const xs = row.map(n => out.get(n.id)).sort((x, y) => x - y)
+    for (let i = 1; i < xs.length; i++) {
+      assert.ok(xs[i] - xs[i - 1] >= 1 - 1e-9,
+        `row ${row.map(n => n.id).join('')}: ${xs[i - 1]} and ${xs[i]} are less than one slot apart`)
+    }
+  }
 })
 
 test('a single child stays directly below its parent, however deep the chain', () => {

@@ -584,14 +584,24 @@ export function centreOverChildren(rows, pos, edges) {
     parents.get(e.to).push(e.from);
   }
 
-  const free = (id, want) => {
+  // One full slot of spacing — the rule the sweeps already keep, and the reason the upstream plugin
+  // cannot overlap: it builds every row with `out[i] >= out[i-1] + 1` and then never moves a card
+  // again. These two passes DO move cards afterwards, so they owe the same spacing. A move that
+  // cannot reach its target is brought as close as the row allows rather than dropped: the link ends
+  // up as vertical as the neighbours permit, and a card can never sit closer than one slot to
+  // another (cross slots would put 172px-wide cards 68px apart, which is what was reported).
+  const room = id => {
     const spot = where.get(id);
-    if (!spot) return false;
+    if (!spot) return null;
     const row = list[spot.r];
     const left = spot.i > 0 ? out.get(row[spot.i - 1].id) : -Infinity;
     const right = spot.i < row.length - 1 ? out.get(row[spot.i + 1].id) : Infinity;
-    // Strictly between its neighbours: the row keeps its order, so no two links cross.
-    return want > left + 1e-9 && want < right - 1e-9;
+    return left + 1 <= right - 1 ? { lo: left + 1, hi: right - 1 } : null;
+  };
+  const fit = (id, want) => {
+    const r = room(id);
+    if (!r) return null;
+    return Math.min(Math.max(want, r.lo), r.hi);
   };
 
   // Deepest rank first. A parent must be centred onto children whose own place is FINAL: walking
@@ -606,8 +616,9 @@ export function centreOverChildren(rows, pos, edges) {
       if (!children.length) continue;
       const want = children.reduce((sum, c) => sum + out.get(c), 0) / children.length;
       if (!Number.isFinite(want)) continue;
-      if (!free(id, want)) continue;
-      out.set(id, want);
+      const target = fit(id, want);
+      if (target === null) continue;
+      out.set(id, target);
     }
   }
 
@@ -623,11 +634,11 @@ export function centreOverChildren(rows, pos, edges) {
       const children = (kids.get(id) || []).filter(c => out.has(c));
       if (children.length !== 1) continue;
       const child = children[0];
-      const target = out.get(id);
-      if (out.get(child) === target) continue;
+      if (out.get(child) === out.get(id)) continue;
       if ((kids.get(child) || []).length) continue;
       if ((parents.get(child) || []).length !== 1) continue;
-      if (!free(child, target)) continue;
+      const target = fit(child, out.get(id));
+      if (target === null) continue;
       out.set(child, target);
     }
   }
