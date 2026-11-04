@@ -291,6 +291,51 @@ def test_the_default_board_is_served_rather_than_refused(client):
     assert any(t["title"] == "[TEST] task on the default board" for t in r.json()["tasks"])
 
 
+def test_boards_list_includes_default_and_skips_archived(client):
+    """#12: `default` lives at <root>/kanban.db (boards/default/ holds only board.json),
+    and an archived board leaves a tombstone board.json (+ maybe an empty DB) behind."""
+    import json
+
+    http, board = client
+    home = Path(os.environ["HERMES_KANBAN_HOME"])
+    boards = home / "kanban" / "boards"
+
+    conn = kbc.connect(board="default")
+    kanban_db.create_task(conn, title="[TEST] default task", priority=1, created_by="test")
+    conn.close()
+    (boards / "default").mkdir(parents=True, exist_ok=True)
+    (boards / "default" / "board.json").write_text(
+        json.dumps({"slug": "default", "name": "Default", "archived": False}), encoding="utf-8")
+
+    gone = boards / "gone-board"
+    gone.mkdir()
+    (gone / "board.json").write_text(
+        json.dumps({"slug": "gone-board", "name": "Gone", "archived": True}), encoding="utf-8")
+    (gone / "kanban.db").write_bytes(b"")
+    (boards / "_archived" / "gone-board-1").mkdir(parents=True)
+    (boards / "_archived" / "gone-board-1" / "kanban.db").write_bytes(b"")
+
+    slugs = [b["slug"] for b in http.get("/boards").json()["boards"]]
+    assert "default" in slugs
+    assert board["slug"] in slugs
+    assert "gone-board" not in slugs
+    assert "_archived" not in slugs
+
+    # the aggregate view follows the same list
+    titles = [t["title"] for t in http.get("/gantt?board=all").json()["tasks"]]
+    assert "[TEST] default task" in titles
+
+
+def test_boards_list_adds_default_without_a_boards_default_dir(client):
+    http, board = client
+    conn = kbc.connect(board="default")
+    kanban_db.create_task(conn, title="[TEST] default task", priority=1, created_by="test")
+    conn.close()
+    slugs = [b["slug"] for b in http.get("/boards").json()["boards"]]
+    assert "default" in slugs
+
+
+
 def test_a_board_in_its_own_directory_is_served(monkeypatch, tmp_path):
     """The assertion must not reject the honest case it exists to protect."""
     import types
