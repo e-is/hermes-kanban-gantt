@@ -2276,8 +2276,20 @@ export function GraphView({
                         : node.status === 'blocked' && node.blockKind
                           ? jsx('span', { className: 'shrink-0 truncate', style: { color: 'var(--ui-status-danger, #f87171)' }, title: node.blockKind, children: node.blockKind })
                           : null,
+                      // Tall cards name the agent, and the bundled card keeps the avatar BESIDE the
+                      // name — the letter on one side and the name on the other reads as two
+                      // different agents. Compact cards have no room for the name, so the avatar
+                      // stays on the right, where it is the only thing to read.
                       tallCards && node.assignee
-                        ? jsx('span', { className: 'shrink-0 truncate', style: { color: tone, maxWidth: '42%' }, children: node.assignee })
+                        ? jsxs('span', {
+                          className: 'shrink-0 inline-flex items-center gap-1 min-w-0',
+                          style: { color: tone, maxWidth: '48%' },
+                          title: node.assignee,
+                          children: [
+                            jsx(ProfileAvatar, { name: node.assignee, size: '0.75rem' }),
+                            jsx('span', { className: 'truncate', children: node.assignee })
+                          ]
+                        })
                         : null,
                       jsx('span', { className: 'flex-1' }),
                       // Right, in the bundled card's order: priority, links, comments, attachment,
@@ -2308,9 +2320,14 @@ export function GraphView({
                             )
                           })
                         : null,
-                      node.assignee
-                        ? jsx('span', { className: 'shrink-0 inline-flex', title: node.assignee, children: jsx(ProfileAvatar, { name: node.assignee, size: '0.85rem' }) })
-                        : jsx('span', { className: 'shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60', style: { width: '0.7rem', height: '0.7rem' } }),
+                      // The avatar sits beside the name in tall cards, so the right edge keeps it
+                      // only when there is no name there to pair it with — otherwise the letter
+                      // and the name read as two different agents.
+                      !tallCards
+                        ? (node.assignee
+                          ? jsx('span', { className: 'shrink-0 inline-flex', title: node.assignee, children: jsx(ProfileAvatar, { name: node.assignee, size: '0.85rem' }) })
+                          : jsx('span', { className: 'shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60', style: { width: '0.7rem', height: '0.7rem' } }))
+                        : null,
                       jsx('span', { className: 'shrink-0', style: { fontFamily: 'var(--font-mono, monospace)' }, children: shortId(node.id) })
                     ]
                   }),

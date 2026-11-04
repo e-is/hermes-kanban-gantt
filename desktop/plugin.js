@@ -8816,7 +8816,19 @@ function GraphView({
                     children: [
                       // Left: the agent's own word — what it is doing right now, or why it is stuck.
                       runNow ? jsx6("span", { className: "shrink-0", style: { color: tone }, children: relativeAge(runNow.started_at || runNow.startedAt) }) : node.status === "blocked" && node.blockKind ? jsx6("span", { className: "shrink-0 truncate", style: { color: "var(--ui-status-danger, #f87171)" }, title: node.blockKind, children: node.blockKind }) : null,
-                      tallCards && node.assignee ? jsx6("span", { className: "shrink-0 truncate", style: { color: tone, maxWidth: "42%" }, children: node.assignee }) : null,
+                      // Tall cards name the agent, and the bundled card keeps the avatar BESIDE the
+                      // name — the letter on one side and the name on the other reads as two
+                      // different agents. Compact cards have no room for the name, so the avatar
+                      // stays on the right, where it is the only thing to read.
+                      tallCards && node.assignee ? jsxs6("span", {
+                        className: "shrink-0 inline-flex items-center gap-1 min-w-0",
+                        style: { color: tone, maxWidth: "48%" },
+                        title: node.assignee,
+                        children: [
+                          jsx6(ProfileAvatar, { name: node.assignee, size: "0.75rem" }),
+                          jsx6("span", { className: "truncate", children: node.assignee })
+                        ]
+                      }) : null,
                       jsx6("span", { className: "flex-1" }),
                       // Right, in the bundled card's order: priority, links, comments, attachment,
                       // agent, id. Each one is a glyph plus a number, never a word.
@@ -8838,7 +8850,10 @@ function GraphView({
                           attachmentPreviewState(node.id, node.board || board, att, siblings)
                         )
                       }) : null,
-                      node.assignee ? jsx6("span", { className: "shrink-0 inline-flex", title: node.assignee, children: jsx6(ProfileAvatar, { name: node.assignee, size: "0.85rem" }) }) : jsx6("span", { className: "shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60", style: { width: "0.7rem", height: "0.7rem" } }),
+                      // The avatar sits beside the name in tall cards, so the right edge keeps it
+                      // only when there is no name there to pair it with — otherwise the letter
+                      // and the name read as two different agents.
+                      !tallCards ? node.assignee ? jsx6("span", { className: "shrink-0 inline-flex", title: node.assignee, children: jsx6(ProfileAvatar, { name: node.assignee, size: "0.85rem" }) }) : jsx6("span", { className: "shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60", style: { width: "0.7rem", height: "0.7rem" } }) : null,
                       jsx6("span", { className: "shrink-0", style: { fontFamily: "var(--font-mono, monospace)" }, children: shortId(node.id) })
                     ]
                   })
