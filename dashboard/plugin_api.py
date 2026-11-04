@@ -326,7 +326,15 @@ def list_boards():
             boards.insert(0, {"slug": "default", "label": "Default"})
         except HTTPException:
             pass
-    return {"boards": boards, "current": _resolve_board(None)}
+    current = _resolve_board(None)
+    # `current` is what the gateway would serve, not necessarily a board this listing
+    # offers: an archived `default` is skipped by the loop above, while
+    # `get_current_board()` falls through to DEFAULT_BOARD without an archived check.
+    # A picker opened on a slug it cannot show renders an empty trigger and ticks
+    # nothing, so answer with the first board the list does carry.
+    if boards and current not in {b["slug"] for b in boards}:
+        current = boards[0]["slug"]
+    return {"boards": boards, "current": current}
 
 
 def _activity_series(conn, window_sec: int = 24 * 3600, buckets: int = 24) -> dict:

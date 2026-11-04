@@ -326,6 +326,30 @@ def test_boards_list_includes_default_and_skips_archived(client):
     assert "[TEST] default task" in titles
 
 
+def test_boards_list_never_names_a_board_it_does_not_list(client):
+    """The list's own edge: an archived `default` is skipped (its tombstone keeps it out),
+    but the core still answers `default` as the current board — `get_current_board()`
+    falls through to DEFAULT_BOARD without an archived check. `current` must therefore be
+    a board the listing carries, or the picker opens on a slug it cannot show: an empty
+    trigger, no board ticked, and no obvious way back."""
+    import json
+
+    http, board = client
+    home = Path(os.environ["HERMES_KANBAN_HOME"])
+    boards = home / "kanban" / "boards"
+
+    (boards / "default").mkdir(parents=True, exist_ok=True)
+    (boards / "default" / "board.json").write_text(
+        json.dumps({"slug": "default", "name": "Default", "archived": True}), encoding="utf-8")
+    kanban_db.clear_current_board()
+
+    data = http.get("/boards").json()
+    slugs = [b["slug"] for b in data["boards"]]
+    assert "default" not in slugs, "an archived default is not offered"
+    assert slugs, "the sandbox board is still listed"
+    assert data["current"] in slugs, f"current {data['current']!r} must be one of {slugs}"
+
+
 def test_boards_list_adds_default_without_a_boards_default_dir(client):
     http, board = client
     conn = kbc.connect(board="default")
