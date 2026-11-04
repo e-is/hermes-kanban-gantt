@@ -1,7 +1,13 @@
 # Spike close-out — replace the polling loop with websockets
 
+> **Superseded (2026-11-04).** This page describes the 2026-10-26 cycle on tree `1.7.2` @ `0b486a0`.
+> The current entry point is
+> [`websocket-spike-closeout-2026-11-04.md`](websocket-spike-closeout-2026-11-04.md) (plugin `1.9.0`,
+> card `t_e10ba956`). Kept for history: its PoC measurements and the `ws_proof.py` repair are what
+> the newer cycle builds on.
+
 Card `t_99712c4d` (board `gantt-demo`), closed 2026-10-26. Tree `main` @ `0b486a0`, plugin `1.7.2`.
-This page is the entry point; the evidence lives in the four docs below.
+This page was the entry point for that cycle; the evidence lives in the four docs below.
 
 ## Answer
 
