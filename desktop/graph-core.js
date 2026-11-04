@@ -385,17 +385,46 @@ function centreOverChildren(rows, pos, edges) {
     kids.get(e.from).push(e.to);
   }
   const out = new Map(pos);
-  for (const row of rows || []) {
+  const list = rows || [];
+  const where = /* @__PURE__ */ new Map();
+  list.forEach((row, r) => row.forEach((n, i) => where.set(n.id, { r, i })));
+  const parents = /* @__PURE__ */ new Map();
+  for (const e of edges || []) {
+    if (!parents.has(e.to)) parents.set(e.to, []);
+    parents.get(e.to).push(e.from);
+  }
+  const free = (id, want) => {
+    const spot = where.get(id);
+    if (!spot) return false;
+    const row = list[spot.r];
+    const left = spot.i > 0 ? out.get(row[spot.i - 1].id) : -Infinity;
+    const right = spot.i < row.length - 1 ? out.get(row[spot.i + 1].id) : Infinity;
+    return want > left + 1e-9 && want < right - 1e-9;
+  };
+  for (let r = list.length - 1; r >= 0; r--) {
+    const row = list[r];
     for (let i = 0; i < row.length; i++) {
       const id = row[i].id;
       const children = (kids.get(id) || []).filter((c) => out.has(c));
       if (!children.length) continue;
       const want = children.reduce((sum, c) => sum + out.get(c), 0) / children.length;
       if (!Number.isFinite(want)) continue;
-      const left = i > 0 ? out.get(row[i - 1].id) : -Infinity;
-      const right = i < row.length - 1 ? out.get(row[i + 1].id) : Infinity;
-      if (!(want > left + 1e-9 && want < right - 1e-9)) continue;
+      if (!free(id, want)) continue;
       out.set(id, want);
+    }
+  }
+  for (const row of list) {
+    for (let i = 0; i < row.length; i++) {
+      const id = row[i].id;
+      const children = (kids.get(id) || []).filter((c) => out.has(c));
+      if (children.length !== 1) continue;
+      const child = children[0];
+      const target = out.get(id);
+      if (out.get(child) === target) continue;
+      if ((kids.get(child) || []).length) continue;
+      if ((parents.get(child) || []).length !== 1) continue;
+      if (!free(child, target)) continue;
+      out.set(child, target);
     }
   }
   return out;

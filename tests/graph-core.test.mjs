@@ -645,6 +645,46 @@ test('centring refuses a move that would cross a neighbour, and takes the room i
   assert.equal(roomy.get('p'), 1.5)
 })
 
+test('a single child stays directly below its parent, however deep the chain', () => {
+  // a → b → c, with `b` alone on its row (so it is free to move) and `x` far enough right that `a`
+  // has room to follow. Centring top-down puts `a` on `b`'s OLD slot and never revisits it, so the
+  // pair separates by exactly the distance `b` travelled afterwards.
+  const rows = [[{ id: 'a' }, { id: 'x' }], [{ id: 'b' }], [{ id: 'c' }, { id: 'z' }]]
+  const slots = new Map([['a', 0], ['x', 3], ['b', 0.5], ['c', 2], ['z', 3]])
+  const edges = [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }]
+  const out = centreOverChildren(rows, slots, edges)
+  assert.equal(out.get('b'), 2, 'b goes onto its only child')
+  assert.equal(out.get('a'), out.get('b'), 'a follows b — the chain is centred as a whole')
+  assert.ok(out.get('a') < out.get('x'), 'and a still does not cross its neighbour')
+})
+
+test('a parent that cannot move pulls its leaf child under it — and only a leaf', () => {
+  // `p` is wedged between `a` and `b`, so it cannot travel to `c`'s slot. The child has room, so the
+  // child is the one that moves: the link ends up vertical either way, which is what the eye reads.
+  const rows = [[{ id: 'a' }, { id: 'p' }, { id: 'b' }], [{ id: 'c' }, { id: 'd' }]]
+  const wedged = centreOverChildren(rows,
+    new Map([['a', 0], ['p', 1], ['b', 2], ['c', 2], ['d', 3]]), [{ from: 'p', to: 'c' }])
+  assert.equal(wedged.get('p'), 1, 'the parent stays where its row allows')
+  assert.equal(wedged.get('c'), 1, 'the leaf child comes under it instead')
+
+  // A child that leads somewhere else is NOT pulled: moving it would drag its own subtree sideways
+  // and undo what the pass below it just did.
+  const chain = [[{ id: 'a' }, { id: 'p' }, { id: 'b' }], [{ id: 'c' }, { id: 'd' }], [{ id: 'e' }]]
+  const kept = centreOverChildren(chain,
+    new Map([['a', 0], ['p', 1], ['b', 2], ['c', 2], ['d', 3], ['e', 2]]),
+    [{ from: 'p', to: 'c' }, { from: 'c', to: 'e' }])
+  assert.equal(kept.get('c'), 2, 'a child with children of its own is left alone')
+
+  // A child with TWO parents is never pulled: pulling it to `p` and then to `q` means the last one
+  // wins and the other parent is left sideways regardless — it can only sit under one of them.
+  const shared = [[{ id: 'a' }, { id: 'p' }, { id: 'b' }, { id: 'q' }], [{ id: 'c' }, { id: 'd' }]]
+  const twoParents = centreOverChildren(shared,
+    new Map([['a', 0], ['p', 1], ['b', 2], ['q', 4], ['c', 2], ['d', 3]]),
+    [{ from: 'p', to: 'c' }, { from: 'q', to: 'c' }])
+  assert.equal(twoParents.get('c'), 2, 'a shared child stays where it is')
+  assert.equal(twoParents.get('p'), 1, 'and neither parent is moved for it')
+})
+
 test('no two cards of a row end up on the same cross coordinate', () => {
   const tasks = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id }))
   const { nodes: placed } = layoutGraph(graphNodes(tasks), graphEdges([]), { arrangement: 'down' })

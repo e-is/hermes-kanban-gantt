@@ -553,10 +553,18 @@ export function arrangeRows(list, rankMap, edges, by = 'status', { orderSweeps =
  * end up a whole slot away from the children it leads to, and the link between them goes sideways
  * instead of down. That is what a reader sees as a card that is not above its child.
  *
- * This pass runs after them, row by row, and moves a parent to the mean of its children's
- * positions only when the spot is free AND the move does not cross either neighbour — so it can
- * only ever remove a sideways link, never introduce an overlapping card or a crossed row. A parent
- * with a single child therefore lands exactly on it, which is the case the eye judges first.
+ * This pass runs after them and moves a parent to the mean of its children's positions, in TWO
+ * passes whose order is the whole point. The first walks the ranks from the DEEPEST up, so a parent
+ * is centred onto children whose own place is already final — walking down instead centres a parent
+ * onto a child that then moves, and the gap between the two grows with depth (measured on the demo
+ * board: 34px, then 151px, then 152px down one chain). The second walks back up and, where a parent
+ * is wedged between its neighbours and cannot travel, brings its only LEAF child under it instead: a
+ * leaf drags nothing with it, so one extra pass is enough and no subtree is disturbed.
+ *
+ * Both passes only move a card when the spot is free AND the move does not cross either neighbour —
+ * so they can only ever remove a sideways link, never introduce an overlapping card or a crossed
+ * row. A parent with a single child therefore lands exactly on it, which is the case the eye judges
+ * first.
  *
  * Pure and separate from the sweeps so the property itself can be asserted.
  */
@@ -567,18 +575,60 @@ export function centreOverChildren(rows, pos, edges) {
     kids.get(e.from).push(e.to);
   }
   const out = new Map(pos);
-  for (const row of rows || []) {
+  const list = rows || [];
+  const where = new Map();
+  list.forEach((row, r) => row.forEach((n, i) => where.set(n.id, { r, i })));
+  const parents = new Map();
+  for (const e of edges || []) {
+    if (!parents.has(e.to)) parents.set(e.to, []);
+    parents.get(e.to).push(e.from);
+  }
+
+  const free = (id, want) => {
+    const spot = where.get(id);
+    if (!spot) return false;
+    const row = list[spot.r];
+    const left = spot.i > 0 ? out.get(row[spot.i - 1].id) : -Infinity;
+    const right = spot.i < row.length - 1 ? out.get(row[spot.i + 1].id) : Infinity;
+    // Strictly between its neighbours: the row keeps its order, so no two links cross.
+    return want > left + 1e-9 && want < right - 1e-9;
+  };
+
+  // Deepest rank first. A parent must be centred onto children whose own place is FINAL: walking
+  // top-down centres a parent onto a child that then moves (it has children of its own), and the
+  // parent is never revisited — so the pair separates by exactly the child's later travel, and the
+  // gap grows with depth. Bottom-up, every card is placed after everything below it, in one pass.
+  for (let r = list.length - 1; r >= 0; r--) {
+    const row = list[r];
     for (let i = 0; i < row.length; i++) {
       const id = row[i].id;
       const children = (kids.get(id) || []).filter(c => out.has(c));
       if (!children.length) continue;
       const want = children.reduce((sum, c) => sum + out.get(c), 0) / children.length;
       if (!Number.isFinite(want)) continue;
-      const left = i > 0 ? out.get(row[i - 1].id) : -Infinity;
-      const right = i < row.length - 1 ? out.get(row[i + 1].id) : Infinity;
-      // Strictly between its neighbours: the row keeps its order, so no two links cross.
-      if (!(want > left + 1e-9 && want < right - 1e-9)) continue;
+      if (!free(id, want)) continue;
       out.set(id, want);
+    }
+  }
+
+  // Second pass, the other way. A parent wedged between its neighbours cannot travel, so when its
+  // only child is a LEAF with room, the child comes to it instead — the link ends up vertical
+  // either way, which is what the eye reads. Two conditions keep it bounded: the child must be a
+  // leaf (a child that leads somewhere would drag its own subtree sideways and undo the pass above),
+  // and it must have exactly ONE parent (a shared child pulled by two parents is pulled twice, the
+  // last one wins, and whichever parent lost is left sideways anyway — it can only sit under one).
+  for (const row of list) {
+    for (let i = 0; i < row.length; i++) {
+      const id = row[i].id;
+      const children = (kids.get(id) || []).filter(c => out.has(c));
+      if (children.length !== 1) continue;
+      const child = children[0];
+      const target = out.get(id);
+      if (out.get(child) === target) continue;
+      if ((kids.get(child) || []).length) continue;
+      if ((parents.get(child) || []).length !== 1) continue;
+      if (!free(child, target)) continue;
+      out.set(child, target);
     }
   }
   return out;
