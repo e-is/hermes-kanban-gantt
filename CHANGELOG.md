@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.2 — the picker can no longer open on a board it does not list
+
+**The one edge 1.8.1 left open.** Skipping archived boards made a new mismatch possible:
+an archived `default` is kept out of `GET /boards` by its tombstone, while
+`get_current_board()` still answers `default` — it falls through to `DEFAULT_BOARD`
+without an archived check. `current` could therefore name a board the list does not
+carry, and the switcher resolved it with `boards.find(...)` → `undefined`: an empty
+trigger, no board ticked, and no obvious way back. `current` now falls back to the
+first board the listing actually offers.
+
+**A test holds it.** `test_boards_list_never_names_a_board_it_does_not_list` archives
+`default`, lists the boards and asserts `current` is one of them; without the fix it
+fails on exactly that assertion (63 tests).
+
 ## 1.8.1 — a prefixed title no longer takes the page down, and archived boards stay gone
 
 **Two crashes, one family.** The chip that renders a title's leading `[TAG]` read a

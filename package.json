@@ -1,6 +1,6 @@
 {
   "name": "hermes-kanban-gantt",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "private": true,
   "type": "module",
   "description": "Gantt timeline view for the Hermes kanban boards (unified plugin: desktop/ + dashboard/).",
