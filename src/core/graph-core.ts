@@ -437,6 +437,10 @@ export function layoutGraph(nodes, edges, {
   // the count are how a folded column still says what it holds — but give up their cards and their
   // width, so the columns beside them close up.
   collapsed = [],
+  // How tall a card is in the status arrangement, per task: a card with no summary does not need the
+  // room one with a two-line summary needs, and in a column the empty space is what makes a short
+  // list look long. Ignored by the graph arrangements, where the rows are a grid.
+  heightOf = null,
   // Grouping is what makes an all-boards graph readable: layout each group on its own and
   // stack the blocks, so a board is a CONTIGUOUS, framed region instead of its members being
   // interleaved with another board's and each card needing a badge to say where it belongs.
@@ -455,14 +459,14 @@ export function layoutGraph(nodes, edges, {
   const list = (nodes || []).map(n => (typeof n === 'string' ? { id: n, title: n } : n));
   const keys = groupBy ? [...new Set(list.map(n => groupBy(n)))].filter(k => k != null && k !== '') : [];
   if (keys.length <= 1) {
-    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH, nodeW, collapsed), groups: [] }
+    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH, nodeW, collapsed, heightOf), groups: [] }
   }
 
   // Each group is laid out by the same code as a single board, then placed: blocks stacked
   // top to bottom, centred on the widest one, each with its own header strip.
   const blocks = keys.map(key => ({
     key,
-    block: layoutOne(list.filter(n => groupBy(n) === key), edges, arrangement, sortBy, nodeH, nodeW, collapsed)
+    block: layoutOne(list.filter(n => groupBy(n) === key), edges, arrangement, sortBy, nodeH, nodeW, collapsed, heightOf)
   }));
   const inner = Math.max(...blocks.map(b => b.block.width));
   const width = inner + groupPad * 2;
@@ -725,7 +729,7 @@ function rankedOnly(list, rankMap) {
   return out;
 }
 
-function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W, collapsed = []) {
+function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W, collapsed = [], heightOf = null) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
   const reduced = reduceEdges(list, es);
@@ -810,15 +814,20 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   rows.forEach((row, r) => {
     // A folded column keeps its header and gives up its cards.
     if (arrangement === 'status' && folded.has(rowStatus[r])) return;
+    // In a column the cards stack, so the height each one takes decides where the next begins. The
+    // graph arrangements keep their uniform grid: a card's height there is the row's pitch.
+    let cursorY = 0;
     for (const node of row) {
-      const cross = (slots.get(node.id) ?? 0) * crossStep;
+      const h = arrangement === 'status' && heightOf ? heightOf(node) : nodeH;
+      const cross = arrangement === 'status' ? cursorY : (slots.get(node.id) ?? 0) * crossStep;
       // Compact is a grid: rows ARE the rank axis, columns the cross axis.
       const along = arrangement === 'status' ? colX[r] + COL_PAD : r * rankStep;
       const box = crossAlongY
-        ? { id: node.id, x: along, y: cross, w: nodeW, h: nodeH, rank: r }
-        : { id: node.id, x: cross, y: along, w: nodeW, h: nodeH, rank: r };
+        ? { id: node.id, x: along, y: cross, w: nodeW, h, rank: r }
+        : { id: node.id, x: cross, y: along, w: nodeW, h, rank: r };
       boxes.set(node.id, box);
       placed.push(box);
+      if (arrangement === 'status') cursorY += h + NODE_GAP;
     }
   });
 

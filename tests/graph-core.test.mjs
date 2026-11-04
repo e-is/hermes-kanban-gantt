@@ -754,6 +754,22 @@ test('a folded status column keeps its rail and gives up its cards', () => {
   }
 })
 
+test('in a column a card takes the height it is given, and the next begins below it', () => {
+  const tasks = [{ id: 'a', status: 'todo', title: 'short' }, { id: 'b', status: 'todo', title: 'a much longer title' }]
+  const laid = layoutGraph(tasks, [], { arrangement: 'status', heightOf: n => (n.id === 'a' ? 40 : 90) })
+  const a = laid.nodes.find(n => n.id === 'a'), b = laid.nodes.find(n => n.id === 'b')
+  assert.equal(a.h, 40, 'a card takes the height it was given')
+  assert.equal(b.h, 90, 'and so does the next one')
+  const first = a.y < b.y ? a : b
+  const second = first === a ? b : a
+  assert.equal(second.y, first.y + first.h + core.NODE_GAP, 'the next card starts one gap below')
+  const col = laid.columns[0]
+  assert.ok(col.y + col.h >= second.y + second.h, 'the column is as tall as its last card')
+  // The graph arrangements ignore it: their rows are a grid, and a taller card there would overlap.
+  const down = layoutGraph(tasks, [], { arrangement: 'down', heightOf: () => 200 })
+  assert.ok(down.nodes.every(n => n.h === core.NODE_H))
+})
+
 test('no two cards of a row end up on the same cross coordinate', () => {
   const tasks = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id }))
   const { nodes: placed } = layoutGraph(graphNodes(tasks), graphEdges([]), { arrangement: 'down' })

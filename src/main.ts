@@ -1305,9 +1305,17 @@ export function GraphView({
   // the whole sentence.
   const nodeH = tallCards ? NODE_H + 34 : NODE_H
   const nodeW = tallCards ? NODE_W + 48 : NODE_W
+  // In a column, a card is as tall as what it carries: a title and a footer need 52px, a wrapped
+  // title or a summary add the room they actually take. Empty space is what makes a short column
+  // look long, and it also pushes the cards the reader cares about out of view.
+  const heightOf = n => {
+    const longTitle = (n.title || '').length > 30
+    const hasSummary = tallCards && Boolean(n.summary)
+    return 52 + (longTitle ? 14 : 0) + (hasSummary ? 30 : 0)
+  }
   const layout = useMemo(
-    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, collapsed: [...foldedCols], groupBy: grouping ? n => n.board || '' : null }),
-    [shown, edges, sortBy, grouping, nodeH, nodeW, arrangement, foldedCols]
+    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, collapsed: [...foldedCols], heightOf, groupBy: grouping ? n => n.board || '' : null }),
+    [shown, edges, sortBy, grouping, nodeH, nodeW, arrangement, foldedCols, tallCards]
   )
   const lin = useMemo(() => {
     if (!selectedId || !shown.some(n => n.id === selectedId)) return null
@@ -2195,8 +2203,14 @@ export function GraphView({
                   jsxs('div', {
                     className: 'flex items-start gap-1 px-1.5 pt-1 min-w-0',
                     children: [
-                      jsx('span', {
-                        className: 'shrink-0 inline-flex items-center justify-center mt-[1px]',
+                      // The status icon is the graph's own compass — in a column the header already
+                      // carries the state, and the icon only pushed the title right of the summary
+                      // below it. So it is drawn where it earns its place, and dropped where it
+                      // does not.
+                      statusMode
+                        ? null
+                        : jsx('span', {
+                          className: 'shrink-0 inline-flex items-center justify-center mt-[1px]',
                         style: { color: tone },
                         title: node.status,
                         children: node.status === 'running'

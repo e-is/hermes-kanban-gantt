@@ -6552,6 +6552,10 @@ function layoutGraph(nodes, edges, {
   // the count are how a folded column still says what it holds — but give up their cards and their
   // width, so the columns beside them close up.
   collapsed = [],
+  // How tall a card is in the status arrangement, per task: a card with no summary does not need the
+  // room one with a two-line summary needs, and in a column the empty space is what makes a short
+  // list look long. Ignored by the graph arrangements, where the rows are a grid.
+  heightOf = null,
   // Grouping is what makes an all-boards graph readable: layout each group on its own and
   // stack the blocks, so a board is a CONTIGUOUS, framed region instead of its members being
   // interleaved with another board's and each card needing a badge to say where it belongs.
@@ -6570,11 +6574,11 @@ function layoutGraph(nodes, edges, {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, title: n } : n);
   const keys = groupBy ? [...new Set(list.map((n) => groupBy(n)))].filter((k) => k != null && k !== "") : [];
   if (keys.length <= 1) {
-    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH, nodeW, collapsed), groups: [] };
+    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH, nodeW, collapsed, heightOf), groups: [] };
   }
   const blocks = keys.map((key) => ({
     key,
-    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy, nodeH, nodeW, collapsed)
+    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy, nodeH, nodeW, collapsed, heightOf)
   }));
   const inner = Math.max(...blocks.map((b) => b.block.width));
   const width = inner + groupPad * 2;
@@ -6751,7 +6755,7 @@ function rankedOnly(list, rankMap) {
   for (const n of list) out.set(n.id, (rankMap.get(n.id) ?? 0) - lo);
   return out;
 }
-function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W, collapsed = []) {
+function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W, collapsed = [], heightOf = null) {
   const { edges: es2, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es2);
   const reduced = reduceEdges(list, es2);
@@ -6811,12 +6815,15 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   const placed = [];
   rows.forEach((row, r) => {
     if (arrangement === "status" && folded.has(rowStatus[r])) return;
+    let cursorY = 0;
     for (const node of row) {
-      const cross = (slots.get(node.id) ?? 0) * crossStep;
+      const h = arrangement === "status" && heightOf ? heightOf(node) : nodeH;
+      const cross = arrangement === "status" ? cursorY : (slots.get(node.id) ?? 0) * crossStep;
       const along = arrangement === "status" ? colX[r] + COL_PAD : r * rankStep;
-      const box = crossAlongY ? { id: node.id, x: along, y: cross, w: nodeW, h: nodeH, rank: r } : { id: node.id, x: cross, y: along, w: nodeW, h: nodeH, rank: r };
+      const box = crossAlongY ? { id: node.id, x: along, y: cross, w: nodeW, h, rank: r } : { id: node.id, x: cross, y: along, w: nodeW, h, rank: r };
       boxes.set(node.id, box);
       placed.push(box);
+      if (arrangement === "status") cursorY += h + NODE_GAP;
     }
   });
   if (soloIds.length) {
@@ -7949,9 +7956,14 @@ function GraphView({
   const grouping = showBoardBadge;
   const nodeH = tallCards ? NODE_H + 34 : NODE_H;
   const nodeW = tallCards ? NODE_W + 48 : NODE_W;
+  const heightOf = (n) => {
+    const longTitle = (n.title || "").length > 30;
+    const hasSummary = tallCards && Boolean(n.summary);
+    return 52 + (longTitle ? 14 : 0) + (hasSummary ? 30 : 0);
+  };
   const layout = useMemo2(
-    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, collapsed: [...foldedCols], groupBy: grouping ? (n) => n.board || "" : null }),
-    [shown, edges, sortBy, grouping, nodeH, nodeW, arrangement, foldedCols]
+    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, collapsed: [...foldedCols], heightOf, groupBy: grouping ? (n) => n.board || "" : null }),
+    [shown, edges, sortBy, grouping, nodeH, nodeW, arrangement, foldedCols, tallCards]
   );
   const lin = useMemo2(() => {
     if (!selectedId || !shown.some((n) => n.id === selectedId)) return null;
@@ -8750,7 +8762,11 @@ function GraphView({
                   jsxs6("div", {
                     className: "flex items-start gap-1 px-1.5 pt-1 min-w-0",
                     children: [
-                      jsx6("span", {
+                      // The status icon is the graph's own compass — in a column the header already
+                      // carries the state, and the icon only pushed the title right of the summary
+                      // below it. So it is drawn where it earns its place, and dropped where it
+                      // does not.
+                      statusMode ? null : jsx6("span", {
                         className: "shrink-0 inline-flex items-center justify-center mt-[1px]",
                         style: { color: tone },
                         title: node.status,
