@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.9.0 — the graph reads like a board: columns, cards, and a fold
+
+**Status columns.** The status arrangement now draws the column the bundled board draws: rounded,
+bordered, on the board's own wash, with the status name in the header, a dot in the status tone and
+the count beside it. The columns pack tightly — each starts where the previous one ended, plus its own
+padding and a small gutter — instead of at a graph rank's distance. A column folds to a rail when you
+click its header: it keeps its dot, its place and its count, and the columns beside it close up. The
+fold persists, because it is a way of reading a board rather than a session state. In the all-boards
+graph the columns live inside their board's dashed frame — the frame's width and height include them,
+and a test asserts the containment rather than trusting it.
+
+**Cards that say what the bundled card says.** The second line is the worker's last word
+(`latest_summary`), in tall cards where there is room for it without eating the title. The footer
+follows the bundled card's order: what the agent is doing or why it is stuck, then priority, links,
+comments, attachments, the agent's initial BESIDE the agent's name, and the short id. In a column the
+card takes the bundled board's 2px status edge — no wash and no status icon, because the header
+already says it, and the icon only pushed the title right of the summary under it. And in a column the
+card is as tall as its content: 52px for a title and a footer, 14px more when the title wraps, 30px
+more when it has a summary. The two aggregates behind those fields (`latest_summary`,
+`comment_count`) are one pass per board, not one query per card: the graph polls.
+
+**Two fixes behind them.** A parent in the top-down arrangement was centred onto a child that then
+moved, so the pair separated by exactly the child's later travel and the gap grew with each rank —
+measured on the demo board at 34px, then 151px, then 152px down one chain. The centring now walks the
+deepest rank up, so every parent is placed onto children that are already final, and a wedged parent
+pulls its only leaf child under it instead. Those passes also keep a full slot of spacing now: they
+accepted a card landing 0.36 slots from its neighbour, which drew two 172px cards 68px apart. Both
+rules come from the bundled plugin's own source — one slot of spacing, and nothing moved after
+placement.
+
+**Also:** the title prefix is styled or shown plainly but never deleted (unchecking the tag option
+used to remove the `[EPIC]` from the title), and the nine status names are translated in all 17
+locale bundles.
+
+Tests, all measured on this commit: 68 in the graph core, 64 pytest, 96 render checks and 23
+hook-order checks.
+
 ## 1.8.2 — the picker can no longer open on a board it does not list
 
 **The one edge 1.8.1 left open.** Skipping archived boards made a new mismatch possible:
