@@ -274,5 +274,16 @@ export const de = {
       triage: 'In die Triage senden',
       delete: 'Löschen',
       restore: 'Wiederherstellen'
-    }
+    },
+  status: {
+      triage: 'Triage',
+      todo: 'Zu erledigen',
+      scheduled: 'Geplant',
+      ready: 'Bereit',
+      running: 'Läuft',
+      blocked: 'Blockiert',
+      review: 'Prüfung',
+      done: 'Erledigt',
+      archived: 'Archiviert'
+  }
 }

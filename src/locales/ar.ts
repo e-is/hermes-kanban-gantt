@@ -268,5 +268,16 @@ export const ar = {
       triage: 'إرسال إلى الفرز',
       delete: 'حذف',
       restore: 'استعادة'
-    }
+    },
+  status: {
+      triage: 'فرز',
+      todo: 'قائمة المهام',
+      scheduled: 'مجدول',
+      ready: 'جاهز',
+      running: 'قيد التنفيذ',
+      blocked: 'محظور',
+      review: 'مراجعة',
+      done: 'منجز',
+      archived: 'مؤرشف'
+  }
 }

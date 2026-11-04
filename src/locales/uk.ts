@@ -269,5 +269,16 @@ export const uk = {
       triage: 'Надіслати в тріаж',
       delete: 'Видалити',
       restore: 'Відновити'
-    }
+    },
+  status: {
+      triage: 'Розбір',
+      todo: 'До виконання',
+      scheduled: 'Заплановано',
+      ready: 'Готово',
+      running: 'У роботі',
+      blocked: 'Заблоковано',
+      review: 'Перевірка',
+      done: 'Виконано',
+      archived: 'В архіві'
+  }
 }

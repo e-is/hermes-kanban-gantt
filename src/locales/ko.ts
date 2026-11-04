@@ -274,5 +274,16 @@ export const ko = {
       triage: '분류로 보내기',
       delete: '삭제',
       restore: '복원'
-    }
+    },
+  status: {
+      triage: '분류',
+      todo: '할 일',
+      scheduled: '예약됨',
+      ready: '준비됨',
+      running: '실행 중',
+      blocked: '차단됨',
+      review: '검토',
+      done: '완료',
+      archived: '보관됨'
+  }
 }

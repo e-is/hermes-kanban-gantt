@@ -270,4 +270,15 @@ export const zh = {
       delete: '删除',
       restore: '恢复'
     },
+  status: {
+      triage: '待分诊',
+      todo: '待办',
+      scheduled: '已排期',
+      ready: '就绪',
+      running: '进行中',
+      blocked: '受阻',
+      review: '待审',
+      done: '已完成',
+      archived: '已归档'
+  }
 }

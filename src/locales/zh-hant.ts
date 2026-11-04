@@ -274,5 +274,16 @@ export const zhHant = {
       triage: '送至分類',
       delete: '刪除',
       restore: '還原'
-    }
+    },
+  status: {
+      triage: '待分診',
+      todo: '待辦',
+      scheduled: '已排程',
+      ready: '就緒',
+      running: '進行中',
+      blocked: '受阻',
+      review: '待審',
+      done: '已完成',
+      archived: '已封存'
+  }
 }

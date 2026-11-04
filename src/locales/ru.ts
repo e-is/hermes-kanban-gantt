@@ -269,5 +269,16 @@ export const ru = {
       triage: 'Отправить в триаж',
       delete: 'Удалить',
       restore: 'Восстановить'
-    }
+    },
+  status: {
+      triage: 'Разбор',
+      todo: 'К выполнению',
+      scheduled: 'Запланировано',
+      ready: 'Готово',
+      running: 'В работе',
+      blocked: 'Заблокировано',
+      review: 'Проверка',
+      done: 'Сделано',
+      archived: 'В архиве'
+  }
 }

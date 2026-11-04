@@ -1807,6 +1807,62 @@ export function GraphView({
                   })
                 })()
               : null,
+            // Status columns, in the `status` arrangement only — the layout hands them over with the
+            // cards. Behind the edges and the cards, above the board frames: the frame is the outer
+            // boundary, the column is what the bundled board draws inside it. Every value is a theme
+            // token and every measure is inline, because the host's stylesheet does not compile
+            // arbitrary classes for a plugin.
+            ...(layout.columns || []).map(c => jsxs('div', {
+              key: `col-${c.status}`,
+              className: 'absolute rounded-lg pointer-events-none',
+              style: {
+                left: `${c.x + GRAPH_MARGIN}px`,
+                top: `${c.y + GRAPH_MARGIN}px`,
+                width: `${c.w}px`,
+                height: `${c.h}px`,
+                border: '1px solid var(--ui-stroke-tertiary)',
+                borderRadius: '8px',
+                backgroundColor: 'color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)'
+              },
+              children: jsxs('div', {
+                className: 'flex items-center',
+                style: { gap: '6px', padding: '6px 8px 0', minWidth: 0 },
+                children: [
+                  jsx('span', {
+                    style: {
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '9999px',
+                      flexShrink: 0,
+                      backgroundColor: (STATUS_META[c.status] || {}).tone || statusTone(c.status)
+                    }
+                  }),
+                  jsx('span', {
+                    style: {
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: 'var(--ui-text-secondary)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    },
+                    children: (i18n.status && i18n.status[c.status]) || (STATUS_META[c.status] || {}).label || c.status
+                  }),
+                  jsx('span', {
+                    style: {
+                      marginLeft: 'auto',
+                      padding: '0 5px',
+                      borderRadius: '9999px',
+                      fontSize: '10px',
+                      fontVariantNumeric: 'tabular-nums',
+                      color: 'var(--ui-text-tertiary)',
+                      backgroundColor: 'var(--ui-bg-quaternary)'
+                    },
+                    children: String(c.count)
+                  })
+                ]
+              })
+            })),
             jsx('svg', {
               className: 'absolute inset-0 pointer-events-none',
               width: layout.width + GRAPH_MARGIN * 2,

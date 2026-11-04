@@ -274,5 +274,16 @@ export const ga = {
       triage: 'Seol chuig Triage',
       delete: 'Scrios',
       restore: 'Athchóirigh'
-    }
+    },
+  status: {
+      triage: 'Scagadh',
+      todo: 'Le déanamh',
+      scheduled: 'Sceidealaithe',
+      ready: 'Réidh',
+      running: 'Ag rith',
+      blocked: 'Blocáilte',
+      review: 'Athbhreithniú',
+      done: 'Déanta',
+      archived: 'Cartlannaithe'
+  }
 }

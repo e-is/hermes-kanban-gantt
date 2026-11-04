@@ -4,6 +4,8 @@ var NODE_H = 62;
 var SPARK_BAND = 7;
 var NODE_GAP = 14;
 var RANK_GAP = 52;
+var COL_HEAD = 26;
+var COL_PAD = 8;
 var idOf = (ref) => ref && typeof ref === "object" ? ref.id : ref;
 function graphNodes(tasks) {
   return (tasks || []).map((t) => ({
@@ -303,6 +305,7 @@ function layoutGraph(nodes, edges, {
   const width = inner + groupPad * 2;
   const groups = [];
   const out = [];
+  const columns = [];
   const drawnEdges = [];
   let cursor = 0;
   for (const { key, block } of blocks) {
@@ -310,6 +313,7 @@ function layoutGraph(nodes, edges, {
     const dx = groupPad + (inner - block.width) / 2;
     const dy = cursor + groupHead;
     for (const b of block.nodes) out.push({ ...b, x: b.x + dx, y: b.y + dy });
+    for (const c of block.columns || []) columns.push({ ...c, x: c.x + dx, y: c.y + dy });
     groups.push({ key, x: 0, y: cursor, w: width, h });
     for (const e of block.edges) {
       drawnEdges.push({ ...e, x1: e.x1 + dx, y1: e.y1 + dy, x2: e.x2 + dx, y2: e.y2 + dy });
@@ -320,6 +324,7 @@ function layoutGraph(nodes, edges, {
   return {
     nodes: out,
     edges: drawnEdges,
+    columns,
     groups,
     width,
     height,
@@ -477,6 +482,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   const reduced = reduceEdges(list, es);
   let rows;
   let slots;
+  let rowStatus = [];
   let quiet = false;
   let soloIds = [];
   if (arrangement === "status") {
@@ -487,6 +493,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
     rows = present.map((st) => (list || []).filter((n) => (n.status || "todo") === st).sort((a, b) => (rankMap.get(a.id) ?? 0) - (rankMap.get(b.id) ?? 0) || cmp(a, b)));
+    rowStatus = present;
     slots = /* @__PURE__ */ new Map();
     for (const row of rows) row.forEach((n, i) => slots.set(n.id, i));
   } else if (arrangement === "compact") {
@@ -545,6 +552,20 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
       placed.push(box);
     });
   }
+  const columns = arrangement === "status" ? rows.map((row, r) => {
+    const bs = row.map((n) => boxes.get(n.id)).filter(Boolean);
+    if (!bs.length) return null;
+    const top = Math.min(...bs.map((b) => b.y));
+    const bottom = Math.max(...bs.map((b) => b.y + b.h));
+    return {
+      status: rowStatus[r] || "todo",
+      x: Math.min(...bs.map((b) => b.x)) - COL_PAD,
+      y: top - COL_HEAD,
+      w: nodeW + COL_PAD * 2,
+      h: bottom - top + COL_HEAD + COL_PAD,
+      count: row.length
+    };
+  }).filter(Boolean) : [];
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const b of placed) {
     minX = Math.min(minX, b.x);
@@ -552,7 +573,13 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     maxX = Math.max(maxX, b.x + b.w);
     maxY = Math.max(maxY, b.y + b.h);
   }
-  if (!placed.length) {
+  for (const c of columns) {
+    minX = Math.min(minX, c.x);
+    minY = Math.min(minY, c.y);
+    maxX = Math.max(maxX, c.x + c.w);
+    maxY = Math.max(maxY, c.y + c.h);
+  }
+  if (!placed.length && !columns.length) {
     minX = 0;
     minY = 0;
     maxX = 0;
@@ -561,6 +588,10 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   for (const b of placed) {
     b.x -= minX;
     b.y -= minY;
+  }
+  for (const c of columns) {
+    c.x -= minX;
+    c.y -= minY;
   }
   const drawn = [];
   if (!quiet) {
@@ -573,6 +604,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   return {
     nodes: placed,
     edges: drawn,
+    columns,
     width: maxX - minX,
     height: maxY - minY,
     ranks: rows.length,
@@ -626,6 +658,8 @@ function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
   return grown;
 }
 export {
+  COL_HEAD,
+  COL_PAD,
   NODE_GAP,
   NODE_H,
   NODE_W,

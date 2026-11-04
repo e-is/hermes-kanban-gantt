@@ -274,5 +274,16 @@ export const es = {
       triage: 'Enviar a triaje',
       delete: 'Eliminar',
       restore: 'Restaurar'
-    }
+    },
+  status: {
+      triage: 'Triaje',
+      todo: 'Por hacer',
+      scheduled: 'Programado',
+      ready: 'Listo',
+      running: 'En curso',
+      blocked: 'Bloqueado',
+      review: 'Revisión',
+      done: 'Hecho',
+      archived: 'Archivado'
+  }
 }

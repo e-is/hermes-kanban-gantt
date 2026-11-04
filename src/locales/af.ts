@@ -274,5 +274,16 @@ export const af = {
       triage: 'Stuur na Triage',
       delete: 'Verwyder',
       restore: 'Herstel'
-    }
+    },
+  status: {
+      triage: 'Triage',
+      todo: 'Te doen',
+      scheduled: 'Geskeduleer',
+      ready: 'Gereed',
+      running: 'Loop',
+      blocked: 'Geblokkeer',
+      review: 'Hersiening',
+      done: 'Klaar',
+      archived: 'Geargiveer'
+  }
 }

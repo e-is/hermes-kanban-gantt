@@ -272,5 +272,16 @@ export const fr = {
       triage: 'Renvoyer en triage',
       delete: 'Supprimer',
       restore: 'Restaurer'
-    }
+    },
+  status: {
+      triage: 'Triage',
+      todo: 'À faire',
+      scheduled: 'Planifié',
+      ready: 'Prêt',
+      running: 'En cours',
+      blocked: 'Bloqué',
+      review: 'Revue',
+      done: 'Terminé',
+      archived: 'Archivé'
+  }
 }

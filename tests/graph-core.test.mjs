@@ -706,6 +706,35 @@ test('a parent that cannot move pulls its leaf child under it — and only a lea
   assert.equal(twoParents.get('p'), 1, 'and neither parent is moved for it')
 })
 
+test('status columns are handed over, and never leave their board frame', () => {
+  // The bundled board draws a bordered column per status; the graph draws the same, so the layout
+  // has to say where each column is — including in the multi-board case, where a column must stay
+  // inside its board's dashed frame rather than spill over the boundary.
+  const tasks = [
+    { id: 'a1', status: 'todo', board: 'A' }, { id: 'a2', status: 'todo', board: 'A' },
+    { id: 'a3', status: 'running', board: 'A' },
+    { id: 'b1', status: 'todo', board: 'B' }, { id: 'b2', status: 'done', board: 'B' }
+  ]
+  const laid = layoutGraph(tasks, [], { arrangement: 'status', groupBy: n => n.board })
+  assert.equal(laid.columns.length, 4, 'two boards, two statuses each')
+  const counts = laid.columns.map(c => c.count).sort()
+  assert.deepEqual(counts, [1, 1, 1, 2], 'each column counts its own cards')
+  for (const c of laid.columns) {
+    const frame = laid.groups.find(g =>
+      c.x >= g.x - 0.01 && c.y >= g.y - 0.01 &&
+      c.x + c.w <= g.x + g.w + 0.01 && c.y + c.h <= g.y + g.h + 0.01)
+    assert.ok(frame, `the ${c.status} column leaves its board frame`)
+  }
+  // Every card of a column sits inside it, header aside.
+  for (const c of laid.columns) {
+    const inside = laid.nodes.filter(n => n.x >= c.x && n.x + n.w <= c.x + c.w &&
+      n.y >= c.y && n.y + n.h <= c.y + c.h)
+    assert.equal(inside.length, c.count, `the ${c.status} column does not hold its cards`)
+  }
+  // The other arrangements are graphs, not boards: no columns.
+  assert.deepEqual(layoutGraph(tasks, [], { arrangement: 'down' }).columns, [])
+})
+
 test('no two cards of a row end up on the same cross coordinate', () => {
   const tasks = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id }))
   const { nodes: placed } = layoutGraph(graphNodes(tasks), graphEdges([]), { arrangement: 'down' })

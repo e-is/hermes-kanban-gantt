@@ -274,5 +274,16 @@ export const hu = {
       triage: 'Küldés Triázsba',
       delete: 'Törlés',
       restore: 'Visszaállítás'
-    }
+    },
+  status: {
+      triage: 'Osztályozás',
+      todo: 'Teendő',
+      scheduled: 'Ütemezve',
+      ready: 'Készen áll',
+      running: 'Fut',
+      blocked: 'Blokkolva',
+      review: 'Ellenőrzés',
+      done: 'Kész',
+      archived: 'Archiválva'
+  }
 }

@@ -274,5 +274,16 @@ export const tr = {
       triage: 'Triyaja gönder',
       delete: 'Sil',
       restore: 'Geri yükle'
-    }
+    },
+  status: {
+      triage: 'Ayıklama',
+      todo: 'Yapılacak',
+      scheduled: 'Planlandı',
+      ready: 'Hazır',
+      running: 'Çalışıyor',
+      blocked: 'Engellendi',
+      review: 'İnceleme',
+      done: 'Bitti',
+      archived: 'Arşivlendi'
+  }
 }

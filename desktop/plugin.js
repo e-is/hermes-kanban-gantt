@@ -381,6 +381,17 @@ var en = {
     triage: "Send to Triage",
     delete: "Delete",
     restore: "Restore"
+  },
+  status: {
+    triage: "Triage",
+    todo: "To do",
+    scheduled: "Scheduled",
+    ready: "Ready",
+    running: "Running",
+    blocked: "Blocked",
+    review: "Review",
+    done: "Done",
+    archived: "Archived"
   }
 };
 
@@ -653,6 +664,17 @@ var fr = {
     triage: "Renvoyer en triage",
     delete: "Supprimer",
     restore: "Restaurer"
+  },
+  status: {
+    triage: "Triage",
+    todo: "À faire",
+    scheduled: "Planifié",
+    ready: "Prêt",
+    running: "En cours",
+    blocked: "Bloqué",
+    review: "Revue",
+    done: "Terminé",
+    archived: "Archivé"
   }
 };
 
@@ -922,6 +944,17 @@ var zh = {
     triage: "送入待分类",
     delete: "删除",
     restore: "恢复"
+  },
+  status: {
+    triage: "待分诊",
+    todo: "待办",
+    scheduled: "已排期",
+    ready: "就绪",
+    running: "进行中",
+    blocked: "受阻",
+    review: "待审",
+    done: "已完成",
+    archived: "已归档"
   }
 };
 
@@ -1196,6 +1229,17 @@ var af = {
     triage: "Stuur na Triage",
     delete: "Verwyder",
     restore: "Herstel"
+  },
+  status: {
+    triage: "Triage",
+    todo: "Te doen",
+    scheduled: "Geskeduleer",
+    ready: "Gereed",
+    running: "Loop",
+    blocked: "Geblokkeer",
+    review: "Hersiening",
+    done: "Klaar",
+    archived: "Geargiveer"
   }
 };
 
@@ -1470,6 +1514,17 @@ var ar = {
     triage: "إرسال إلى الفرز",
     delete: "حذف",
     restore: "استعادة"
+  },
+  status: {
+    triage: "فرز",
+    todo: "قائمة المهام",
+    scheduled: "مجدول",
+    ready: "جاهز",
+    running: "قيد التنفيذ",
+    blocked: "محظور",
+    review: "مراجعة",
+    done: "منجز",
+    archived: "مؤرشف"
   }
 };
 
@@ -1744,6 +1799,17 @@ var de = {
     triage: "In die Triage senden",
     delete: "Löschen",
     restore: "Wiederherstellen"
+  },
+  status: {
+    triage: "Triage",
+    todo: "Zu erledigen",
+    scheduled: "Geplant",
+    ready: "Bereit",
+    running: "Läuft",
+    blocked: "Blockiert",
+    review: "Prüfung",
+    done: "Erledigt",
+    archived: "Archiviert"
   }
 };
 
@@ -2018,6 +2084,17 @@ var es = {
     triage: "Enviar a triaje",
     delete: "Eliminar",
     restore: "Restaurar"
+  },
+  status: {
+    triage: "Triaje",
+    todo: "Por hacer",
+    scheduled: "Programado",
+    ready: "Listo",
+    running: "En curso",
+    blocked: "Bloqueado",
+    review: "Revisión",
+    done: "Hecho",
+    archived: "Archivado"
   }
 };
 
@@ -2292,6 +2369,17 @@ var ga = {
     triage: "Seol chuig Triage",
     delete: "Scrios",
     restore: "Athchóirigh"
+  },
+  status: {
+    triage: "Scagadh",
+    todo: "Le déanamh",
+    scheduled: "Sceidealaithe",
+    ready: "Réidh",
+    running: "Ag rith",
+    blocked: "Blocáilte",
+    review: "Athbhreithniú",
+    done: "Déanta",
+    archived: "Cartlannaithe"
   }
 };
 
@@ -2566,6 +2654,17 @@ var hu = {
     triage: "Küldés Triázsba",
     delete: "Törlés",
     restore: "Visszaállítás"
+  },
+  status: {
+    triage: "Osztályozás",
+    todo: "Teendő",
+    scheduled: "Ütemezve",
+    ready: "Készen áll",
+    running: "Fut",
+    blocked: "Blokkolva",
+    review: "Ellenőrzés",
+    done: "Kész",
+    archived: "Archiválva"
   }
 };
 
@@ -2840,6 +2939,17 @@ var it = {
     triage: "Invia a Triage",
     delete: "Elimina",
     restore: "Ripristina"
+  },
+  status: {
+    triage: "Triage",
+    todo: "Da fare",
+    scheduled: "Pianificato",
+    ready: "Pronto",
+    running: "In corso",
+    blocked: "Bloccato",
+    review: "Revisione",
+    done: "Fatto",
+    archived: "Archiviato"
   }
 };
 
@@ -3114,6 +3224,17 @@ var ja = {
     triage: "トリアージへ送る",
     delete: "削除",
     restore: "復元"
+  },
+  status: {
+    triage: "トリアージ",
+    todo: "未着手",
+    scheduled: "予定",
+    ready: "準備完了",
+    running: "実行中",
+    blocked: "ブロック",
+    review: "レビュー",
+    done: "完了",
+    archived: "アーカイブ"
   }
 };
 
@@ -3388,6 +3509,17 @@ var ko = {
     triage: "분류로 보내기",
     delete: "삭제",
     restore: "복원"
+  },
+  status: {
+    triage: "분류",
+    todo: "할 일",
+    scheduled: "예약됨",
+    ready: "준비됨",
+    running: "실행 중",
+    blocked: "차단됨",
+    review: "검토",
+    done: "완료",
+    archived: "보관됨"
   }
 };
 
@@ -3662,6 +3794,17 @@ var pt = {
     triage: "Enviar para triagem",
     delete: "Eliminar",
     restore: "Restaurar"
+  },
+  status: {
+    triage: "Triagem",
+    todo: "A fazer",
+    scheduled: "Agendado",
+    ready: "Pronto",
+    running: "Em execução",
+    blocked: "Bloqueado",
+    review: "Revisão",
+    done: "Concluído",
+    archived: "Arquivado"
   }
 };
 
@@ -3931,6 +4074,17 @@ var ru = {
     triage: "Отправить в триаж",
     delete: "Удалить",
     restore: "Восстановить"
+  },
+  status: {
+    triage: "Разбор",
+    todo: "К выполнению",
+    scheduled: "Запланировано",
+    ready: "Готово",
+    running: "В работе",
+    blocked: "Заблокировано",
+    review: "Проверка",
+    done: "Сделано",
+    archived: "В архиве"
   }
 };
 
@@ -4205,6 +4359,17 @@ var tr = {
     triage: "Triyaja gönder",
     delete: "Sil",
     restore: "Geri yükle"
+  },
+  status: {
+    triage: "Ayıklama",
+    todo: "Yapılacak",
+    scheduled: "Planlandı",
+    ready: "Hazır",
+    running: "Çalışıyor",
+    blocked: "Engellendi",
+    review: "İnceleme",
+    done: "Bitti",
+    archived: "Arşivlendi"
   }
 };
 
@@ -4474,6 +4639,17 @@ var uk = {
     triage: "Надіслати в тріаж",
     delete: "Видалити",
     restore: "Відновити"
+  },
+  status: {
+    triage: "Розбір",
+    todo: "До виконання",
+    scheduled: "Заплановано",
+    ready: "Готово",
+    running: "У роботі",
+    blocked: "Заблоковано",
+    review: "Перевірка",
+    done: "Виконано",
+    archived: "В архіві"
   }
 };
 
@@ -4748,6 +4924,17 @@ var zhHant = {
     triage: "送至分類",
     delete: "刪除",
     restore: "還原"
+  },
+  status: {
+    triage: "待分診",
+    todo: "待辦",
+    scheduled: "已排程",
+    ready: "就緒",
+    running: "進行中",
+    blocked: "受阻",
+    review: "待審",
+    done: "已完成",
+    archived: "已封存"
   }
 };
 
@@ -6127,6 +6314,8 @@ var NODE_W = 172;
 var NODE_H = 62;
 var NODE_GAP = 14;
 var RANK_GAP = 52;
+var COL_HEAD = 26;
+var COL_PAD = 8;
 var idOf = (ref) => ref && typeof ref === "object" ? ref.id : ref;
 function graphNodes(tasks) {
   return (tasks || []).map((t) => ({
@@ -6380,6 +6569,7 @@ function layoutGraph(nodes, edges, {
   const width = inner + groupPad * 2;
   const groups = [];
   const out = [];
+  const columns = [];
   const drawnEdges = [];
   let cursor = 0;
   for (const { key, block } of blocks) {
@@ -6387,6 +6577,7 @@ function layoutGraph(nodes, edges, {
     const dx = groupPad + (inner - block.width) / 2;
     const dy = cursor + groupHead;
     for (const b of block.nodes) out.push({ ...b, x: b.x + dx, y: b.y + dy });
+    for (const c of block.columns || []) columns.push({ ...c, x: c.x + dx, y: c.y + dy });
     groups.push({ key, x: 0, y: cursor, w: width, h });
     for (const e of block.edges) {
       drawnEdges.push({ ...e, x1: e.x1 + dx, y1: e.y1 + dy, x2: e.x2 + dx, y2: e.y2 + dy });
@@ -6397,6 +6588,7 @@ function layoutGraph(nodes, edges, {
   return {
     nodes: out,
     edges: drawnEdges,
+    columns,
     groups,
     width,
     height,
@@ -6554,6 +6746,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   const reduced = reduceEdges(list, es2);
   let rows;
   let slots;
+  let rowStatus = [];
   let quiet = false;
   let soloIds = [];
   if (arrangement === "status") {
@@ -6564,6 +6757,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
     rows = present.map((st) => (list || []).filter((n) => (n.status || "todo") === st).sort((a, b) => (rankMap.get(a.id) ?? 0) - (rankMap.get(b.id) ?? 0) || cmp(a, b)));
+    rowStatus = present;
     slots = /* @__PURE__ */ new Map();
     for (const row of rows) row.forEach((n, i) => slots.set(n.id, i));
   } else if (arrangement === "compact") {
@@ -6622,6 +6816,20 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
       placed.push(box);
     });
   }
+  const columns = arrangement === "status" ? rows.map((row, r) => {
+    const bs = row.map((n) => boxes.get(n.id)).filter(Boolean);
+    if (!bs.length) return null;
+    const top = Math.min(...bs.map((b) => b.y));
+    const bottom = Math.max(...bs.map((b) => b.y + b.h));
+    return {
+      status: rowStatus[r] || "todo",
+      x: Math.min(...bs.map((b) => b.x)) - COL_PAD,
+      y: top - COL_HEAD,
+      w: nodeW + COL_PAD * 2,
+      h: bottom - top + COL_HEAD + COL_PAD,
+      count: row.length
+    };
+  }).filter(Boolean) : [];
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const b of placed) {
     minX = Math.min(minX, b.x);
@@ -6629,7 +6837,13 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     maxX = Math.max(maxX, b.x + b.w);
     maxY = Math.max(maxY, b.y + b.h);
   }
-  if (!placed.length) {
+  for (const c of columns) {
+    minX = Math.min(minX, c.x);
+    minY = Math.min(minY, c.y);
+    maxX = Math.max(maxX, c.x + c.w);
+    maxY = Math.max(maxY, c.y + c.h);
+  }
+  if (!placed.length && !columns.length) {
     minX = 0;
     minY = 0;
     maxX = 0;
@@ -6638,6 +6852,10 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   for (const b of placed) {
     b.x -= minX;
     b.y -= minY;
+  }
+  for (const c of columns) {
+    c.x -= minX;
+    c.y -= minY;
   }
   const drawn = [];
   if (!quiet) {
@@ -6650,6 +6868,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   return {
     nodes: placed,
     edges: drawn,
+    columns,
     width: maxX - minX,
     height: maxY - minY,
     ranks: rows.length,
@@ -8126,6 +8345,62 @@ function GraphView({
                 ]
               });
             })() : null,
+            // Status columns, in the `status` arrangement only — the layout hands them over with the
+            // cards. Behind the edges and the cards, above the board frames: the frame is the outer
+            // boundary, the column is what the bundled board draws inside it. Every value is a theme
+            // token and every measure is inline, because the host's stylesheet does not compile
+            // arbitrary classes for a plugin.
+            ...(layout.columns || []).map((c) => jsxs6("div", {
+              key: `col-${c.status}`,
+              className: "absolute rounded-lg pointer-events-none",
+              style: {
+                left: `${c.x + GRAPH_MARGIN}px`,
+                top: `${c.y + GRAPH_MARGIN}px`,
+                width: `${c.w}px`,
+                height: `${c.h}px`,
+                border: "1px solid var(--ui-stroke-tertiary)",
+                borderRadius: "8px",
+                backgroundColor: "color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)"
+              },
+              children: jsxs6("div", {
+                className: "flex items-center",
+                style: { gap: "6px", padding: "6px 8px 0", minWidth: 0 },
+                children: [
+                  jsx6("span", {
+                    style: {
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "9999px",
+                      flexShrink: 0,
+                      backgroundColor: (STATUS_META[c.status] || {}).tone || statusTone(c.status)
+                    }
+                  }),
+                  jsx6("span", {
+                    style: {
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "var(--ui-text-secondary)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap"
+                    },
+                    children: i18n.status && i18n.status[c.status] || (STATUS_META[c.status] || {}).label || c.status
+                  }),
+                  jsx6("span", {
+                    style: {
+                      marginLeft: "auto",
+                      padding: "0 5px",
+                      borderRadius: "9999px",
+                      fontSize: "10px",
+                      fontVariantNumeric: "tabular-nums",
+                      color: "var(--ui-text-tertiary)",
+                      backgroundColor: "var(--ui-bg-quaternary)"
+                    },
+                    children: String(c.count)
+                  })
+                ]
+              })
+            })),
             jsx6("svg", {
               className: "absolute inset-0 pointer-events-none",
               width: layout.width + GRAPH_MARGIN * 2,

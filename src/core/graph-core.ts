@@ -27,6 +27,10 @@ export const SPARK_BAND = 7;
 /** Gaps between siblings and between ranks (px, CSS). */
 export const NODE_GAP = 14;
 export const RANK_GAP = 52;
+// A status column: the header strip above its first card, and the padding around the cards. Part of
+// the layout rather than of the drawing, because the multi-board frame has to contain the column.
+export const COL_HEAD = 26;
+export const COL_PAD = 8;
 
 // ── nodes and edges ───────────────────────────────────────────────────────────
 
@@ -450,6 +454,7 @@ export function layoutGraph(nodes, edges, {
   const width = inner + groupPad * 2;
   const groups = [];
   const out = [];
+  const columns = [];
   const drawnEdges = [];
   let cursor = 0;
   for (const { key, block } of blocks) {
@@ -457,6 +462,9 @@ export function layoutGraph(nodes, edges, {
     const dx = groupPad + (inner - block.width) / 2;
     const dy = cursor + groupHead;
     for (const b of block.nodes) out.push({ ...b, x: b.x + dx, y: b.y + dy });
+    // The columns travel with their block: same offset, so a status column never leaves its board's
+    // dashed frame — the frame is the block's own width, and the columns are inside it.
+    for (const c of block.columns || []) columns.push({ ...c, x: c.x + dx, y: c.y + dy });
     // Every frame is as wide as the widest board, so the frames line up in one column
     // instead of looking like a ragged stack.
     groups.push({ key, x: 0, y: cursor, w: width, h });
@@ -469,6 +477,7 @@ export function layoutGraph(nodes, edges, {
   return {
     nodes: out,
     edges: drawnEdges,
+    columns,
     groups,
     width,
     height,
@@ -709,6 +718,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
 
   let rows;
   let slots;
+  let rowStatus = [];
   let quiet = false;
   let soloIds = [];
   if (arrangement === 'status') {
@@ -723,6 +733,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     rows = present.map(st => (list || [])
       .filter(n => (n.status || 'todo') === st)
       .sort((a, b) => (rankMap.get(a.id) ?? 0) - (rankMap.get(b.id) ?? 0) || cmp(a, b)));
+    rowStatus = present;
     slots = new Map();
     for (const row of rows) row.forEach((n, i) => slots.set(n.id, i));
   } else if (arrangement === 'compact') {
@@ -809,14 +820,40 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     });
   }
 
+  // Status columns, as boxes: one per status rank, with the header strip and the padding folded in.
+  // Built BEFORE the normalisation, so the drawing's origin accounts for the header above the first
+  // card — otherwise the column would start above the drawing's own origin and be clipped by it.
+  // Part of the layout rather than of the drawing, because the multi-board frame has to contain it.
+  const columns = arrangement === 'status'
+    ? rows.map((row, r) => {
+      const bs = row.map(n => boxes.get(n.id)).filter(Boolean)
+      if (!bs.length) return null
+      const top = Math.min(...bs.map(b => b.y))
+      const bottom = Math.max(...bs.map(b => b.y + b.h))
+      return {
+        status: rowStatus[r] || 'todo',
+        x: Math.min(...bs.map(b => b.x)) - COL_PAD,
+        y: top - COL_HEAD,
+        w: nodeW + COL_PAD * 2,
+        h: bottom - top + COL_HEAD + COL_PAD,
+        count: row.length
+      }
+    }).filter(Boolean)
+    : []
+
   // Normalise to a positive origin: SVG does not care, but hit tests and scroll maths do.
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const b of placed) {
     minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
     maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
   }
-  if (!placed.length) { minX = 0; minY = 0; maxX = 0; maxY = 0; }
+  for (const c of columns) {
+    minX = Math.min(minX, c.x); minY = Math.min(minY, c.y);
+    maxX = Math.max(maxX, c.x + c.w); maxY = Math.max(maxY, c.y + c.h);
+  }
+  if (!placed.length && !columns.length) { minX = 0; minY = 0; maxX = 0; maxY = 0; }
   for (const b of placed) { b.x -= minX; b.y -= minY; }
+  for (const c of columns) { c.x -= minX; c.y -= minY; }
 
   const drawn = [];
   if (!quiet) {
@@ -832,6 +869,7 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   return {
     nodes: placed,
     edges: drawn,
+    columns,
     width: maxX - minX,
     height: maxY - minY,
     ranks: rows.length,

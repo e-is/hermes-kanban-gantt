@@ -268,5 +268,16 @@ export const ja = {
       triage: 'トリアージへ送る',
       delete: '削除',
       restore: '復元'
-    }
+    },
+  status: {
+      triage: 'トリアージ',
+      todo: '未着手',
+      scheduled: '予定',
+      ready: '準備完了',
+      running: '実行中',
+      blocked: 'ブロック',
+      review: 'レビュー',
+      done: '完了',
+      archived: 'アーカイブ'
+  }
 }
