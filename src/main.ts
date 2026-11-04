@@ -1208,6 +1208,31 @@ export function GraphView({
   // The graph card obeys the same tag preference as the list row and the drawer: read here, because
   // this component is reached from the page rather than from those two.
   const showPrefixTags = useValue($titlePrefixTags)
+  // Which status columns the reader has folded away — per the view, not per the session: folding
+  // "done" is a statement about how this board is read, so it survives a reload like the other
+  // view preferences do.
+  const [foldedCols, setFoldedCols] = useState(() => {
+    try {
+      const raw = localStorage.getItem('hermes.plugin.kanban-gantt.graphFolded')
+      return new Set(raw ? JSON.parse(raw) : [])
+    } catch {
+      return new Set()
+    }
+  })
+  const toggleCol = status => {
+    setFoldedCols(prev => {
+      const next = new Set(prev)
+      if (next.has(status)) next.delete(status)
+      else next.add(status)
+      try {
+        localStorage.setItem('hermes.plugin.kanban-gantt.graphFolded', JSON.stringify([...next]))
+      } catch {
+        /* a full or disabled store must not break the view */
+      }
+      return next
+    })
+  }
+  // How many links a card has, in one pass: the footer shows the number the bundled card shows.
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(null)
   // Proximity drop: while a card is being dragged, the NEAREST valid card within NEAR_PX is the
@@ -1256,6 +1281,15 @@ export function GraphView({
 
   const nodes = useMemo(() => graphNodes(tasks), [tasks])
   const edges = useMemo(() => graphEdges(tasks), [tasks])
+  // How many links a card has, in one pass: the footer shows the number the bundled card shows.
+  const linkCounts = useMemo(() => {
+    const m = new Map()
+    for (const e of edges || []) {
+      m.set(e.from, (m.get(e.from) || 0) + 1)
+      m.set(e.to, (m.get(e.to) || 0) + 1)
+    }
+    return m
+  }, [edges])
   // The scope is a filter ON TOP of the funnel: `tasks` is already what the funnel, the
   // search and the status chips allow, and this narrows it further.
   const shown = useMemo(() => {
@@ -1272,8 +1306,8 @@ export function GraphView({
   const nodeH = tallCards ? NODE_H + 34 : NODE_H
   const nodeW = tallCards ? NODE_W + 48 : NODE_W
   const layout = useMemo(
-    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, groupBy: grouping ? n => n.board || '' : null }),
-    [shown, edges, sortBy, grouping, nodeH, nodeW, arrangement]
+    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, collapsed: [...foldedCols], groupBy: grouping ? n => n.board || '' : null }),
+    [shown, edges, sortBy, grouping, nodeH, nodeW, arrangement, foldedCols]
   )
   const lin = useMemo(() => {
     if (!selectedId || !shown.some(n => n.id === selectedId)) return null
@@ -1814,7 +1848,7 @@ export function GraphView({
             // arbitrary classes for a plugin.
             ...(layout.columns || []).map(c => jsxs('div', {
               key: `col-${c.status}`,
-              className: 'absolute rounded-lg pointer-events-none',
+              className: 'absolute rounded-lg',
               style: {
                 left: `${c.x + GRAPH_MARGIN}px`,
                 top: `${c.y + GRAPH_MARGIN}px`,
@@ -1822,11 +1856,23 @@ export function GraphView({
                 height: `${c.h}px`,
                 border: '1px solid var(--ui-stroke-tertiary)',
                 borderRadius: '8px',
-                backgroundColor: 'color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)'
+                backgroundColor: 'color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)',
+                pointerEvents: 'none'
               },
               children: jsxs('div', {
+                // The header is the only clickable part of a column: folding is a reading decision,
+                // and a click anywhere else must still reach the canvas (pan, marquee, drop).
                 className: 'flex items-center',
-                style: { gap: '6px', padding: '6px 8px 0', minWidth: 0 },
+                role: 'button',
+                onClick: () => toggleCol(c.status),
+                style: {
+                  gap: '6px',
+                  padding: c.collapsed ? '6px 0 0' : '6px 6px 0 8px',
+                  minWidth: 0,
+                  pointerEvents: 'auto',
+                  cursor: 'pointer',
+                  flexDirection: c.collapsed ? 'column' : 'row'
+                },
                 children: [
                   jsx('span', {
                     style: {
@@ -1837,20 +1883,22 @@ export function GraphView({
                       backgroundColor: (STATUS_META[c.status] || {}).tone || statusTone(c.status)
                     }
                   }),
+                  c.collapsed
+                    ? null
+                    : jsx('span', {
+                      style: {
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: 'var(--ui-text-secondary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      },
+                      children: (i18n.status && i18n.status[c.status]) || (STATUS_META[c.status] || {}).label || c.status
+                    }),
                   jsx('span', {
                     style: {
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: 'var(--ui-text-secondary)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    },
-                    children: (i18n.status && i18n.status[c.status]) || (STATUS_META[c.status] || {}).label || c.status
-                  }),
-                  jsx('span', {
-                    style: {
-                      marginLeft: 'auto',
+                      marginLeft: c.collapsed ? 0 : 'auto',
                       padding: '0 5px',
                       borderRadius: '9999px',
                       fontSize: '10px',
@@ -1859,6 +1907,12 @@ export function GraphView({
                       backgroundColor: 'var(--ui-bg-quaternary)'
                     },
                     children: String(c.count)
+                  }),
+                  jsx(Codicon, {
+                    name: c.collapsed ? 'chevron-right' : 'chevron-left',
+                    size: '0.65rem',
+                    className: 'shrink-0',
+                    style: { color: 'var(--ui-text-quaternary)' }
                   })
                 ]
               })
@@ -2057,6 +2111,9 @@ export function GraphView({
               const b = boxes.get(node.id)
               if (!b) return null
               const tone = statusTone(node.status)
+              const statusMode = arrangement === 'status'
+              const linkCount = linkCounts.get(node.id) || 0
+              const runNow = (node.runs || []).find(r => (r.status || r.outcome) === 'running')
               const failed = (node.runs || []).some(r => ['crashed', 'failed', 'spawn_failed', 'gave_up'].includes(r.outcome || r.status))
               const isSelected = node.id === selectedId
               const inLineage = lin ? (lin.up.has(node.id) || lin.down.has(node.id)) : false
@@ -2086,8 +2143,13 @@ export function GraphView({
                   // cheapest way to read a board of 60 nodes at a glance. 6 px, plus a 7 % wash
                   // of the same tone across the card: at 3 px the stripe read as a rendering
                   // artefact, and the wash is what makes the STATE legible before the words are.
-                  borderLeft: `6px solid ${tone}`,
-                  backgroundImage: `linear-gradient(color-mix(in srgb, ${tone} 7%, transparent), color-mix(in srgb, ${tone} 7%, transparent))`
+                  // In the status arrangement the column header already carries the state, so the
+                  // card takes the bundled board's own 2 px edge and drops the wash — two signals
+                  // for one fact would only compete.
+                  borderLeft: statusMode ? `2px solid ${tone}` : `6px solid ${tone}`,
+                  backgroundImage: statusMode
+                    ? undefined
+                    : `linear-gradient(color-mix(in srgb, ${tone} 7%, transparent), color-mix(in srgb, ${tone} 7%, transparent))`
                 },
                 // No card drag while the arrow is drawn: the slot gesture owns the pointer.
                 draggable: Boolean(onDragStart) && !link,
@@ -2184,13 +2246,57 @@ export function GraphView({
                           : null
                     ]
                   }),
+                  // The bundled card's second line, and the one change that makes a card read as a
+                  // card rather than as a label: what the worker last said. Tall cards only — at
+                  // 62px it would eat the title, which is the thing that must never be clipped.
+                  tallCards && node.summary
+                    ? jsx('div', {
+                      style: {
+                        padding: '0 6px',
+                        marginTop: '2px',
+                        fontSize: '10.5px',
+                        lineHeight: 1.25,
+                        color: 'var(--ui-text-tertiary)',
+                        display: '-webkit-box',
+                        WebkitLineClamp: '2',
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        overflowWrap: 'anywhere'
+                      },
+                      children: node.summary
+                    })
+                    : null,
                   jsxs('div', {
-                    className: 'mt-auto flex items-center gap-1 px-1.5 pb-0.5 text-[9px] text-(--ui-text-quaternary) min-w-0',
+                    className: 'mt-auto flex items-center gap-1.5 px-1.5 pb-0.5 min-w-0',
+                    style: { fontSize: '9px', color: 'var(--ui-text-quaternary)', fontVariantNumeric: 'tabular-nums' },
                     children: [
-                      node.priority != null
-                        ? jsx('span', { className: 'shrink-0 tabular-nums', children: `P${node.priority}` })
+                      // Left: the agent's own word — what it is doing right now, or why it is stuck.
+                      runNow
+                        ? jsx('span', { className: 'shrink-0', style: { color: tone }, children: relativeAge(runNow.started_at || runNow.startedAt) })
+                        : node.status === 'blocked' && node.blockKind
+                          ? jsx('span', { className: 'shrink-0 truncate', style: { color: 'var(--ui-status-danger, #f87171)' }, title: node.blockKind, children: node.blockKind })
+                          : null,
+                      tallCards && node.assignee
+                        ? jsx('span', { className: 'shrink-0 truncate', style: { color: tone, maxWidth: '42%' }, children: node.assignee })
                         : null,
                       jsx('span', { className: 'flex-1' }),
+                      // Right, in the bundled card's order: priority, links, comments, attachment,
+                      // agent, id. Each one is a glyph plus a number, never a word.
+                      node.priority != null && node.priority > 0
+                        ? jsx('span', { className: 'shrink-0 inline-flex items-center', children: `P${node.priority}` })
+                        : null,
+                      linkCount
+                        ? jsxs('span', { className: 'shrink-0 inline-flex items-center gap-0.5', children: [
+                            jsx(Codicon, { name: 'references', size: '0.6rem' }),
+                            String(linkCount)
+                          ] })
+                        : null,
+                      node.commentCount
+                        ? jsxs('span', { className: 'shrink-0 inline-flex items-center gap-0.5', children: [
+                            jsx(Codicon, { name: 'comment', size: '0.6rem' }),
+                            String(node.commentCount)
+                          ] })
+                        : null,
                       node.attachmentCount
                         ? jsx(AttachmentMenu, {
                             taskId: node.id,
@@ -2204,7 +2310,8 @@ export function GraphView({
                         : null,
                       node.assignee
                         ? jsx('span', { className: 'shrink-0 inline-flex', title: node.assignee, children: jsx(ProfileAvatar, { name: node.assignee, size: '0.85rem' }) })
-                        : jsx('span', { className: 'shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60', style: { width: '0.7rem', height: '0.7rem' } })
+                        : jsx('span', { className: 'shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60', style: { width: '0.7rem', height: '0.7rem' } }),
+                      jsx('span', { className: 'shrink-0', style: { fontFamily: 'var(--font-mono, monospace)' }, children: shortId(node.id) })
                     ]
                   }),
                 ]

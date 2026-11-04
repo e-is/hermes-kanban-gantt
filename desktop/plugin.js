@@ -6316,6 +6316,8 @@ var NODE_GAP = 14;
 var RANK_GAP = 52;
 var COL_HEAD = 26;
 var COL_PAD = 8;
+var COL_GAP = 10;
+var COL_RAIL = 34;
 var idOf = (ref) => ref && typeof ref === "object" ? ref.id : ref;
 function graphNodes(tasks) {
   return (tasks || []).map((t) => ({
@@ -6326,6 +6328,11 @@ function graphNodes(tasks) {
     assignee: t.assignee || "",
     board: t.board || "",
     attachmentCount: t.attachment_count || 0,
+    // What the bundled card shows under its title and in its footer. `summary` is the worker's own
+    // last word (`latest_summary`), never the task body: the body is a spec, not a status line.
+    summary: t.latest_summary || "",
+    commentCount: t.comment_count || 0,
+    blockKind: t.block_kind || "",
     // Kept whole: the sparkline needs them and a second fetch per node is not a thing.
     events: t.events || [],
     runs: t.runs || [],
@@ -6541,6 +6548,10 @@ function nearestInHalo(rects, x, y, radius, { exclude = null, allowed = null } =
 function layoutGraph(nodes, edges, {
   arrangement = "down",
   sortBy = "status",
+  // Status columns the reader has folded away. They keep their header rail — the dot, the name and
+  // the count are how a folded column still says what it holds — but give up their cards and their
+  // width, so the columns beside them close up.
+  collapsed = [],
   // Grouping is what makes an all-boards graph readable: layout each group on its own and
   // stack the blocks, so a board is a CONTIGUOUS, framed region instead of its members being
   // interleaved with another board's and each card needing a badge to say where it belongs.
@@ -6559,11 +6570,11 @@ function layoutGraph(nodes, edges, {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, title: n } : n);
   const keys = groupBy ? [...new Set(list.map((n) => groupBy(n)))].filter((k) => k != null && k !== "") : [];
   if (keys.length <= 1) {
-    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH, nodeW), groups: [] };
+    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH, nodeW, collapsed), groups: [] };
   }
   const blocks = keys.map((key) => ({
     key,
-    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy, nodeH, nodeW)
+    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy, nodeH, nodeW, collapsed)
   }));
   const inner = Math.max(...blocks.map((b) => b.block.width));
   const width = inner + groupPad * 2;
@@ -6740,7 +6751,7 @@ function rankedOnly(list, rankMap) {
   for (const n of list) out.set(n.id, (rankMap.get(n.id) ?? 0) - lo);
   return out;
 }
-function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W) {
+function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W, collapsed = []) {
   const { edges: es2, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es2);
   const reduced = reduceEdges(list, es2);
@@ -6786,12 +6797,23 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   const crossAlongY = arrangement === "flow" || arrangement === "status";
   const rankStep = crossAlongY ? nodeW + RANK_GAP : nodeH + RANK_GAP;
   const crossStep = crossAlongY ? nodeH + NODE_GAP : nodeW + NODE_GAP;
+  const folded = new Set(collapsed || []);
+  const colWidth = nodeW + COL_PAD * 2;
+  const colX = [];
+  if (arrangement === "status") {
+    let x = 0;
+    rows.forEach((row, r) => {
+      colX[r] = x;
+      x += (folded.has(rowStatus[r]) ? COL_RAIL : colWidth) + COL_GAP;
+    });
+  }
   const boxes = /* @__PURE__ */ new Map();
   const placed = [];
   rows.forEach((row, r) => {
+    if (arrangement === "status" && folded.has(rowStatus[r])) return;
     for (const node of row) {
       const cross = (slots.get(node.id) ?? 0) * crossStep;
-      const along = r * rankStep;
+      const along = arrangement === "status" ? colX[r] + COL_PAD : r * rankStep;
       const box = crossAlongY ? { id: node.id, x: along, y: cross, w: nodeW, h: nodeH, rank: r } : { id: node.id, x: cross, y: along, w: nodeW, h: nodeH, rank: r };
       boxes.set(node.id, box);
       placed.push(box);
@@ -6817,19 +6839,37 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     });
   }
   const columns = arrangement === "status" ? rows.map((row, r) => {
+    const foldedHere = folded.has(rowStatus[r]);
     const bs = row.map((n) => boxes.get(n.id)).filter(Boolean);
-    if (!bs.length) return null;
-    const top = Math.min(...bs.map((b) => b.y));
-    const bottom = Math.max(...bs.map((b) => b.y + b.h));
+    if (!bs.length && !foldedHere) return null;
+    const top = bs.length ? Math.min(...bs.map((b) => b.y)) : 0;
+    const bottom = bs.length ? Math.max(...bs.map((b) => b.y + b.h)) : 0;
     return {
       status: rowStatus[r] || "todo",
-      x: Math.min(...bs.map((b) => b.x)) - COL_PAD,
+      collapsed: foldedHere,
+      x: colX[r],
       y: top - COL_HEAD,
-      w: nodeW + COL_PAD * 2,
-      h: bottom - top + COL_HEAD + COL_PAD,
+      w: foldedHere ? COL_RAIL : colWidth,
+      // A folded column has no cards to size it: it takes the tallest column's height, so the
+      // rails line up with the columns beside them instead of ending in mid-air.
+      h: foldedHere ? 0 : bottom - top + COL_HEAD + COL_PAD,
       count: row.length
     };
   }).filter(Boolean) : [];
+  const openCols = columns.filter((c) => !c.collapsed);
+  if (openCols.length) {
+    const top = Math.min(...openCols.map((c) => c.y));
+    const bottom = Math.max(...openCols.map((c) => c.y + c.h));
+    for (const c of columns) if (c.collapsed) {
+      c.y = top;
+      c.h = bottom - top;
+    }
+  } else {
+    for (const c of columns) {
+      c.y = -COL_HEAD;
+      c.h = COL_HEAD + COL_PAD + nodeH;
+    }
+  }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const b of placed) {
     minX = Math.min(minX, b.x);
@@ -7842,6 +7882,26 @@ function GraphView({
   sortBy = "status"
 }) {
   const showPrefixTags = useValue2($titlePrefixTags);
+  const [foldedCols, setFoldedCols] = useState4(() => {
+    try {
+      const raw = localStorage.getItem("hermes.plugin.kanban-gantt.graphFolded");
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch {
+      return /* @__PURE__ */ new Set();
+    }
+  });
+  const toggleCol = (status) => {
+    setFoldedCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      try {
+        localStorage.setItem("hermes.plugin.kanban-gantt.graphFolded", JSON.stringify([...next]));
+      } catch {
+      }
+      return next;
+    });
+  };
   const [pan, setPan] = useState4({ x: 0, y: 0 });
   const [dragging, setDragging] = useState4(null);
   const NEAR_PX = 64;
@@ -7874,6 +7934,14 @@ function GraphView({
   const canvasRef = useRef2(null);
   const nodes = useMemo2(() => graphNodes(tasks), [tasks]);
   const edges = useMemo2(() => graphEdges(tasks), [tasks]);
+  const linkCounts = useMemo2(() => {
+    const m = /* @__PURE__ */ new Map();
+    for (const e of edges || []) {
+      m.set(e.from, (m.get(e.from) || 0) + 1);
+      m.set(e.to, (m.get(e.to) || 0) + 1);
+    }
+    return m;
+  }, [edges]);
   const shown = useMemo2(() => {
     const keep = scopeIds(nodes, edges, scope, { lineage: lineage2 });
     return nodes.filter((n) => keep.has(n.id));
@@ -7882,8 +7950,8 @@ function GraphView({
   const nodeH = tallCards ? NODE_H + 34 : NODE_H;
   const nodeW = tallCards ? NODE_W + 48 : NODE_W;
   const layout = useMemo2(
-    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, groupBy: grouping ? (n) => n.board || "" : null }),
-    [shown, edges, sortBy, grouping, nodeH, nodeW, arrangement]
+    () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, collapsed: [...foldedCols], groupBy: grouping ? (n) => n.board || "" : null }),
+    [shown, edges, sortBy, grouping, nodeH, nodeW, arrangement, foldedCols]
   );
   const lin = useMemo2(() => {
     if (!selectedId || !shown.some((n) => n.id === selectedId)) return null;
@@ -8352,7 +8420,7 @@ function GraphView({
             // arbitrary classes for a plugin.
             ...(layout.columns || []).map((c) => jsxs6("div", {
               key: `col-${c.status}`,
-              className: "absolute rounded-lg pointer-events-none",
+              className: "absolute rounded-lg",
               style: {
                 left: `${c.x + GRAPH_MARGIN}px`,
                 top: `${c.y + GRAPH_MARGIN}px`,
@@ -8360,11 +8428,23 @@ function GraphView({
                 height: `${c.h}px`,
                 border: "1px solid var(--ui-stroke-tertiary)",
                 borderRadius: "8px",
-                backgroundColor: "color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)"
+                backgroundColor: "color-mix(in srgb, var(--ui-bg-quinary) 50%, transparent)",
+                pointerEvents: "none"
               },
               children: jsxs6("div", {
+                // The header is the only clickable part of a column: folding is a reading decision,
+                // and a click anywhere else must still reach the canvas (pan, marquee, drop).
                 className: "flex items-center",
-                style: { gap: "6px", padding: "6px 8px 0", minWidth: 0 },
+                role: "button",
+                onClick: () => toggleCol(c.status),
+                style: {
+                  gap: "6px",
+                  padding: c.collapsed ? "6px 0 0" : "6px 6px 0 8px",
+                  minWidth: 0,
+                  pointerEvents: "auto",
+                  cursor: "pointer",
+                  flexDirection: c.collapsed ? "column" : "row"
+                },
                 children: [
                   jsx6("span", {
                     style: {
@@ -8375,7 +8455,7 @@ function GraphView({
                       backgroundColor: (STATUS_META[c.status] || {}).tone || statusTone(c.status)
                     }
                   }),
-                  jsx6("span", {
+                  c.collapsed ? null : jsx6("span", {
                     style: {
                       fontSize: "11px",
                       fontWeight: 600,
@@ -8388,7 +8468,7 @@ function GraphView({
                   }),
                   jsx6("span", {
                     style: {
-                      marginLeft: "auto",
+                      marginLeft: c.collapsed ? 0 : "auto",
                       padding: "0 5px",
                       borderRadius: "9999px",
                       fontSize: "10px",
@@ -8397,6 +8477,12 @@ function GraphView({
                       backgroundColor: "var(--ui-bg-quaternary)"
                     },
                     children: String(c.count)
+                  }),
+                  jsx6(Codicon5, {
+                    name: c.collapsed ? "chevron-right" : "chevron-left",
+                    size: "0.65rem",
+                    className: "shrink-0",
+                    style: { color: "var(--ui-text-quaternary)" }
                   })
                 ]
               })
@@ -8584,6 +8670,9 @@ function GraphView({
               const b = boxes.get(node.id);
               if (!b) return null;
               const tone = statusTone(node.status);
+              const statusMode = arrangement === "status";
+              const linkCount = linkCounts.get(node.id) || 0;
+              const runNow = (node.runs || []).find((r) => (r.status || r.outcome) === "running");
               const failed = (node.runs || []).some((r) => ["crashed", "failed", "spawn_failed", "gave_up"].includes(r.outcome || r.status));
               const isSelected = node.id === selectedId;
               const inLineage = lin ? lin.up.has(node.id) || lin.down.has(node.id) : false;
@@ -8613,8 +8702,11 @@ function GraphView({
                   // cheapest way to read a board of 60 nodes at a glance. 6 px, plus a 7 % wash
                   // of the same tone across the card: at 3 px the stripe read as a rendering
                   // artefact, and the wash is what makes the STATE legible before the words are.
-                  borderLeft: `6px solid ${tone}`,
-                  backgroundImage: `linear-gradient(color-mix(in srgb, ${tone} 7%, transparent), color-mix(in srgb, ${tone} 7%, transparent))`
+                  // In the status arrangement the column header already carries the state, so the
+                  // card takes the bundled board's own 2 px edge and drops the wash — two signals
+                  // for one fact would only compete.
+                  borderLeft: statusMode ? `2px solid ${tone}` : `6px solid ${tone}`,
+                  backgroundImage: statusMode ? void 0 : `linear-gradient(color-mix(in srgb, ${tone} 7%, transparent), color-mix(in srgb, ${tone} 7%, transparent))`
                 },
                 // No card drag while the arrow is drawn: the slot gesture owns the pointer.
                 draggable: Boolean(onDragStart) && !link,
@@ -8700,11 +8792,43 @@ function GraphView({
                       failed ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0 text-[#f87171]", title: i18n.runs((node.runs || []).length) }) : node.status === "blocked" ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0", style: { color: statusTone("blocked") }, title: node.status }) : null
                     ]
                   }),
+                  // The bundled card's second line, and the one change that makes a card read as a
+                  // card rather than as a label: what the worker last said. Tall cards only — at
+                  // 62px it would eat the title, which is the thing that must never be clipped.
+                  tallCards && node.summary ? jsx6("div", {
+                    style: {
+                      padding: "0 6px",
+                      marginTop: "2px",
+                      fontSize: "10.5px",
+                      lineHeight: 1.25,
+                      color: "var(--ui-text-tertiary)",
+                      display: "-webkit-box",
+                      WebkitLineClamp: "2",
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      overflowWrap: "anywhere"
+                    },
+                    children: node.summary
+                  }) : null,
                   jsxs6("div", {
-                    className: "mt-auto flex items-center gap-1 px-1.5 pb-0.5 text-[9px] text-(--ui-text-quaternary) min-w-0",
+                    className: "mt-auto flex items-center gap-1.5 px-1.5 pb-0.5 min-w-0",
+                    style: { fontSize: "9px", color: "var(--ui-text-quaternary)", fontVariantNumeric: "tabular-nums" },
                     children: [
-                      node.priority != null ? jsx6("span", { className: "shrink-0 tabular-nums", children: `P${node.priority}` }) : null,
+                      // Left: the agent's own word — what it is doing right now, or why it is stuck.
+                      runNow ? jsx6("span", { className: "shrink-0", style: { color: tone }, children: relativeAge(runNow.started_at || runNow.startedAt) }) : node.status === "blocked" && node.blockKind ? jsx6("span", { className: "shrink-0 truncate", style: { color: "var(--ui-status-danger, #f87171)" }, title: node.blockKind, children: node.blockKind }) : null,
+                      tallCards && node.assignee ? jsx6("span", { className: "shrink-0 truncate", style: { color: tone, maxWidth: "42%" }, children: node.assignee }) : null,
                       jsx6("span", { className: "flex-1" }),
+                      // Right, in the bundled card's order: priority, links, comments, attachment,
+                      // agent, id. Each one is a glyph plus a number, never a word.
+                      node.priority != null && node.priority > 0 ? jsx6("span", { className: "shrink-0 inline-flex items-center", children: `P${node.priority}` }) : null,
+                      linkCount ? jsxs6("span", { className: "shrink-0 inline-flex items-center gap-0.5", children: [
+                        jsx6(Codicon5, { name: "references", size: "0.6rem" }),
+                        String(linkCount)
+                      ] }) : null,
+                      node.commentCount ? jsxs6("span", { className: "shrink-0 inline-flex items-center gap-0.5", children: [
+                        jsx6(Codicon5, { name: "comment", size: "0.6rem" }),
+                        String(node.commentCount)
+                      ] }) : null,
                       node.attachmentCount ? jsx6(AttachmentMenu, {
                         taskId: node.id,
                         board: node.board || board,
@@ -8714,7 +8838,8 @@ function GraphView({
                           attachmentPreviewState(node.id, node.board || board, att, siblings)
                         )
                       }) : null,
-                      node.assignee ? jsx6("span", { className: "shrink-0 inline-flex", title: node.assignee, children: jsx6(ProfileAvatar, { name: node.assignee, size: "0.85rem" }) }) : jsx6("span", { className: "shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60", style: { width: "0.7rem", height: "0.7rem" } })
+                      node.assignee ? jsx6("span", { className: "shrink-0 inline-flex", title: node.assignee, children: jsx6(ProfileAvatar, { name: node.assignee, size: "0.85rem" }) }) : jsx6("span", { className: "shrink-0 rounded-full border border-dashed border-(--ui-text-quaternary) opacity-60", style: { width: "0.7rem", height: "0.7rem" } }),
+                      jsx6("span", { className: "shrink-0", style: { fontFamily: "var(--font-mono, monospace)" }, children: shortId(node.id) })
                     ]
                   })
                 ]

@@ -735,6 +735,25 @@ test('status columns are handed over, and never leave their board frame', () => 
   assert.deepEqual(layoutGraph(tasks, [], { arrangement: 'down' }).columns, [])
 })
 
+test('a folded status column keeps its rail and gives up its cards', () => {
+  const tasks = [{ id: 't1', status: 'todo' }, { id: 't2', status: 'running' }, { id: 't3', status: 'done' }]
+  const open = layoutGraph(tasks, [], { arrangement: 'status' })
+  const folded = layoutGraph(tasks, [], { arrangement: 'status', collapsed: ['running'] })
+  const rail = folded.columns.find(c => c.status === 'running')
+  assert.ok(rail.collapsed, 'the rail says it is folded')
+  assert.equal(rail.w, core.COL_RAIL, 'a folded column keeps only its rail')
+  assert.equal(rail.count, 1, 'and still says how much it holds')
+  assert.equal(folded.nodes.length, 2, 'its cards are not drawn')
+  assert.ok(folded.width < open.width, 'folding narrows the drawing')
+  // Columns are packed like the bundled board: the gap between two of them is the gutter, never a
+  // graph rank gap.
+  const cols = [...folded.columns].sort((a, b) => a.x - b.x)
+  for (let i = 1; i < cols.length; i++) {
+    assert.ok(cols[i].x - (cols[i - 1].x + cols[i - 1].w) <= core.COL_GAP + 0.01,
+      'columns are separated by the gutter only')
+  }
+})
+
 test('no two cards of a row end up on the same cross coordinate', () => {
   const tasks = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id }))
   const { nodes: placed } = layoutGraph(graphNodes(tasks), graphEdges([]), { arrangement: 'down' })

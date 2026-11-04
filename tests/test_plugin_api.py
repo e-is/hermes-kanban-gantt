@@ -155,6 +155,41 @@ def test_gantt_snapshot(client):
     assert all(isinstance(t["attachment_count"], int) for t in data["tasks"])
 
 
+def test_card_meta_takes_the_newest_summary_and_counts_comments(tmp_path):
+    """What a card shows beside its title: the LAST run's summary, and how many comments it has.
+
+    Both are one aggregate for the board, so the subtlety is "latest": a task with three runs must
+    answer with the newest one, and an empty summary must not shadow an older one that said
+    something.
+    """
+    import sqlite3
+
+    db = tmp_path / "kanban.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE task_runs (id INTEGER PRIMARY KEY, task_id TEXT, status TEXT, "
+        "started_at INTEGER, ended_at INTEGER, summary TEXT)"
+    )
+    conn.execute("CREATE TABLE task_comments (id INTEGER PRIMARY KEY, task_id TEXT, body TEXT)")
+    conn.executemany(
+        "INSERT INTO task_runs (task_id, status, started_at, ended_at, summary) VALUES (?,?,?,?,?)",
+        [("t_a", "done", 100, 200, "first attempt"),
+         ("t_a", "done", 300, 400, "the last word"),
+         ("t_a", "failed", 500, 600, ""),  # empty: must not shadow "the last word"
+         ("t_b", "done", 100, 200, "only run")],
+    )
+    conn.executemany(
+        "INSERT INTO task_comments (task_id, body) VALUES (?, ?)",
+        [("t_a", "one"), ("t_a", "two"), ("t_b", "only")],
+    )
+    conn.commit()
+
+    summaries, comments = plugin_api._card_meta(conn)
+    conn.close()
+    assert summaries == {"t_a": "the last word", "t_b": "only run"}
+    assert comments == {"t_a": 2, "t_b": 1}
+
+
 def test_attachment_counts_group_by_task(tmp_path):
     """`_attachment_counts` answers "does this row need a paperclip", for the whole board.
 

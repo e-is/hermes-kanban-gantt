@@ -247,6 +247,29 @@ def _run_windows(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
     return out
 
 
+def _card_meta(conn: sqlite3.Connection) -> tuple[dict[str, str], dict[str, int]]:
+    """What a card shows beside its title: the latest run summary, and how many comments it has.
+
+    Both are ONE aggregate for the whole board. A card is drawn for every task, so a per-task query
+    would be N round trips for two integers and one line of text — and the graph polls, so it would
+    be N round trips every poll.
+    """
+    summaries: dict[str, str] = {}
+    # Ordered so the newest row per task comes first: `setdefault` then keeps exactly that one.
+    for task_id, summary in conn.execute(
+        "SELECT task_id, summary FROM task_runs "
+        "WHERE summary IS NOT NULL AND TRIM(summary) <> '' "
+        "ORDER BY task_id, COALESCE(ended_at, started_at, 0) DESC, id DESC"
+    ):
+        summaries.setdefault(task_id, summary)
+    comments: dict[str, int] = {}
+    for task_id, count in conn.execute(
+        "SELECT task_id, COUNT(*) FROM task_comments GROUP BY task_id"
+    ):
+        comments[task_id] = int(count)
+    return summaries, comments
+
+
 def _attachment_counts(conn: sqlite3.Connection) -> dict[str, int]:
     """How many attachments each task has — a count, never the list.
 
@@ -387,10 +410,11 @@ def _read_gantt(slug: str) -> dict:
     try:
         runs = _run_windows(conn)
         attachment_counts = _attachment_counts(conn)
+        summaries, comment_counts = _card_meta(conn)
         activity = _activity_series(conn)
         rows = conn.execute(
             "SELECT id, title, status, assignee, priority, created_at, started_at, completed_at, "
-            "NULL AS run_started_at, NULL AS run_ended_at "
+            "block_kind, NULL AS run_started_at, NULL AS run_ended_at "
             "FROM tasks"
         ).fetchall()
 
@@ -411,6 +435,8 @@ def _read_gantt(slug: str) -> dict:
             # Whether to draw a paperclip — the files themselves are fetched on demand,
             # from /tasks/<id>/attachments, when the reader opens it.
             rec["attachment_count"] = attachment_counts.get(rec["id"], 0)
+            rec["latest_summary"] = summaries.get(rec["id"], "")
+            rec["comment_count"] = comment_counts.get(rec["id"], 0)
             rec["children"] = children.get(rec["id"], [])
             rec["parents"] = parents.get(rec["id"], [])
             # The graph's sparkline: present only for tasks with activity in the window.
@@ -453,7 +479,7 @@ def _read_gantt_all() -> dict:
             activity = _activity_series(conn)
             rows = conn.execute(
                 "SELECT id, title, status, assignee, priority, created_at, started_at, completed_at, "
-                "NULL AS run_started_at, NULL AS run_ended_at "
+                "block_kind, NULL AS run_started_at, NULL AS run_ended_at "
                 "FROM tasks"
             ).fetchall()
 
@@ -467,11 +493,14 @@ def _read_gantt_all() -> dict:
 
             # One query per board, like the runs above.
             attachment_counts = _attachment_counts(conn)
+            summaries, comment_counts = _card_meta(conn)
             for row in rows:
                 rec = _task_summary(row, board_slug=bslug)
                 rec["runs"] = []
                 rec.update(runs.get(rec["id"], {}))
                 rec["attachment_count"] = attachment_counts.get(rec["id"], 0)
+                rec["latest_summary"] = summaries.get(rec["id"], "")
+                rec["comment_count"] = comment_counts.get(rec["id"], 0)
                 rec["children"] = children.get(rec["id"], [])
                 rec["parents"] = parents.get(rec["id"], [])
                 if rec["id"] in activity:

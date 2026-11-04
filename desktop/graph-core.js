@@ -6,6 +6,8 @@ var NODE_GAP = 14;
 var RANK_GAP = 52;
 var COL_HEAD = 26;
 var COL_PAD = 8;
+var COL_GAP = 10;
+var COL_RAIL = 34;
 var idOf = (ref) => ref && typeof ref === "object" ? ref.id : ref;
 function graphNodes(tasks) {
   return (tasks || []).map((t) => ({
@@ -16,6 +18,11 @@ function graphNodes(tasks) {
     assignee: t.assignee || "",
     board: t.board || "",
     attachmentCount: t.attachment_count || 0,
+    // What the bundled card shows under its title and in its footer. `summary` is the worker's own
+    // last word (`latest_summary`), never the task body: the body is a spec, not a status line.
+    summary: t.latest_summary || "",
+    commentCount: t.comment_count || 0,
+    blockKind: t.block_kind || "",
     // Kept whole: the sparkline needs them and a second fetch per node is not a thing.
     events: t.events || [],
     runs: t.runs || [],
@@ -277,6 +284,10 @@ function nearestInHalo(rects, x, y, radius, { exclude = null, allowed = null } =
 function layoutGraph(nodes, edges, {
   arrangement = "down",
   sortBy = "status",
+  // Status columns the reader has folded away. They keep their header rail — the dot, the name and
+  // the count are how a folded column still says what it holds — but give up their cards and their
+  // width, so the columns beside them close up.
+  collapsed = [],
   // Grouping is what makes an all-boards graph readable: layout each group on its own and
   // stack the blocks, so a board is a CONTIGUOUS, framed region instead of its members being
   // interleaved with another board's and each card needing a badge to say where it belongs.
@@ -295,11 +306,11 @@ function layoutGraph(nodes, edges, {
   const list = (nodes || []).map((n) => typeof n === "string" ? { id: n, title: n } : n);
   const keys = groupBy ? [...new Set(list.map((n) => groupBy(n)))].filter((k) => k != null && k !== "") : [];
   if (keys.length <= 1) {
-    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH, nodeW), groups: [] };
+    return { ...layoutOne(list, edges, arrangement, sortBy, nodeH, nodeW, collapsed), groups: [] };
   }
   const blocks = keys.map((key) => ({
     key,
-    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy, nodeH, nodeW)
+    block: layoutOne(list.filter((n) => groupBy(n) === key), edges, arrangement, sortBy, nodeH, nodeW, collapsed)
   }));
   const inner = Math.max(...blocks.map((b) => b.block.width));
   const width = inner + groupPad * 2;
@@ -476,7 +487,7 @@ function rankedOnly(list, rankMap) {
   for (const n of list) out.set(n.id, (rankMap.get(n.id) ?? 0) - lo);
   return out;
 }
-function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W) {
+function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NODE_W, collapsed = []) {
   const { edges: es, dangling } = edgesWithin(list, edges);
   const { ranks: rankMap, cyclic, truncated } = ranks(list, es);
   const reduced = reduceEdges(list, es);
@@ -522,12 +533,23 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
   const crossAlongY = arrangement === "flow" || arrangement === "status";
   const rankStep = crossAlongY ? nodeW + RANK_GAP : nodeH + RANK_GAP;
   const crossStep = crossAlongY ? nodeH + NODE_GAP : nodeW + NODE_GAP;
+  const folded = new Set(collapsed || []);
+  const colWidth = nodeW + COL_PAD * 2;
+  const colX = [];
+  if (arrangement === "status") {
+    let x = 0;
+    rows.forEach((row, r) => {
+      colX[r] = x;
+      x += (folded.has(rowStatus[r]) ? COL_RAIL : colWidth) + COL_GAP;
+    });
+  }
   const boxes = /* @__PURE__ */ new Map();
   const placed = [];
   rows.forEach((row, r) => {
+    if (arrangement === "status" && folded.has(rowStatus[r])) return;
     for (const node of row) {
       const cross = (slots.get(node.id) ?? 0) * crossStep;
-      const along = r * rankStep;
+      const along = arrangement === "status" ? colX[r] + COL_PAD : r * rankStep;
       const box = crossAlongY ? { id: node.id, x: along, y: cross, w: nodeW, h: nodeH, rank: r } : { id: node.id, x: cross, y: along, w: nodeW, h: nodeH, rank: r };
       boxes.set(node.id, box);
       placed.push(box);
@@ -553,19 +575,37 @@ function layoutOne(list, edges, arrangement, sortBy, nodeH = NODE_H, nodeW = NOD
     });
   }
   const columns = arrangement === "status" ? rows.map((row, r) => {
+    const foldedHere = folded.has(rowStatus[r]);
     const bs = row.map((n) => boxes.get(n.id)).filter(Boolean);
-    if (!bs.length) return null;
-    const top = Math.min(...bs.map((b) => b.y));
-    const bottom = Math.max(...bs.map((b) => b.y + b.h));
+    if (!bs.length && !foldedHere) return null;
+    const top = bs.length ? Math.min(...bs.map((b) => b.y)) : 0;
+    const bottom = bs.length ? Math.max(...bs.map((b) => b.y + b.h)) : 0;
     return {
       status: rowStatus[r] || "todo",
-      x: Math.min(...bs.map((b) => b.x)) - COL_PAD,
+      collapsed: foldedHere,
+      x: colX[r],
       y: top - COL_HEAD,
-      w: nodeW + COL_PAD * 2,
-      h: bottom - top + COL_HEAD + COL_PAD,
+      w: foldedHere ? COL_RAIL : colWidth,
+      // A folded column has no cards to size it: it takes the tallest column's height, so the
+      // rails line up with the columns beside them instead of ending in mid-air.
+      h: foldedHere ? 0 : bottom - top + COL_HEAD + COL_PAD,
       count: row.length
     };
   }).filter(Boolean) : [];
+  const openCols = columns.filter((c) => !c.collapsed);
+  if (openCols.length) {
+    const top = Math.min(...openCols.map((c) => c.y));
+    const bottom = Math.max(...openCols.map((c) => c.y + c.h));
+    for (const c of columns) if (c.collapsed) {
+      c.y = top;
+      c.h = bottom - top;
+    }
+  } else {
+    for (const c of columns) {
+      c.y = -COL_HEAD;
+      c.h = COL_HEAD + COL_PAD + nodeH;
+    }
+  }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const b of placed) {
     minX = Math.min(minX, b.x);
@@ -658,8 +698,10 @@ function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
   return grown;
 }
 export {
+  COL_GAP,
   COL_HEAD,
   COL_PAD,
+  COL_RAIL,
   NODE_GAP,
   NODE_H,
   NODE_W,
