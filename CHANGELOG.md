@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.8.1 — a prefixed title no longer takes the page down, and archived boards stay gone
+
+**Two crashes, one family.** The chip that renders a title's leading `[TAG]` read a
+variable that does not exist, in two places: the list row passed `children: prefix`
+(only `shown.prefix` exists) and the drawer passed `drawerTitle.prefix` (only
+`shownTitle.prefix`). Both are evaluated *only* when the title actually has a prefix
+and the prefix-tag preference is on — which is why the page looked healthy for months
+and then fell into "failed to render" on a board whose titles are all `[olio] …`.
+A `ReferenceError` during render is not local: the whole plugin page goes with it.
+
+**It was invisible to CI, so CI now looks.** The render harness had no prefixed
+fixture and the preference is off by default (`$titlePrefixTags = atom(false)`), so
+neither site was ever rendered. `tests/ui/esm-render.mjs` now renders a board of
+prefixed titles with the preference on and asserts the chip in the row *and* in the
+drawer: 96 checks, and before the fix it reported 3 failures (both sites threw).
+
+**Archived boards stop coming back.** `GET /boards` listed every directory holding a
+`kanban.db`, tombstones included, and dropped `default` whenever its own directory was
+not the one holding the database. It now lists `default` always and skips a board
+marked `archived` in its `board.json` — and `/gantt?board=all` follows the same list,
+so the picker and the all-boards view cannot disagree. Thanks **@HearthCore** (#13).
+
+Thanks **@warmso** for the drawer half of the prefix fix and for a write-up that made
+the review a two-minute job (#14).
+
 ## 1.8.0 — the page speaks the 16 desktop languages
 
 **One module per language, not one monolith.** The bundle was 871 lines in a single
