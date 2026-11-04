@@ -1,0 +1,293 @@
+{
+  "started_at": "2026-11-04T21:35:40+0100",
+  "python": "3.11.16",
+  "host": "fixe13.e-is",
+  "real_db": "/home/blavenie/.hermes/kanban/boards/gantt-demo/kanban.db",
+  "staging_root": "/tmp/kg-wsproto/run-1793824540",
+  "board": "gantt-demo",
+  "versions": {
+    "fastapi": "0.133.1",
+    "uvicorn": "0.41.0",
+    "websockets": "15.0.1"
+  },
+  "baseline": {
+    "status": 200,
+    "snapshot_bytes": 16823,
+    "tasks": 25,
+    "get_gantt_ms": {
+      "n": 30,
+      "p50": 2.15,
+      "p95": 3.31,
+      "mean": 2.32,
+      "max": 5.75,
+      "min": 1.98
+    },
+    "remote_headers_note": "connect-per-request, no ETag, full body",
+    "poll_60s_bytes_per_day": 24225120,
+    "hammer_20_pages": {
+      "requests": 1684,
+      "seconds": 5,
+      "req_per_s": 336.8,
+      "cpu_s": 11.65,
+      "rss_kb": 66344
+    }
+  },
+  "setup": {
+    "handshake_to_first_frame_ms": {
+      "n": 20,
+      "p50": 1.87,
+      "p95": 11.72,
+      "mean": 2.42,
+      "max": 11.72,
+      "min": 1.58
+    },
+    "tasks_in_first_frame": 25
+  },
+  "latency_default": {
+    "config": {
+      "poll_ms": 250,
+      "debounce_ms": 300
+    },
+    "write_to_frame_ms": {
+      "n": 20,
+      "p50": 505.71,
+      "p95": 549.24,
+      "mean": 507.0,
+      "max": 549.24,
+      "min": 497.62
+    },
+    "frame_generated_at_age_ms": {
+      "n": 20,
+      "p50": 534.66,
+      "p95": 995.52,
+      "mean": 514.35,
+      "max": 995.52,
+      "min": 38.81
+    },
+    "versions": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21
+    ],
+    "server_db_reads": 21,
+    "frame_bytes": 17222,
+    "tasks_in_frame": 26,
+    "floor_ms": 550
+  },
+  "latency_tuned": {
+    "config": {
+      "poll_ms": 50,
+      "debounce_ms": 100
+    },
+    "write_to_frame_ms": {
+      "n": 19,
+      "p50": 110.67,
+      "p95": 160.36,
+      "mean": 118.56,
+      "max": 160.36,
+      "min": 103.36
+    },
+    "frame_generated_at_age_ms": {
+      "n": 19,
+      "p50": 441.08,
+      "p95": 906.71,
+      "mean": 449.92,
+      "max": 906.71,
+      "min": 20.11
+    },
+    "versions": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "server_db_reads": 20,
+    "frame_bytes": 17578,
+    "tasks_in_frame": 27,
+    "floor_ms": 150
+  },
+  "throughput": {
+    "config": {
+      "poll_ms": 250,
+      "debounce_ms": 300,
+      "writers": 4
+    },
+    "seconds": 10.0,
+    "writes": 1967,
+    "cap": 2000,
+    "forced_write_rate": 200.0,
+    "writes_per_s": 196.7,
+    "frames": 18,
+    "frames_per_s": 1.8,
+    "writes_per_frame": 109.3,
+    "server_db_reads": 19,
+    "cpu_s": 0.29,
+    "rss_kb": 65444
+  },
+  "fanout": {
+    "clients": 20,
+    "subscribed": 20,
+    "delivered": 20,
+    "one_write_to_all_clients_ms": {
+      "n": 20,
+      "p50": 344.9,
+      "p95": 345.9,
+      "mean": 344.84,
+      "max": 345.9,
+      "min": 343.8
+    },
+    "server_db_reads_for_one_change": 21,
+    "rss_kb_before": 57940,
+    "rss_kb_after_connect": 68192,
+    "rss_kb_per_connection": 512.6,
+    "idle_cpu_s_per_3s_20_clients": 0.03,
+    "idle_cpu_percent": 1.0,
+    "frames_per_client": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "kick": {
+    "kicked": {
+      "kicked": 1
+    },
+    "client_connects": 2,
+    "reconnected": true,
+    "reconnect_gap_ms": {
+      "n": 1,
+      "p50": 401.1,
+      "p95": 401.1,
+      "mean": 401.1,
+      "max": 401.1,
+      "min": 401.1
+    },
+    "resynced_version": 2,
+    "snapshots": 2,
+    "errors": [
+      "ConnectionClosedError: received 1012 (service restart); then sent 1012 (service restart)"
+    ]
+  },
+  "blip": {
+    "cut": {
+      "connects": 4,
+      "reconnect_gaps_ms": {
+        "n": 3,
+        "p50": 56.81,
+        "p95": 397.86,
+        "mean": 164.5,
+        "max": 397.86,
+        "min": 38.84
+      },
+      "errors": [
+        "ConnectionClosedError: no close frame received or sent",
+        "ConnectionClosedError: no close frame received or sent",
+        "ConnectionClosedError: no close frame received or sent",
+        "ConnectionClosedError: no close frame received or sent"
+      ],
+      "snapshots": 4,
+      "versions": [
+        2,
+        3,
+        3,
+        3,
+        4,
+        4
+      ]
+    },
+    "stall": {
+      "connects": 2,
+      "reconnect_gaps_ms": {
+        "n": 1,
+        "p50": 43.25,
+        "p95": 43.25,
+        "mean": 43.25,
+        "max": 43.25,
+        "min": 43.25
+      },
+      "errors": [
+        "timeout:idle",
+        "timeout:idle"
+      ],
+      "snapshots": 2,
+      "versions": [
+        5,
+        5,
+        6,
+        6,
+        6
+      ]
+    }
+  },
+  "auth": {
+    "absent": {
+      "handshake": "rejected",
+      "detail": "InvalidStatus: server rejected WebSocket connection: HTTP 403"
+    },
+    "wrong": {
+      "handshake": "rejected",
+      "detail": "InvalidStatus: server rejected WebSocket connection: HTTP 403"
+    },
+    "valid": {
+      "handshake": "accepted",
+      "first_frame": "snapshot",
+      "tasks": 25
+    },
+    "live_gateway_http": {
+      "status": 401
+    }
+  },
+  "multi_instance": {
+    "instances": 2,
+    "same_database": "/tmp/kg-wsproto/run-multi_instance",
+    "A_delivered": false,
+    "B_delivered": false,
+    "A_latency_ms": null,
+    "B_latency_ms": null,
+    "A_db_reads": 1,
+    "B_db_reads": 1,
+    "note": "each process reads on its own; the change detection is per process, so N gateways = N reads per change"
+  },
+  "proxy_idle": {
+    "server_heartbeat_s": 1,
+    "proxy_idle_kill_s": 3,
+    "connects": 1,
+    "reconnects": 0,
+    "heartbeats_seen": 7,
+    "errors": []
+  }
+}
