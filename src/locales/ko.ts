@@ -92,6 +92,7 @@ export const ko = {
     result: '결과',
     latestSummary: '최근 요약',
     runs: n => `실행 기록 · ${n}`,
+    runsFailed: n => `실패한 실행 · ${n}`,
     show: '표시',
     hide: '숨기기',
     comments: n => `댓글 · ${n}`,

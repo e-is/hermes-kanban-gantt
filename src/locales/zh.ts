@@ -92,6 +92,7 @@ export const zh = {
     result: '结果',
     latestSummary: '最新摘要',
     runs: n => `运行记录 · ${n}`,
+    runsFailed: n => `失败的运行 · ${n}`,
     show: '展开',
     hide: '收起',
     comments: n => `评论 · ${n}`,

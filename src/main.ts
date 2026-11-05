@@ -2132,7 +2132,11 @@ export function GraphView({
               // One computation, so the span can be skipped when there is nothing to say rather than
               // rendered empty.
               const runAge = runNow ? relativeAge(runNow.started_at ?? runNow.startedAt, nowSec, i18n.relativeUnits) : ''
-              const failed = (node.runs || []).some(r => ['crashed', 'failed', 'spawn_failed', 'gave_up'].includes(r.outcome || r.status))
+              const failedRuns = (node.runs || []).filter(r => ['crashed', 'failed', 'spawn_failed', 'gave_up'].includes(r.outcome || r.status))
+              const failed = failedRuns.length > 0
+              // The tooltip on the warning says which failure it is about: the count, then the last
+              // one's own words — the same sentence the card would show if it were running.
+              const lastFailure = failed ? (failedRuns[failedRuns.length - 1].summary || '') : ''
               const isSelected = node.id === selectedId
               const inLineage = lin ? (lin.up.has(node.id) || lin.down.has(node.id)) : false
               const faded = Boolean(lin) && !isSelected && !inLineage
@@ -2256,7 +2260,9 @@ export function GraphView({
                         : jsx('span', {
                           className: 'shrink-0 inline-flex items-center justify-center mt-[1px]',
                           style: { color: tone },
-                          title: node.status,
+                          // The glyph alone reads as a colour; the tooltip says the state in the
+                          // reader's own language, and for a run in progress, for how long.
+                          title: `${i18n.status?.[node.status] || node.status}${runAge ? ` · ${runAge}` : ''}`,
                           children: node.status === 'running'
                             ? jsxs('span', { className: 'relative inline-flex items-center justify-center', children: [
                                 jsx('span', { className: 'kg-arc', style: { '--kanban-tone': tone } }),
@@ -2264,11 +2270,12 @@ export function GraphView({
                               ] })
                             : jsx(Codicon, { name: statusIcon(node.status), size: '0.8rem' })
                         }),
-                      failed
-                        ? jsx(Codicon, { name: 'warning', size: '0.75rem', className: 'shrink-0 text-[#f87171]', title: i18n.runs((node.runs || []).length) })
-                        : node.status === 'blocked'
-                          ? jsx(Codicon, { name: 'warning', size: '0.75rem', className: 'shrink-0', style: { color: statusTone('blocked') }, title: node.status })
-                          : null
+                      // The title row keeps one state glyph (the status icon, above) and, for a
+                      // blocked card, the reason it is blocked — the failed runs are counted in the
+                      // footer now.
+                      node.status === 'blocked'
+                        ? jsx(Codicon, { name: 'warning', size: '0.75rem', className: 'shrink-0', style: { color: statusTone('blocked') }, title: node.blockKind || i18n.status.blocked })
+                        : null
                     ]
                   }),
                   // The bundled card's second line, and the one change that makes a card read as a
@@ -2348,6 +2355,19 @@ export function GraphView({
                               attachmentPreviewState(node.id, node.board || board, att, siblings)
                             )
                           })
+                        : null,
+                      // Failed runs are a count, and counts live in the footer — the bundled card keeps
+                      // its warning here too, glyph plus number, rather than a second flag beside the
+                      // title where the state already has its own glyph.
+                      failed
+                        ? jsxs('span', {
+                          className: 'shrink-0 inline-flex items-center gap-0.5 text-[#f87171]',
+                          title: lastFailure ? `${i18n.runsFailed(failedRuns.length)} — ${lastFailure}` : i18n.runsFailed(failedRuns.length),
+                          children: [
+                            jsx(Codicon, { name: 'warning', size: '0.6rem' }),
+                            String(failedRuns.length)
+                          ]
+                        })
                         : null,
                       // The avatar sits beside the name in tall cards, so the right edge keeps it
                       // only when there is no name there to pair it with — otherwise the letter

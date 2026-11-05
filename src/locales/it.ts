@@ -92,6 +92,7 @@ export const it = {
     result: 'Risultato',
     latestSummary: 'Ultimo riepilogo',
     runs: n => `Esecuzioni · ${n}`,
+    runsFailed: n => `Esecuzioni fallite · ${n}`,
     show: 'Mostra',
     hide: 'Nascondi',
     comments: n => `Commenti · ${n}`,

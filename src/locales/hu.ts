@@ -92,6 +92,7 @@ export const hu = {
     result: 'Eredmény',
     latestSummary: 'Legutóbbi összefoglaló',
     runs: n => `Futtatások · ${n}`,
+    runsFailed: n => `Sikertelen futások · ${n}`,
     show: 'Megjelenítés',
     hide: 'Elrejtés',
     comments: n => `Hozzászólások · ${n}`,

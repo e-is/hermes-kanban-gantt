@@ -92,6 +92,7 @@ export const en = {
     result: 'Result',
     latestSummary: 'Latest summary',
     runs: n => `Runs · ${n}`,
+    runsFailed: n => `Failed runs · ${n}`,
     show: 'Show',
     hide: 'Hide',
     comments: n => `Comments · ${n}`,
