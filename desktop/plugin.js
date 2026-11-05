@@ -8765,19 +8765,9 @@ function GraphView({
                   jsxs6("div", {
                     className: "shrink-0 flex items-start gap-1 px-1.5 pt-1 min-w-0",
                     children: [
-                      // The status icon is the graph's own compass — in a column the header already
-                      // carries the state, and the icon only pushed the title right of the summary
-                      // below it. So it is drawn where it earns its place, and dropped where it
-                      // does not.
-                      statusMode ? null : jsx6("span", {
-                        className: "shrink-0 inline-flex items-center justify-center mt-[1px]",
-                        style: { color: tone },
-                        title: node.status,
-                        children: node.status === "running" ? jsxs6("span", { className: "relative inline-flex items-center justify-center", children: [
-                          jsx6("span", { className: "kg-arc", style: { "--kanban-tone": tone } }),
-                          jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
-                        ] }) : jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
-                      }),
+                      // The status icon is the graph's own compass, and it sits at the card's right
+                      // edge: on the left it pushed the title off the summary's axis, and in a
+                      // column the header already carries the state, so it is dropped there.
                       jsxs6("span", {
                         className: cn3(
                           "min-w-0 flex-1 leading-snug text-(--ui-text-primary)",
@@ -8807,6 +8797,17 @@ function GraphView({
                           }) : null,
                           shown2.text || node.id
                         ]
+                      }),
+                      // Right of the title, where it belongs: the state is a property of the card, and
+                      // at the left it pushed the words the reader came for off their axis.
+                      statusMode ? null : jsx6("span", {
+                        className: "shrink-0 inline-flex items-center justify-center mt-[1px]",
+                        style: { color: tone },
+                        title: node.status,
+                        children: node.status === "running" ? jsxs6("span", { className: "relative inline-flex items-center justify-center", children: [
+                          jsx6("span", { className: "kg-arc", style: { "--kanban-tone": tone } }),
+                          jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
+                        ] }) : jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
                       }),
                       failed ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0 text-[#f87171]", title: i18n.runs((node.runs || []).length) }) : node.status === "blocked" ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0", style: { color: statusTone("blocked") }, title: node.status }) : null
                     ]
