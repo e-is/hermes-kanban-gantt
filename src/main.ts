@@ -2330,8 +2330,17 @@ export function GraphView({
                       jsx('span', { className: 'flex-1' }),
                       // Right, in the bundled card's order: priority, links, comments, attachment,
                       // agent, id. Each one is a glyph plus a number, never a word.
+                      // The bundled card's own priority mark: an up arrow and the number, in amber —
+                      // `P2` said the same thing in a glyph the reader has to decode first.
                       node.priority != null && node.priority > 0
-                        ? jsx('span', { className: 'shrink-0 inline-flex items-center', children: `P${node.priority}` })
+                        ? jsxs('span', {
+                          className: 'shrink-0 inline-flex items-center gap-0.5',
+                          style: { color: '#f59e0b' },
+                          children: [
+                            jsx(Codicon, { name: 'arrow-up', size: '0.6rem' }),
+                            String(node.priority)
+                          ]
+                        })
                         : null,
                       linkCount
                         ? jsxs('span', { className: 'shrink-0 inline-flex items-center gap-0.5', children: [

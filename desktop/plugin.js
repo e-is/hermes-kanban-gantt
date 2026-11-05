@@ -8880,7 +8880,16 @@ function GraphView({
                       jsx6("span", { className: "flex-1" }),
                       // Right, in the bundled card's order: priority, links, comments, attachment,
                       // agent, id. Each one is a glyph plus a number, never a word.
-                      node.priority != null && node.priority > 0 ? jsx6("span", { className: "shrink-0 inline-flex items-center", children: `P${node.priority}` }) : null,
+                      // The bundled card's own priority mark: an up arrow and the number, in amber —
+                      // `P2` said the same thing in a glyph the reader has to decode first.
+                      node.priority != null && node.priority > 0 ? jsxs6("span", {
+                        className: "shrink-0 inline-flex items-center gap-0.5",
+                        style: { color: "#f59e0b" },
+                        children: [
+                          jsx6(Codicon5, { name: "arrow-up", size: "0.6rem" }),
+                          String(node.priority)
+                        ]
+                      }) : null,
                       linkCount ? jsxs6("span", { className: "shrink-0 inline-flex items-center gap-0.5", children: [
                         jsx6(Codicon5, { name: "references", size: "0.6rem" }),
                         String(linkCount)
