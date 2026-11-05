@@ -814,6 +814,9 @@ export function lastActivity(task) {
 export function relativeAge(ts, now, units = {}) {
   const u = { now: 'now', m: 'm', h: 'h', d: 'd', w: 'w', mo: 'mo', y: 'y', ...units }
   if (ts == null) return ''
+  // An age without a clock is not an age. A caller that forgets `now` gets `NaN` for every
+  // comparison, all of which are false, so the last branch ran with NaN and the card said `NaNy`.
+  if (!Number.isFinite(Number(ts)) || !Number.isFinite(Number(now))) return ''
   const s = Math.max(0, now - ts)
   if (s < 60) return u.now
   if (s < 3600) return `${Math.floor(s / 60)}${u.m}`

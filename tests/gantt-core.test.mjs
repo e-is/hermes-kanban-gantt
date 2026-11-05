@@ -628,6 +628,12 @@ test('relativeAge grows with the gap and is empty without a timestamp', () => {
   const out = order.map(t => relativeAge(t, NOW))
   assert.equal(new Set(out).size, out.length)
   assert.equal(relativeAge(NOW + 10, NOW), 'now')
+  // A caller that forgets the clock must get nothing, never `NaNy`: every comparison against NaN is
+  // false, so the year branch used to run and the card printed `NaNy` beside the agent's initial.
+  assert.equal(relativeAge(NOW - 300), '')
+  assert.equal(relativeAge(NOW - 300, undefined), '')
+  assert.equal(relativeAge(NaN, NOW), '')
+  assert.equal(relativeAge('not a date', NOW), '')
 })
 
 test('relativeAge speaks the locale it is given', () => {

@@ -540,6 +540,7 @@ function lastActivity(task) {
 function relativeAge(ts, now, units = {}) {
   const u = { now: "now", m: "m", h: "h", d: "d", w: "w", mo: "mo", y: "y", ...units };
   if (ts == null) return "";
+  if (!Number.isFinite(Number(ts)) || !Number.isFinite(Number(now))) return "";
   const s = Math.max(0, now - ts);
   if (s < 60) return u.now;
   if (s < 3600) return `${Math.floor(s / 60)}${u.m}`;
