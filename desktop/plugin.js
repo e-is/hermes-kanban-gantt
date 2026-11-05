@@ -5724,6 +5724,7 @@ function lastActivity(task) {
 function relativeAge(ts, now, units = {}) {
   const u = { now: "now", m: "m", h: "h", d: "d", w: "w", mo: "mo", y: "y", ...units };
   if (ts == null) return "";
+  if (!Number.isFinite(Number(ts)) || !Number.isFinite(Number(now))) return "";
   const s = Math.max(0, now - ts);
   if (s < 60) return u.now;
   if (s < 3600) return `${Math.floor(s / 60)}${u.m}`;
@@ -7889,6 +7890,7 @@ function GraphView({
   sortBy = "status"
 }) {
   const showPrefixTags = useValue2($titlePrefixTags);
+  const nowSec = Math.floor(Date.now() / 1e3);
   const [foldedCols, setFoldedCols] = useState4(() => {
     try {
       const raw = localStorage.getItem("hermes.plugin.kanban-gantt.graphFolded");
@@ -7958,8 +7960,8 @@ function GraphView({
   const nodeW = tallCards ? NODE_W + 48 : NODE_W;
   const heightOf = (n) => {
     const longTitle = (n.title || "").length > 30;
-    const hasSummary = tallCards && Boolean(n.summary);
-    return 52 + (longTitle ? 14 : 0) + (hasSummary ? 30 : 0);
+    const hasSummary = Boolean(n.summary);
+    return 46 + (longTitle ? 16 : 0) + (hasSummary ? 28 : 0);
   };
   const layout = useMemo2(
     () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, collapsed: [...foldedCols], heightOf, groupBy: grouping ? (n) => n.board || "" : null }),
@@ -8685,6 +8687,7 @@ function GraphView({
               const statusMode = arrangement === "status";
               const linkCount = linkCounts.get(node.id) || 0;
               const runNow = (node.runs || []).find((r) => (r.status || r.outcome) === "running");
+              const runAge = runNow ? relativeAge(runNow.started_at ?? runNow.startedAt, nowSec, i18n.relativeUnits) : "";
               const failed = (node.runs || []).some((r) => ["crashed", "failed", "spawn_failed", "gave_up"].includes(r.outcome || r.status));
               const isSelected = node.id === selectedId;
               const inLineage = lin ? lin.up.has(node.id) || lin.down.has(node.id) : false;
@@ -8760,7 +8763,7 @@ function GraphView({
                 },
                 children: [
                   jsxs6("div", {
-                    className: "flex items-start gap-1 px-1.5 pt-1 min-w-0",
+                    className: "shrink-0 flex items-start gap-1 px-1.5 pt-1 min-w-0",
                     children: [
                       // The status icon is the graph's own compass — in a column the header already
                       // carries the state, and the icon only pushed the title right of the summary
@@ -8777,21 +8780,21 @@ function GraphView({
                       }),
                       jsxs6("span", {
                         className: cn3(
-                          "min-w-0 flex-1 leading-tight text-(--ui-text-primary)",
-                          tallCards ? "text-[13px]" : "text-[12.5px] truncate"
+                          "min-w-0 flex-1 leading-snug text-(--ui-text-primary)",
+                          statusMode || tallCards ? "" : "truncate"
                         ),
-                        // ONE style object, and weights inline: this is the only text in the
-                        // card that matters, and a class the host bundle does not compile would
-                        // leave it exactly as small as it was. Two `style` keys in the same
-                        // literal would silently keep only the last — which is how the first
-                        // attempt at bold ended up at 400.
+                        // The bundled card's own type: 13px at weight 500 in the foreground, with the
+                        // summary a size smaller and tertiary. Weight 600 here read as bold next to
+                        // that summary, which is the contrast the bundled card uses to separate the
+                        // two lines — not two weights fighting each other.
                         style: {
-                          fontWeight: 600,
-                          ...tallCards ? {
+                          fontSize: "0.8125rem",
+                          fontWeight: 500,
+                          ...statusMode || tallCards ? {
                             whiteSpace: "normal",
                             overflowWrap: "anywhere",
                             display: "-webkit-box",
-                            WebkitLineClamp: "3",
+                            WebkitLineClamp: "2",
                             WebkitBoxOrient: "vertical",
                             overflow: "hidden"
                           } : {}
@@ -8809,14 +8812,18 @@ function GraphView({
                     ]
                   }),
                   // The bundled card's second line, and the one change that makes a card read as a
-                  // card rather than as a label: what the worker last said. Tall cards only — at
-                  // 62px it would eat the title, which is the thing that must never be clipped.
-                  tallCards && node.summary ? jsx6("div", {
+                  // card rather than as a label: what the worker last said. It is the flexible part
+                  // of the card — two lines, and the first thing to give way when a column makes the
+                  // card shorter — because the title and the footer must never be clipped.
+                  node.summary ? jsx6("div", {
+                    className: "shrink min-h-0",
                     style: {
                       padding: "0 6px",
                       marginTop: "2px",
-                      fontSize: "10.5px",
-                      lineHeight: 1.25,
+                      // The bundled card's summary line: a size below the title, same leading, and
+                      // tertiary — the contrast between the two lines is the hierarchy.
+                      fontSize: "0.6875rem",
+                      lineHeight: 1.375,
                       color: "var(--ui-text-tertiary)",
                       display: "-webkit-box",
                       WebkitLineClamp: "2",
@@ -8827,11 +8834,11 @@ function GraphView({
                     children: node.summary
                   }) : null,
                   jsxs6("div", {
-                    className: "mt-auto flex items-center gap-1.5 px-1.5 pb-0.5 min-w-0",
+                    className: "shrink-0 mt-auto flex items-center gap-1.5 px-1.5 pb-0.5 min-w-0",
                     style: { fontSize: "9px", color: "var(--ui-text-quaternary)", fontVariantNumeric: "tabular-nums" },
                     children: [
                       // Left: the agent's own word — what it is doing right now, or why it is stuck.
-                      runNow ? jsx6("span", { className: "shrink-0", style: { color: tone }, children: relativeAge(runNow.started_at || runNow.startedAt) }) : node.status === "blocked" && node.blockKind ? jsx6("span", { className: "shrink-0 truncate", style: { color: "var(--ui-status-danger, #f87171)" }, title: node.blockKind, children: node.blockKind }) : null,
+                      runAge ? jsx6("span", { className: "shrink-0", style: { color: tone }, children: runAge }) : node.status === "blocked" && node.blockKind ? jsx6("span", { className: "shrink-0 truncate", style: { color: "var(--ui-status-danger, #f87171)" }, title: node.blockKind, children: node.blockKind }) : null,
                       // Tall cards name the agent, and the bundled card keeps the avatar BESIDE the
                       // name — the letter on one side and the name on the other reads as two
                       // different agents. Compact cards have no room for the name, so the avatar

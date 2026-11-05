@@ -700,7 +700,20 @@ async def capture_graph(ui: Desktop, name: str = "screenshot-en-08-graph"):
         print("  ! scope toggle not found — the scope stays as the run found it")
     if await click_attr(ui, "Fit"):
         await asyncio.sleep(1.4)
-    return await ui.shot(name)
+    shot = await ui.shot(name)
+    # The status arrangement is a second feature of the same view — columns with a header, a tone and
+    # a count, and a fold — and a catalogue that showed only the top-down tree would hide it. Same
+    # camera, one menu away.
+    if await click_attr(ui, "How the cards are arranged"):
+        await asyncio.sleep(0.7)
+        if await click_exact(ui, "Columns by status", selector="[role=menuitem]"):
+            await asyncio.sleep(1.8)
+            if await click_attr(ui, "Fit"):
+                await asyncio.sleep(1.4)
+            await ui.shot(name.replace("08-graph", "09-status"))
+        else:
+            print("  ! « Columns by status » not in the arrangement menu — no status shot")
+    return shot
 
 
 async def run_scenario(ui: Desktop, *, make_gif: bool):
