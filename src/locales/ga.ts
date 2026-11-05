@@ -92,6 +92,7 @@ export const ga = {
     result: 'Toradh',
     latestSummary: 'An achoimre is déanaí',
     runs: n => `Rithe · ${n}`,
+    runsFailed: n => `Rithid teipthe · ${n}`,
     show: 'Taispeáin',
     hide: 'Folaigh',
     comments: n => `Tráchtanna · ${n}`,

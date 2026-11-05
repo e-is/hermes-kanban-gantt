@@ -92,6 +92,7 @@ export const pt = {
     result: 'Resultado',
     latestSummary: 'Último resumo',
     runs: n => `Execuções · ${n}`,
+    runsFailed: n => `Execuções falhadas · ${n}`,
     show: 'Mostrar',
     hide: 'Ocultar',
     comments: n => `Comentários · ${n}`,

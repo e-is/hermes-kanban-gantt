@@ -199,6 +199,7 @@ var en = {
   result: "Result",
   latestSummary: "Latest summary",
   runs: (n) => `Runs · ${n}`,
+  runsFailed: (n) => `Failed runs · ${n}`,
   show: "Show",
   hide: "Hide",
   comments: (n) => `Comments · ${n}`,
@@ -484,6 +485,7 @@ var fr = {
   result: "Résultat",
   latestSummary: "Dernier résumé",
   runs: (n) => `Exécutions · ${n}`,
+  runsFailed: (n) => `Échecs · ${n}`,
   show: "Afficher",
   hide: "Masquer",
   comments: (n) => `Commentaires · ${n}`,
@@ -767,6 +769,7 @@ var zh = {
   result: "结果",
   latestSummary: "最新摘要",
   runs: (n) => `运行记录 · ${n}`,
+  runsFailed: (n) => `失败的运行 · ${n}`,
   show: "展开",
   hide: "收起",
   comments: (n) => `评论 · ${n}`,
@@ -1047,6 +1050,7 @@ var af = {
   result: "Resultaat",
   latestSummary: "Jongste opsomming",
   runs: (n) => `Lopies · ${n}`,
+  runsFailed: (n) => `Mislukte lopies · ${n}`,
   show: "Wys",
   hide: "Versteek",
   comments: (n) => `Kommentaar · ${n}`,
@@ -1332,6 +1336,7 @@ var ar = {
   result: "النتيجة",
   latestSummary: "آخر ملخّص",
   runs: (n) => `التشغيلات · ${n}`,
+  runsFailed: (n) => `تشغيلات فاشلة · ${n}`,
   show: "عرض",
   hide: "إخفاء",
   comments: (n) => `التعليقات · ${n}`,
@@ -1617,6 +1622,7 @@ var de = {
   result: "Ergebnis",
   latestSummary: "Letzte Zusammenfassung",
   runs: (n) => `Läufe · ${n}`,
+  runsFailed: (n) => `Fehlgeschlagene Läufe · ${n}`,
   show: "Anzeigen",
   hide: "Ausblenden",
   comments: (n) => `Kommentare · ${n}`,
@@ -1902,6 +1908,7 @@ var es = {
   result: "Resultado",
   latestSummary: "Último resumen",
   runs: (n) => `Ejecuciones · ${n}`,
+  runsFailed: (n) => `Ejecuciones fallidas · ${n}`,
   show: "Mostrar",
   hide: "Ocultar",
   comments: (n) => `Comentarios · ${n}`,
@@ -2187,6 +2194,7 @@ var ga = {
   result: "Toradh",
   latestSummary: "An achoimre is déanaí",
   runs: (n) => `Rithe · ${n}`,
+  runsFailed: (n) => `Rithid teipthe · ${n}`,
   show: "Taispeáin",
   hide: "Folaigh",
   comments: (n) => `Tráchtanna · ${n}`,
@@ -2472,6 +2480,7 @@ var hu = {
   result: "Eredmény",
   latestSummary: "Legutóbbi összefoglaló",
   runs: (n) => `Futtatások · ${n}`,
+  runsFailed: (n) => `Sikertelen futások · ${n}`,
   show: "Megjelenítés",
   hide: "Elrejtés",
   comments: (n) => `Hozzászólások · ${n}`,
@@ -2757,6 +2766,7 @@ var it = {
   result: "Risultato",
   latestSummary: "Ultimo riepilogo",
   runs: (n) => `Esecuzioni · ${n}`,
+  runsFailed: (n) => `Esecuzioni fallite · ${n}`,
   show: "Mostra",
   hide: "Nascondi",
   comments: (n) => `Commenti · ${n}`,
@@ -3042,6 +3052,7 @@ var ja = {
   result: "結果",
   latestSummary: "最新のサマリー",
   runs: (n) => `実行 · ${n}`,
+  runsFailed: (n) => `失敗した実行 · ${n}`,
   show: "表示",
   hide: "非表示",
   comments: (n) => `コメント · ${n}`,
@@ -3327,6 +3338,7 @@ var ko = {
   result: "결과",
   latestSummary: "최근 요약",
   runs: (n) => `실행 기록 · ${n}`,
+  runsFailed: (n) => `실패한 실행 · ${n}`,
   show: "표시",
   hide: "숨기기",
   comments: (n) => `댓글 · ${n}`,
@@ -3612,6 +3624,7 @@ var pt = {
   result: "Resultado",
   latestSummary: "Último resumo",
   runs: (n) => `Execuções · ${n}`,
+  runsFailed: (n) => `Execuções falhadas · ${n}`,
   show: "Mostrar",
   hide: "Ocultar",
   comments: (n) => `Comentários · ${n}`,
@@ -3897,6 +3910,7 @@ var ru = {
   result: "Результат",
   latestSummary: "Последняя сводка",
   runs: (n) => `Запуски · ${n}`,
+  runsFailed: (n) => `Неудачные запуски · ${n}`,
   show: "Показать",
   hide: "Скрыть",
   comments: (n) => `Комментарии · ${n}`,
@@ -4177,6 +4191,7 @@ var tr = {
   result: "Sonuç",
   latestSummary: "Son özet",
   runs: (n) => `Çalıştırmalar · ${n}`,
+  runsFailed: (n) => `Başarısız çalışmalar · ${n}`,
   show: "Göster",
   hide: "Gizle",
   comments: (n) => `Yorumlar · ${n}`,
@@ -4462,6 +4477,7 @@ var uk = {
   result: "Результат",
   latestSummary: "Останній підсумок",
   runs: (n) => `Запуски · ${n}`,
+  runsFailed: (n) => `Невдалі запуски · ${n}`,
   show: "Показати",
   hide: "Сховати",
   comments: (n) => `Коментарі · ${n}`,
@@ -4742,6 +4758,7 @@ var zhHant = {
   result: "結果",
   latestSummary: "最新摘要",
   runs: (n) => `執行紀錄 · ${n}`,
+  runsFailed: (n) => `失敗的執行 · ${n}`,
   show: "顯示",
   hide: "隱藏",
   comments: (n) => `留言 · ${n}`,
@@ -8688,7 +8705,9 @@ function GraphView({
               const linkCount = linkCounts.get(node.id) || 0;
               const runNow = (node.runs || []).find((r) => (r.status || r.outcome) === "running");
               const runAge = runNow ? relativeAge(runNow.started_at ?? runNow.startedAt, nowSec, i18n.relativeUnits) : "";
-              const failed = (node.runs || []).some((r) => ["crashed", "failed", "spawn_failed", "gave_up"].includes(r.outcome || r.status));
+              const failedRuns = (node.runs || []).filter((r) => ["crashed", "failed", "spawn_failed", "gave_up"].includes(r.outcome || r.status));
+              const failed = failedRuns.length > 0;
+              const lastFailure = failed ? failedRuns[failedRuns.length - 1].summary || "" : "";
               const isSelected = node.id === selectedId;
               const inLineage = lin ? lin.up.has(node.id) || lin.down.has(node.id) : false;
               const faded = Boolean(lin) && !isSelected && !inLineage;
@@ -8803,13 +8822,18 @@ function GraphView({
                       statusMode ? null : jsx6("span", {
                         className: "shrink-0 inline-flex items-center justify-center mt-[1px]",
                         style: { color: tone },
-                        title: node.status,
+                        // The glyph alone reads as a colour; the tooltip says the state in the
+                        // reader's own language, and for a run in progress, for how long.
+                        title: `${i18n.status?.[node.status] || node.status}${runAge ? ` · ${runAge}` : ""}`,
                         children: node.status === "running" ? jsxs6("span", { className: "relative inline-flex items-center justify-center", children: [
                           jsx6("span", { className: "kg-arc", style: { "--kanban-tone": tone } }),
                           jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
                         ] }) : jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
                       }),
-                      failed ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0 text-[#f87171]", title: i18n.runs((node.runs || []).length) }) : node.status === "blocked" ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0", style: { color: statusTone("blocked") }, title: node.status }) : null
+                      // The title row keeps one state glyph (the status icon, above) and, for a
+                      // blocked card, the reason it is blocked — the failed runs are counted in the
+                      // footer now.
+                      node.status === "blocked" ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0", style: { color: statusTone("blocked") }, title: node.blockKind || i18n.status.blocked }) : null
                     ]
                   }),
                   // The bundled card's second line, and the one change that makes a card read as a
@@ -8873,6 +8897,17 @@ function GraphView({
                         onPreview: (att, siblings) => $openAttachment.set(
                           attachmentPreviewState(node.id, node.board || board, att, siblings)
                         )
+                      }) : null,
+                      // Failed runs are a count, and counts live in the footer — the bundled card keeps
+                      // its warning here too, glyph plus number, rather than a second flag beside the
+                      // title where the state already has its own glyph.
+                      failed ? jsxs6("span", {
+                        className: "shrink-0 inline-flex items-center gap-0.5 text-[#f87171]",
+                        title: lastFailure ? `${i18n.runsFailed(failedRuns.length)} — ${lastFailure}` : i18n.runsFailed(failedRuns.length),
+                        children: [
+                          jsx6(Codicon5, { name: "warning", size: "0.6rem" }),
+                          String(failedRuns.length)
+                        ]
                       }) : null,
                       // The avatar sits beside the name in tall cards, so the right edge keeps it
                       // only when there is no name there to pair it with — otherwise the letter

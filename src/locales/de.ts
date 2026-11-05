@@ -92,6 +92,7 @@ export const de = {
     result: 'Ergebnis',
     latestSummary: 'Letzte Zusammenfassung',
     runs: n => `Läufe · ${n}`,
+    runsFailed: n => `Fehlgeschlagene Läufe · ${n}`,
     show: 'Anzeigen',
     hide: 'Ausblenden',
     comments: n => `Kommentare · ${n}`,

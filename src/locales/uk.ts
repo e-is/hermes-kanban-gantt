@@ -92,6 +92,7 @@ export const uk = {
     result: 'Результат',
     latestSummary: 'Останній підсумок',
     runs: n => `Запуски · ${n}`,
+    runsFailed: n => `Невдалі запуски · ${n}`,
     show: 'Показати',
     hide: 'Сховати',
     comments: n => `Коментарі · ${n}`,

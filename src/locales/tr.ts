@@ -92,6 +92,7 @@ export const tr = {
     result: 'Sonuç',
     latestSummary: 'Son özet',
     runs: n => `Çalıştırmalar · ${n}`,
+    runsFailed: n => `Başarısız çalışmalar · ${n}`,
     show: 'Göster',
     hide: 'Gizle',
     comments: n => `Yorumlar · ${n}`,
