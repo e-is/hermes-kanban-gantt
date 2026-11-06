@@ -43,6 +43,37 @@ import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
 
 // src/state.ts
 import { atom } from "@hermes/plugin-sdk";
+
+// src/core/pins-core.ts
+function togglePin(pins, slug, pinned) {
+  if (!slug) {
+    return [...pins];
+  }
+  const has = pins.includes(slug);
+  if (pinned === has) {
+    return [...pins];
+  }
+  return pinned ? [...pins, slug] : pins.filter((item) => item !== slug);
+}
+function movePin(pins, slug, target) {
+  const next = [...pins];
+  const from = next.indexOf(slug);
+  const to = next.indexOf(target);
+  if (from < 0 || to < 0 || from === to) {
+    return next;
+  }
+  next.splice(from, 1);
+  next.splice(to, 0, slug);
+  return next;
+}
+function normalizePins(raw) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return [...new Set(raw.filter((item) => typeof item === "string" && item.length > 0))];
+}
+
+// src/state.ts
 var LABEL_W = 300;
 var rest = null;
 var storage = null;
@@ -50,6 +81,7 @@ var socket = null;
 var $baseUrl = atom("");
 var $boardSlug = atom("");
 var $connectionScope = atom("");
+var $pinnedBoards = atom([]);
 var $labelW = atom(LABEL_W);
 var $drawerW = atom(416);
 var $drawerDocked = atom(false);
@@ -105,6 +137,26 @@ function setPluginDoors(restFn, storageObj, socketFn) {
 }
 var getStorage = () => storage;
 var getSocket = () => socket;
+var boardStorageKey = () => {
+  const scope = $connectionScope.get();
+  return scope ? `board.${scope}` : "board";
+};
+var PINS_KEY = "pinnedBoards";
+var pinsStorageKey = () => {
+  const scope = $connectionScope.get();
+  return scope ? `${PINS_KEY}.${scope}` : PINS_KEY;
+};
+function readStoredPins() {
+  if (!storage) return [];
+  try {
+    return normalizePins(storage.get(pinsStorageKey(), []));
+  } catch {
+    return [];
+  }
+}
+function savePins(pins) {
+  if (storage) storage.set(pinsStorageKey(), pins);
+}
 
 // src/i18n.ts
 import { useMemo } from "react";
@@ -119,6 +171,10 @@ var en = {
   refreshWhy: "Live updates are off for this gateway or client, so the page follows a 60 s poll — refresh now instead of waiting.",
   backend: "Backend:",
   allBoards: "All boards",
+  pinBoard: "Pin board",
+  unpinBoard: "Unpin board",
+  pinnedBoards: "Pinned boards",
+  pinnedBoardsHint: "Drag to reorder, or press Alt + Left/Right",
   board: "Board:",
   noBoard: "no board",
   dockDrawer: "Dock the drawer next to the gantt",
@@ -404,6 +460,10 @@ var fr = {
   refreshWhy: "Les mises à jour en direct sont désactivées pour cette gateway ou ce client : la page suit un sondage de 60 s — actualisez maintenant plutôt que d'attendre.",
   backend: "Backend :",
   allBoards: "Tous les boards",
+  pinBoard: "Épingler le board",
+  unpinBoard: "Détacher le board",
+  pinnedBoards: "Boards épinglés",
+  pinnedBoardsHint: "Glissez pour réordonner, ou Alt + Gauche/Droite",
   board: "Board :",
   noBoard: "aucun board",
   dockDrawer: "Ancrer la vue à côté du gantt",
@@ -698,6 +758,10 @@ var zh = {
   refreshWhy: "此网关或客户端的实时更新已关闭，页面改用 60 秒轮询——可立即刷新，无需等待。",
   backend: "后端：",
   allBoards: "全部看板",
+  pinBoard: "固定看板",
+  unpinBoard: "取消固定看板",
+  pinnedBoards: "已固定的看板",
+  pinnedBoardsHint: "拖动可重新排序，或按 Alt + 左/右方向键",
   board: "看板：",
   noBoard: "无看板",
   dockDrawer: "将详情面板固定在甘特图旁",
@@ -967,6 +1031,10 @@ var af = {
   refreshWhy: "Regstreekse opdaterings is af vir hierdie gateway of kliënt, so die bladsy volg 'n peiling van 60 s — verfris nou eerder as om te wag.",
   backend: "Agterkant:",
   allBoards: "Alle borde",
+  pinBoard: "Pen bord vas",
+  unpinBoard: "Maak die bord los",
+  pinnedBoards: "Vasgemaakte borde",
+  pinnedBoardsHint: "Sleep om te herrangskik, of druk Alt + Links/Regs",
   board: "Bord:",
   noBoard: "geen bord",
   dockDrawer: "Dok die laai langs die gantt",
@@ -1252,6 +1320,10 @@ var ar = {
   refreshWhy: "التحديثات المباشرة معطّلة لهذه البوابة أو هذا العميل، لذا تعتمد الصفحة على استطلاع كل 60 ثانية — حدّث الآن بدل الانتظار.",
   backend: "الخادم الخلفي:",
   allBoards: "كل اللوحات",
+  pinBoard: "تثبيت اللوحة",
+  unpinBoard: "إلغاء تثبيت اللوحة",
+  pinnedBoards: "اللوحات المثبتة",
+  pinnedBoardsHint: "اسحب لإعادة الترتيب، أو Alt + اليسار/اليمين",
   board: "اللوحة:",
   noBoard: "لا لوحة",
   dockDrawer: "تثبيت الدرج بجانب مخطط جانت",
@@ -1537,6 +1609,10 @@ var de = {
   refreshWhy: "Live-Aktualisierungen sind für dieses Gateway bzw. diesen Client deaktiviert, daher folgt die Seite einem 60-Sekunden-Abruf – jetzt aktualisieren, statt zu warten.",
   backend: "Backend:",
   allBoards: "Alle Boards",
+  pinBoard: "Board anheften",
+  unpinBoard: "Board lösen",
+  pinnedBoards: "Angeheftete Boards",
+  pinnedBoardsHint: "Zum Umsortieren ziehen oder Alt + Links/Rechts",
   board: "Board:",
   noBoard: "kein Board",
   dockDrawer: "Detailbereich neben dem Gantt andocken",
@@ -1822,6 +1898,10 @@ var es = {
   refreshWhy: "Las actualizaciones en vivo están desactivadas para esta gateway o este cliente, así que la página sigue un sondeo de 60 s: actualiza ahora en lugar de esperar.",
   backend: "Backend:",
   allBoards: "Todos los tableros",
+  pinBoard: "Fijar el tablero",
+  unpinBoard: "Desfijar el tablero",
+  pinnedBoards: "Tableros fijados",
+  pinnedBoardsHint: "Arrastra para reordenar, o Alt + Izquierda/Derecha",
   board: "Tablero:",
   noBoard: "ningún tablero",
   dockDrawer: "Anclar el panel junto al gantt",
@@ -2107,6 +2187,10 @@ var ga = {
   refreshWhy: "Tá nuashonruithe beo múchta don gateway nó don chliant seo, mar sin leanann an leathanach pobal 60 s — athnuaigh anois in ionad fanacht.",
   backend: "Cúlcóras:",
   allBoards: "Gach bord",
+  pinBoard: "Pionn an clár",
+  unpinBoard: "Díphionn an clár",
+  pinnedBoards: "Cláir phionnáilte",
+  pinnedBoardsHint: "Tarraing chun atheagrú, nó Alt + Clé/Deas",
   board: "Bord:",
   noBoard: "gan bord",
   dockDrawer: "Duga an tarraiceán le hais an ghantt",
@@ -2392,6 +2476,10 @@ var hu = {
   refreshWhy: "Ennél az átjárónál vagy kliensnél az élő frissítés ki van kapcsolva, ezért az oldal 60 másodperces lekérdezést követ — frissítsen most, ne várjon.",
   backend: "Háttérrendszer:",
   allBoards: "Minden tábla",
+  pinBoard: "Tábla kitűzése",
+  unpinBoard: "Tábla kitűzésének feloldása",
+  pinnedBoards: "Kitűzött táblák",
+  pinnedBoardsHint: "Húzd át az átrendezéshez, vagy Alt + Bal/Jobb",
   board: "Tábla:",
   noBoard: "nincs tábla",
   dockDrawer: "Fiók rögzítése a Gantt mellé",
@@ -2677,6 +2765,10 @@ var it = {
   refreshWhy: "Gli aggiornamenti live sono disattivati per questo gateway o client, quindi la pagina segue un polling di 60 s: aggiorna subito invece di aspettare.",
   backend: "Backend:",
   allBoards: "Tutte le board",
+  pinBoard: "Fissa la board",
+  unpinBoard: "Rimuovi la board",
+  pinnedBoards: "Board fissate",
+  pinnedBoardsHint: "Trascina per riordinare, oppure Alt + Sinistra/Destra",
   board: "Board:",
   noBoard: "nessuna board",
   dockDrawer: "Aggancia il pannello accanto al Gantt",
@@ -2962,6 +3054,10 @@ var ja = {
   refreshWhy: "このゲートウェイまたはクライアントではライブ更新が無効なため、ページは 60 秒間隔のポーリングで更新されます — 待たずに今すぐ更新してください。",
   backend: "バックエンド:",
   allBoards: "すべてのボード",
+  pinBoard: "ボードを固定",
+  unpinBoard: "ボードの固定を解除",
+  pinnedBoards: "固定したボード",
+  pinnedBoardsHint: "ドラッグ、または Alt + 左右キーで並べ替え",
   board: "ボード:",
   noBoard: "ボードなし",
   dockDrawer: "ドロワーをガントの横に固定",
@@ -3247,6 +3343,10 @@ var ko = {
   refreshWhy: "이 게이트웨이 또는 클라이언트에서는 실시간 업데이트가 꺼져 있어 페이지가 60초 폴링을 사용합니다 — 기다리지 말고 지금 새로 고치세요.",
   backend: "백엔드:",
   allBoards: "모든 보드",
+  pinBoard: "보드 고정",
+  unpinBoard: "보드 고정 해제",
+  pinnedBoards: "고정된 보드",
+  pinnedBoardsHint: "드래그하거나 Alt + 왼쪽/오른쪽 키로 순서 변경",
   board: "보드:",
   noBoard: "보드 없음",
   dockDrawer: "상세 패널을 간트 옆에 고정",
@@ -3532,6 +3632,10 @@ var pt = {
   refreshWhy: "As atualizações em direto estão desativadas para este gateway ou cliente, por isso a página segue uma sondagem de 60 s — atualize agora em vez de esperar.",
   backend: "Backend:",
   allBoards: "Todos os quadros",
+  pinBoard: "Fixar o quadro",
+  unpinBoard: "Desafixar o quadro",
+  pinnedBoards: "Quadros fixados",
+  pinnedBoardsHint: "Arraste para reordenar, ou Alt + Esquerda/Direita",
   board: "Quadro:",
   noBoard: "nenhum quadro",
   dockDrawer: "Fixar o painel ao lado do gantt",
@@ -3817,6 +3921,10 @@ var ru = {
   refreshWhy: "Живые обновления отключены для этого шлюза или клиента, поэтому страница опирается на опрос раз в 60 с — обновите вручную, не дожидаясь.",
   backend: "Бэкенд:",
   allBoards: "Все доски",
+  pinBoard: "Закрепить доску",
+  unpinBoard: "Открепить доску",
+  pinnedBoards: "Закреплённые доски",
+  pinnedBoardsHint: "Перетащите для порядка, или Alt + ←/→",
   board: "Доска:",
   noBoard: "нет доски",
   dockDrawer: "Закрепить панель рядом с Gantt",
@@ -4097,6 +4205,10 @@ var tr = {
   refreshWhy: "Bu ağ geçidi veya istemci için canlı güncellemeler kapalı, bu yüzden sayfa 60 sn’lik bir yoklamayı izliyor — beklemek yerine şimdi yenileyin.",
   backend: "Arka uç:",
   allBoards: "Tüm panolar",
+  pinBoard: "Panoyu sabitle",
+  unpinBoard: "Panonun sabitlemesini kaldır",
+  pinnedBoards: "Sabitlenmiş panolar",
+  pinnedBoardsHint: "Yeniden sıralamak için sürükleyin veya Alt + Sol/Sağ",
   board: "Pano:",
   noBoard: "pano yok",
   dockDrawer: "Çekmeceyi Gantt görünümünün yanına sabitle",
@@ -4382,6 +4494,10 @@ var uk = {
   refreshWhy: "Живі оновлення вимкнено для цього шлюзу або клієнта, тому сторінка покладається на опитування раз на 60 с — оновіть вручну, не чекаючи.",
   backend: "Бекенд:",
   allBoards: "Усі дошки",
+  pinBoard: "Закріпити дошку",
+  unpinBoard: "Відкріпити дошку",
+  pinnedBoards: "Закріплені дошки",
+  pinnedBoardsHint: "Перетягніть, щоб упорядкувати, або Alt + ←/→",
   board: "Дошка:",
   noBoard: "немає дошки",
   dockDrawer: "Закріпити панель поруч із Gantt",
@@ -4662,6 +4778,10 @@ var zhHant = {
   refreshWhy: "此閘道或用戶端已關閉即時更新，因此頁面改用 60 秒輪詢 — 可立即重新整理，無需等待。",
   backend: "後端：",
   allBoards: "所有看板",
+  pinBoard: "釘選看板",
+  unpinBoard: "取消釘選看板",
+  pinnedBoards: "已釘選的看板",
+  pinnedBoardsHint: "拖曳可重新排序，或按 Alt + 左/右方向鍵",
   board: "看板：",
   noBoard: "無看板",
   dockDrawer: "將詳細面板固定在甘特圖旁",
@@ -5138,9 +5258,10 @@ function subscribeGantt(socketDoor, opts) {
 
 // src/ui/TitlebarBoardSwitcher.tsx
 import { Button, cn, Codicon, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, useQuery, useQueryClient, useValue } from "@hermes/plugin-sdk";
-import { jsx, jsxs } from "react/jsx-runtime";
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 function TitlebarBoardSwitcher() {
   const board = useValue($boardSlug);
+  const pinned = useValue($pinnedBoards);
   const i18n = useGanttI18n();
   const queryClient = useQueryClient();
   const { data } = useQuery({
@@ -5151,16 +5272,23 @@ function TitlebarBoardSwitcher() {
   const boards = data?.boards || [];
   const isAllBoards = board === "all" || board === "*";
   const current = isAllBoards ? { slug: "all", label: i18n.allBoards } : boards.find((b) => b.slug === (board || data?.current));
+  const isPinned = !isAllBoards && !!current && pinned.includes(current.slug);
   const setBoard = (slug) => {
     $boardSlug.set(slug);
-    if (getStorage()) getStorage().set("board", slug);
+    if (getStorage()) getStorage().set(boardStorageKey(), slug);
     void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
   };
-  return /* @__PURE__ */ jsxs(DropdownMenu, { children: [
+  const toggleCurrentPin = () => {
+    if (isAllBoards || !current) return;
+    const next = togglePin($pinnedBoards.get(), current.slug, !isPinned);
+    $pinnedBoards.set(next);
+    savePins(next);
+  };
+  return /* @__PURE__ */ jsx("div", { className: "flex min-w-0 max-w-full items-center gap-1", children: /* @__PURE__ */ jsxs(DropdownMenu, { children: [
     /* @__PURE__ */ jsx(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx(
       Button,
       {
-        className: "h-full min-w-0 max-w-full gap-1.5 px-2 [-webkit-app-region:no-drag]",
+        className: "h-full min-w-0 max-w-full shrink gap-1.5 px-2 [-webkit-app-region:no-drag]",
         size: "sm",
         variant: "ghost",
         children: /* @__PURE__ */ jsxs("span", { className: "flex min-w-0 items-center gap-1.5", children: [
@@ -5185,9 +5313,16 @@ function TitlebarBoardSwitcher() {
           typeof b.total === "number" && /* @__PURE__ */ jsx("span", { className: "text-[0.625rem] tabular-nums text-(--ui-text-quaternary)", children: b.total }),
           isCurrent && /* @__PURE__ */ jsx(Codicon, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
         ] }, b.slug);
-      })
+      }),
+      !isAllBoards && current && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx(DropdownMenuSeparator, {}),
+        /* @__PURE__ */ jsxs(DropdownMenuItem, { onSelect: toggleCurrentPin, children: [
+          /* @__PURE__ */ jsx(Codicon, { className: "shrink-0", name: isPinned ? "pinned" : "pin", size: "0.8rem" }),
+          /* @__PURE__ */ jsx("span", { className: "min-w-0 flex-1 truncate", children: isPinned ? i18n.unpinBoard : i18n.pinBoard })
+        ] })
+      ] })
     ] })
-  ] });
+  ] }) });
 }
 
 // src/ui/NewTaskDialog.tsx
@@ -6072,7 +6207,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@hermes/plugin-sdk";
-import { Fragment, jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
+import { Fragment as Fragment2, jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
 function MoveTaskDialog({ open, task, boards, currentBoard, i18n, onClose, onMove }) {
   const [target, setTarget] = useState2("");
   const [error, setError] = useState2(null);
@@ -6121,7 +6256,7 @@ function MoveTaskDialog({ open, task, boards, currentBoard, i18n, onClose, onMov
     error ? /* @__PURE__ */ jsx3("span", { className: "text-[0.75rem] text-destructive", children: error }) : null,
     /* @__PURE__ */ jsxs3(DialogFooter2, { children: [
       /* @__PURE__ */ jsx3(Button3, { disabled: busy, onClick: onClose, variant: "text", children: i18n.cancel }),
-      /* @__PURE__ */ jsx3(Button3, { disabled: !target || busy, onClick: () => void submit(), children: busy ? /* @__PURE__ */ jsxs3(Fragment, { children: [
+      /* @__PURE__ */ jsx3(Button3, { disabled: !target || busy, onClick: () => void submit(), children: busy ? /* @__PURE__ */ jsxs3(Fragment2, { children: [
         /* @__PURE__ */ jsx3(Codicon3, { name: "loading", size: "0.75rem", spinning: true }),
         i18n.moving
       ] }) : i18n.moveConfirm })
@@ -7000,10 +7135,6 @@ function connectionScope() {
   } catch {
     return "";
   }
-}
-function boardStorageKey() {
-  const scope = connectionScope();
-  return scope ? `${BOARD_KEY}.${scope}` : BOARD_KEY;
 }
 function openBoardsKey() {
   const scope = connectionScope();
@@ -10692,6 +10823,7 @@ function KanbanGanttPage() {
     if (saved != null) $titlePrefixTags.set(saved === true || saved === "1");
   }, []);
   const openTabs = useValue2($openBoards);
+  const pinnedBoards = useValue2($pinnedBoards);
   const persistTabs = (list) => {
     $openBoards.set(list);
     const s = getStorage();
@@ -10724,6 +10856,11 @@ function KanbanGanttPage() {
     if (board && !list.includes(board)) list = [...list, board];
     if (list.join("|") !== $openBoards.get().join("|")) $openBoards.set(list);
   }, []);
+  useEffect3(() => {
+    const known = (boardsData?.boards || []).map((b) => b.slug);
+    const missing = pinnedBoards.filter((slug) => known.includes(slug) && !openTabs.includes(slug));
+    if (missing.length) persistTabs([...openTabs, ...missing]);
+  }, [pinnedBoards, boardsData, openTabs]);
   const setBoard = (slug) => {
     $boardSlug.set(slug);
     if (getStorage()) getStorage().set(boardStorageKey(), slug);
@@ -11206,7 +11343,7 @@ function KanbanGanttPage() {
           // board A in graph mode and board B in timeline, at their own zooms — the preferences
           // are stored per board. The strip is always there: with one board it is where the "+"
           // lives, and it names what you are looking at.
-          SHOW_BOARD_TABS ? jsxs6("div", {
+          SHOW_BOARD_TABS || pinnedBoards.length > 0 ? jsxs6("div", {
             className: "mb-2 flex items-center gap-1 overflow-x-auto min-w-0",
             role: "tablist",
             "aria-label": i18n.boardsTabs,
@@ -11220,14 +11357,28 @@ function KanbanGanttPage() {
                   slug === board ? "border-(--ui-accent) bg-(--ui-accent)/12 text-(--ui-accent) font-medium" : "border-(--ui-stroke-secondary) text-(--ui-text-tertiary)"
                 ),
                 children: [
+                  // A pinned board carries the pin glyph: the tab is protected, so the close
+                  // button is gone (unpin it in the switcher menu to make it closable again).
+                  pinnedBoards.includes(slug) ? jsx6(Codicon5, { name: "pin", size: "0.65rem", className: "shrink-0 opacity-70" }) : null,
                   jsx6("button", {
                     type: "button",
                     onClick: () => setBoard(slug),
+                    // Alt+Left/Right reorders the strip without switching board — the desktop's
+                    // keyboard path for its pinned tabs.
+                    onKeyDown: (event) => {
+                      const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+                      const index = openTabs.indexOf(slug);
+                      const target = step ? openTabs[index + step] : null;
+                      if (event.altKey && target) {
+                        event.preventDefault();
+                        persistTabs(movePin(openTabs, slug, target));
+                      }
+                    },
                     className: "cursor-pointer border-0 bg-transparent p-0 text-inherit",
                     title: boardLabel(slug),
                     children: boardLabel(slug)
                   }),
-                  openTabs.length > 1 ? jsx6("button", {
+                  openTabs.length > 1 && !pinnedBoards.includes(slug) ? jsx6("button", {
                     type: "button",
                     onClick: (event) => {
                       event.stopPropagation();
@@ -11551,12 +11702,14 @@ var plugin = {
     $baseUrl.set((ctx.storage.get("baseUrl", "") || "").replace(/\/+$/, ""));
     $boardSlug.set(readStoredBoard(ctx.storage));
     $connectionScope.set(connectionScope());
+    $pinnedBoards.set(readStoredPins());
     try {
       const conn = host && host.state && host.state.connectionId;
       if (conn && typeof conn.listen === "function" && typeof ctx.onDispose === "function") {
         ctx.onDispose(conn.listen(() => {
           $connectionScope.set(connectionScope());
           $boardSlug.set(readStoredBoard(ctx.storage));
+          $pinnedBoards.set(readStoredPins());
         }));
       }
     } catch {

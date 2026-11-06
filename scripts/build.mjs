@@ -52,6 +52,14 @@ await build({
 
 await build({
   ...common,
+  // Pin/tab rules for the board quick-switch tabs: standalone so
+  // tests/pins-core.test.mjs exercises the shipped code.
+  entryPoints: [join(root, 'src', 'core', 'pins-core.ts')],
+  outfile: join(root, 'desktop', 'pins-core.js')
+})
+
+await build({
+  ...common,
   // Pure layout of the graph view (phase 1): built standalone so
   // tests/graph-core.test.mjs exercises the shipped code, and so the view can import
   // it without pulling React into the core.

@@ -63,7 +63,8 @@ import {
   LABEL_W, LABEL_W_MIN, LABEL_W_MAX, DRAWER_W_MIN, DRAWER_W_MAX,
   $baseUrl, $boardSlug, $labelW, $drawerW, $drawerDocked, $detailModal, $titlePrefixTags, $openTaskId,
   $openAttachment,
-  $newTask, $moveUnderId, $wsEnabled, $connectionScope, $openBoards,
+  $newTask, $moveUnderId, $wsEnabled, $connectionScope, $openBoards, $pinnedBoards,
+  boardStorageKey, readStoredPins,
   apiBase, apiFetch, fetchBoards, fetchGantt, fetchTask,
   createTask, fetchProjects, fetchProfiles,
   setParent, removeParent, applyBase
@@ -72,6 +73,7 @@ import { getStorage, getSocket } from './state'
 import { GANTT_LOCALES, useGanttI18n } from './i18n'
 import { subscribeGantt } from './ws'
 import { WS_STATE, canPush } from './core/ws-core'
+import { movePin } from './core/pins-core'
 import { TitlebarBoardSwitcher } from './ui/TitlebarBoardSwitcher'
 import { NewTaskDialog } from './ui/NewTaskDialog'
 import { MoveTaskDialog } from './ui/MoveTaskDialog'
@@ -139,11 +141,6 @@ function connectionScope() {
     /* no desktop bridge (standalone server): one scope, one key */
     return ''
   }
-}
-
-function boardStorageKey() {
-  const scope = connectionScope()
-  return scope ? `${BOARD_KEY}.${scope}` : BOARD_KEY
 }
 
 function openBoardsKey() {
@@ -4563,6 +4560,7 @@ export function KanbanGanttPage() {
   }, [])
 
   const openTabs = useValue($openBoards)
+  const pinnedBoards = useValue($pinnedBoards)
 
   const persistTabs = list => {
     $openBoards.set(list)
@@ -4605,6 +4603,15 @@ export function KanbanGanttPage() {
     if (board && !list.includes(board)) list = [...list, board]
     if (list.join('|') !== $openBoards.get().join('|')) $openBoards.set(list)
   }, [])
+
+  // A pinned board is a tab by definition (the desktop's rule): if the open set lost it
+  // — a close, a stale storage, a rename — the pin puts it back. Pinning is therefore
+  // the way to make a board stick around without reopening it by hand.
+  useEffect(() => {
+    const known = (boardsData?.boards || []).map(b => b.slug)
+    const missing = pinnedBoards.filter(slug => known.includes(slug) && !openTabs.includes(slug))
+    if (missing.length) persistTabs([...openTabs, ...missing])
+  }, [pinnedBoards, boardsData, openTabs])
 
   const setBoard = slug => {
     $boardSlug.set(slug)
@@ -5185,7 +5192,7 @@ export function KanbanGanttPage() {
       // board A in graph mode and board B in timeline, at their own zooms — the preferences
       // are stored per board. The strip is always there: with one board it is where the "+"
       // lives, and it names what you are looking at.
-      SHOW_BOARD_TABS
+      SHOW_BOARD_TABS || pinnedBoards.length > 0
         ? jsxs('div', {
         className: 'mb-2 flex items-center gap-1 overflow-x-auto min-w-0',
         role: 'tablist',
@@ -5202,14 +5209,31 @@ export function KanbanGanttPage() {
                 : 'border-(--ui-stroke-secondary) text-(--ui-text-tertiary)'
             ),
             children: [
+              // A pinned board carries the pin glyph: the tab is protected, so the close
+              // button is gone (unpin it in the switcher menu to make it closable again).
+              pinnedBoards.includes(slug)
+                ? jsx(Codicon, { name: 'pin', size: '0.65rem', className: 'shrink-0 opacity-70' })
+                : null,
               jsx('button', {
                 type: 'button',
                 onClick: () => setBoard(slug),
+                // Alt+Left/Right reorders the strip without switching board — the desktop's
+                // keyboard path for its pinned tabs.
+                onKeyDown: event => {
+                  const step = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0
+                  const index = openTabs.indexOf(slug)
+                  const target = step ? openTabs[index + step] : null
+
+                  if (event.altKey && target) {
+                    event.preventDefault()
+                    persistTabs(movePin(openTabs, slug, target))
+                  }
+                },
                 className: 'cursor-pointer border-0 bg-transparent p-0 text-inherit',
                 title: boardLabel(slug),
                 children: boardLabel(slug)
               }),
-              openTabs.length > 1
+              openTabs.length > 1 && !pinnedBoards.includes(slug)
                 ? jsx('button', {
                     type: 'button',
                     onClick: event => { event.stopPropagation(); closeBoardTab(slug) },
@@ -5553,12 +5577,16 @@ const plugin = {
     // make the push client re-subscribe, rather than keeping the previous
     // backend's board and a socket to a dead port.
     $connectionScope.set(connectionScope())
+    // Pinned tabs are read AFTER the scope: the key is per connection, so
+    // reading it before would hand this gateway the previous one's pins.
+    $pinnedBoards.set(readStoredPins())
     try {
       const conn = host && host.state && host.state.connectionId
       if (conn && typeof conn.listen === 'function' && typeof ctx.onDispose === 'function') {
         ctx.onDispose(conn.listen(() => {
           $connectionScope.set(connectionScope())
           $boardSlug.set(readStoredBoard(ctx.storage))
+          $pinnedBoards.set(readStoredPins())
         }))
       }
     } catch {
