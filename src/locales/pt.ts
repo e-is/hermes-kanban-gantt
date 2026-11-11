@@ -299,6 +299,8 @@ export const pt = {
     wbZoomIn: 'Zoom in',
     wbZoomOut: 'Zoom out',
     wbMilestoneHint: 'A milestone card: it gates the next phase, and the dispatcher never runs it.',
+    wbAddMilestone: "Novo marco",
+    wbAddMilestoneHint: "Acrescenta uma parada no fim da estrada — uma nova fase",
     wbMilestone: 'Milestone',
     wbStep: n => `Milestone ${n}`,
     wbLoose: 'No milestone',

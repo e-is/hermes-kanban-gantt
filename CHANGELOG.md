@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.11.1 — you can add a milestone
+
+The whiteboard could read a plan but not extend one: a milestone is a card on the `jalon` lane, and
+nothing offered that lane. Now:
+
+- **`+ New milestone`** in the canvas bar opens the ordinary creation form with **Assign: `jalon`**;
+  the new stop lands at the end of the road (milestones are ordered by creation time).
+- The lane is also **offered with the profiles** in the drawer and the creation form, so any existing
+  card becomes the gate of the next phase by being assigned to it.
+
+`docs/whiteboard.md` — a usage guide, linked from the README: the model, how to add a milestone, how to
+put work in a phase, every gesture and shortcut, what « Run the plan » does, and the limits.
+
 ## 1.11.0 — the whiteboard mode
 
 A fourth view: the board as a spatial plan, in Adolanium/hermes-whiteboard's own look (MIT) — its

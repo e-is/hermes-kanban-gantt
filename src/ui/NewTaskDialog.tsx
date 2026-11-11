@@ -84,6 +84,8 @@ type Props = {
   projects?: ProjectLike[]
   /** Pre-selected parent (opening from a row's "create sub-task"). */
   defaultParentId?: string
+  /** Preselected assignee — the whiteboard's « new milestone » opens the form on the `jalon` lane. */
+  defaultAssignee?: string
   busy?: boolean
   onSubmit: (values: NewTaskValues) => void
   onClose: () => void
@@ -222,6 +224,7 @@ export function NewTaskDialog({
   tasks,
   projects = [],
   defaultParentId,
+  defaultAssignee,
   busy = false,
   onSubmit,
   onClose,
@@ -247,7 +250,7 @@ export function NewTaskDialog({
     if (!open) return
     setTitle('')
     setBody('')
-    setAssignee('')
+    setAssignee(defaultAssignee || '')
     setPriority('0')
     setParentId(defaultParentId || '')
     setTriage(false)
@@ -258,7 +261,7 @@ export function NewTaskDialog({
     setModelOverride('')
     setGoalMode(false)
     keyRef.current = `kg-new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  }, [open, defaultParentId])
+  }, [open, defaultParentId, defaultAssignee])
 
   // A parent that would be nonsense (finished task, another board) is not
   // offered — the backend accepts it anyway, this keeps the list short. The one

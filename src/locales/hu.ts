@@ -299,6 +299,8 @@ export const hu = {
     wbZoomIn: 'Zoom in',
     wbZoomOut: 'Zoom out',
     wbMilestoneHint: 'A milestone card: it gates the next phase, and the dispatcher never runs it.',
+    wbAddMilestone: "Új mérföldkő",
+    wbAddMilestoneHint: "Új állomást tesz az út végére — egy új szakasz",
     wbMilestone: 'Milestone',
     wbStep: n => `Milestone ${n}`,
     wbLoose: 'No milestone',

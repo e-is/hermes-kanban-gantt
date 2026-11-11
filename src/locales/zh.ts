@@ -294,6 +294,8 @@ export const zh = {
     wbZoomIn: 'Zoom in',
     wbZoomOut: 'Zoom out',
     wbMilestoneHint: 'A milestone card: it gates the next phase, and the dispatcher never runs it.',
+    wbAddMilestone: "新建里程碑",
+    wbAddMilestoneHint: "在路线末端添加一站——一个新阶段",
     wbMilestone: 'Milestone',
     wbStep: n => `Milestone ${n}`,
     wbLoose: 'No milestone',

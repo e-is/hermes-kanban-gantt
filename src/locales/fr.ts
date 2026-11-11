@@ -297,6 +297,8 @@ export const fr = {
     wbZoomIn: 'Zoom avant',
     wbZoomOut: 'Zoom arrière',
     wbMilestoneHint: 'Carte jalon : elle gate la phase suivante, et le dispatcher ne la lance jamais.',
+    wbAddMilestone: "Nouveau jalon",
+    wbAddMilestoneHint: "Ajoute une étape au bout de la route — une nouvelle phase",
     wbMilestone: 'Jalon',
     wbStep: n => `Jalon ${n}`,
     wbLoose: 'Sans jalon',

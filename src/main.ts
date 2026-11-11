@@ -4673,7 +4673,9 @@ export function KanbanGanttPage() {
   const assigneeChoices = useMemo(() => {
     const fromBoard = (derived && derived.allAssignees) || []
     const fromProfiles = (profilesData && profilesData.profiles) || []
-    return Array.from(new Set([...fromProfiles, ...fromBoard])).sort()
+    // The milestone lane rides with the profiles: a card becomes a milestone by being assigned
+    // to it, so it has to be pickable — in the drawer as much as in the creation form.
+    return Array.from(new Set([...fromProfiles, ...fromBoard, MILESTONE_LANE])).sort()
   }, [derived, profilesData])
 
   const handleZoomPct = val => {
@@ -5448,6 +5450,7 @@ export function KanbanGanttPage() {
             onPositions: handleWbPos,
             onOpen: id => $openTaskId.set(id),
             onCreate: parentId => $newTask.set({ parentId: parentId || '' }),
+        onAddMilestone: () => $newTask.set({ parentId: '', assignee: MILESTONE_LANE }),
             onLink: (parentId, childId) => reparentMutation.mutate({ childId, parentId, mode: 'add' }),
             onUnlink: (parentId, childId) => unlinkMutation.mutate({ childId, parentId }),
             onHand: handleWbHand,
@@ -5655,6 +5658,7 @@ export function KanbanGanttPage() {
       // Creation dialog (toolbar button, or "create a sub-task" from a task).
       jsx(NewTaskDialog, {
         open: Boolean(newTask),
+        defaultAssignee: newTask ? newTask.assignee : undefined,
         boardSlug: board && board !== 'all' && board !== '*' ? board : undefined,
         assignees: assigneeChoices,
         tasks: (data && data.tasks) || [],

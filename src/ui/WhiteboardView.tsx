@@ -233,7 +233,8 @@ const LINE: Record<string, string> = {
   play: 'M8 5l11 7-11 7Z',
   wand: 'M5 19L15 9M14 4v3M19 9h-3M17.5 5.5l-2 2M11 4.5l.8 1.6M19.5 13l-1.6-.8',
   check: 'M5 12l5 5L20 7',
-  unlink: 'M5 19L19 5M10 5h9v9M5 5l4 4M15 15l4 4'
+  unlink: 'M5 19L19 5M10 5h9v9M5 5l4 4M15 15l4 4',
+  flag: 'M6 21V4M6 4h11l-2.5 4L17 12H6'
 }
 
 function Line({ name }: { name: string }) {
@@ -518,7 +519,8 @@ export function WhiteboardView({
   onUnlink,
   onHand,
   onPass,
-  onCopy
+  onCopy,
+  onAddMilestone
 }: {
   tasks?: any[]
   i18n: any
@@ -532,6 +534,8 @@ export function WhiteboardView({
   onOpen?: (id: string) => void
   /** a new card, under that milestone (or none) — the page's own creation dialog */
   onCreate?: (parentId: string | null) => void
+  /** open the creation form on the milestone lane: the next stop on the road */
+  onAddMilestone?: () => void
   /** parent -> child: the child waits for the parent */
   onLink?: (parentId: string, childId: string) => void
   onUnlink?: (parentId: string, childId: string) => void
@@ -923,6 +927,14 @@ export function WhiteboardView({
                     ]
                   }, 'run'),
                   jsx('span', { className: 'wb-next', children: nextLabel }, 'next'),
+                  jsx('button', {
+                    className: 'wb-btn',
+                    type: 'button',
+                    'data-wb-milestone': true,
+                    title: i18n.wbAddMilestoneHint,
+                    onClick: () => onAddMilestone?.(),
+                    children: [jsx(Line, { name: 'flag' }, 'i'), i18n.wbAddMilestone]
+                  }, 'milestone'),
                   jsx('button', { className: 'wb-btn', type: 'button', onClick: () => copy('md'), title: i18n.wbCopyMd, children: i18n.wbCopyMd }, 'md'),
                   jsx('button', { className: 'wb-btn', type: 'button', onClick: () => copy('csv'), title: i18n.wbCopyCsv, children: i18n.wbCopyCsv }, 'csv')
                 ]
