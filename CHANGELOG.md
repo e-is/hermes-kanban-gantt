@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.1 — 1.10.0, republished
+
+Content is 1.10.0's, unchanged. The `v1.10.0` tag had been pushed from an early draft that still
+carried the throwaway `docs/spikes/ws-proto/` prototype, and a published tag is not rewritten, so the
+released tree (`main`'s merge of #18) ships as **v1.10.1** instead.
+
 ## 1.10.0 — the card tells the truth about itself
 
 Four defects in the graph card, all of them visible on a live board, and three steps toward the
