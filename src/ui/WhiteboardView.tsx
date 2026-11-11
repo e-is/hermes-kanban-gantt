@@ -1,9 +1,10 @@
-import { Codicon, icons } from '@hermes/plugin-sdk'
+import { Codicon, icons, Streamdown } from '@hermes/plugin-sdk'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
 import {
-  applyPositions, boardFromTasks, boundsOf, layoutBoard, pathFractions, positionsFor, withPosition
+  applyPositions, arrowsOf, boardFromTasks, boardMarkdown, boardTable, boundsOf, layoutBoard, overlaps,
+  handable, pathFractions, planNext, positionsFor, toDelimited, withoutLayout, withPosition
 } from '../core/whiteboard-core'
 
 /**
@@ -98,7 +99,40 @@ const CSS = `
 .wb-layouts .wb-hint { margin-left: auto; font: 11px var(--font-sans, system-ui); color: var(--ui-text-quaternary); }
 .wb-empty { position: absolute; z-index: 4; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(560px, calc(100% - 48px)); text-align: center; pointer-events: none; }
 .wb-empty p { margin: 0 auto 18px; max-width: 440px; font: 14px/1.5 var(--font-sans, system-ui); color: var(--ui-text-secondary); }
-@media (prefers-reduced-motion: reduce) { .wb-item, .wb-world.wb-glide { transition: none; } .wb-work-dot { animation: none; } }
+.wb-hand { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 99px; border: 1px solid hsl(30 40% 25% / .25); background: hsl(40 60% 99% / .9); color: ${INK}; font: 600 11px var(--font-sans, system-ui); cursor: pointer; opacity: 0; transform: translateY(3px); transition: opacity .15s, transform .15s; z-index: 2; }
+.wb-item:hover .wb-hand, .wb-selected .wb-hand, .wb-hand.wb-show { opacity: 1; transform: none; }
+.wb-hand:hover { background: hsl(${HERMES_HUE} 95% 62%); border-color: hsl(${HERMES_HUE} 70% 40% / .5); }
+.wb-hand svg { width: 13px; height: 13px; }
+.wb-far .wb-hand { display: none; }
+.wb-selected > div > .wb-result { outline: 2px solid hsl(${HERMES_HUE} 85% 52%); outline-offset: 3px; }
+.wb-lit > div > .wb-note, .wb-lit > div > .wb-card, .wb-lit > div > .wb-frame { outline: 2px dashed hsl(${HERMES_HUE} 85% 50%); outline-offset: 4px; }
+.wb-result { position: absolute; inset: 0; border-radius: 14px; padding: 14px 16px 12px; background: hsl(40 50% 99%); color: ${INK}; border: 1px solid hsl(${HERMES_HUE} 60% 50% / .35); box-shadow: 0 16px 34px -20px hsl(30 40% 20% / .6); display: flex; flex-direction: column; gap: 6px; cursor: grab; overflow: hidden; }
+.wb-result-head { display: flex; align-items: flex-start; gap: 8px; }
+.wb-result-head b { flex: 1; font: 400 calc(18px * min(var(--wb-k, 1), 1.35))/1.15 ${DISPLAY}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-postmark { flex-shrink: 0; transform: rotate(-8deg); animation: wb-stamp .55s cubic-bezier(.2, 1.5, .4, 1) .3s both; white-space: nowrap; text-transform: uppercase; padding: 2px 7px; border: 1.5px solid hsl(${HERMES_HUE} 70% 38%); border-radius: 6px; color: hsl(${HERMES_HUE} 70% 32%); font: 700 9.5px var(--font-sans, system-ui); letter-spacing: .08em; }
+.wb-result-body { flex: 1; min-height: 0; overflow: auto; font: 12.5px/1.45 var(--font-sans, system-ui); cursor: text; user-select: text; }
+.wb-result-body, .wb-result-body * { color: ${INK} !important; background-color: transparent !important; }
+.wb-result-body p { margin: 0 0 6px; }
+.wb-result-body ul, .wb-result-body ol { margin: 0 0 6px; padding-left: 18px; }
+.wb-result-body h1, .wb-result-body h2, .wb-result-body h3 { font-size: 13px; margin: 4px 0; }
+@keyframes wb-stamp { from { opacity: 0; transform: rotate(-22deg) scale(2.6); } to { opacity: 1; transform: rotate(-8deg) scale(1); } }
+.wb-brief { border: 2px solid hsl(${HERMES_HUE} 85% 52%); }
+.wb-port { position: absolute; right: -11px; top: 50%; width: 16px; height: 16px; margin-top: -8px; border-radius: 99px; background: hsl(${HERMES_HUE} 92% 56%); border: 2px solid hsl(40 60% 99%); box-shadow: 0 2px 6px hsl(30 30% 20% / .35); cursor: crosshair; z-index: 3; transform: scale(var(--wb-inv, 1)); opacity: 0; transition: opacity .15s; }
+.wb-item:hover > .wb-port, .wb-selected > .wb-port { opacity: 1; }
+.wb-cursor { position: absolute; left: 0; top: 0; z-index: 30; pointer-events: none; transition: transform .55s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
+.wb-cursor-label { position: absolute; left: 20px; top: 20px; height: 22px; padding: 0 9px; border-radius: 7px 99px 99px 99px; font: 600 11.5px/22px var(--font-sans, system-ui); color: ${INK}; white-space: nowrap; box-shadow: 0 6px 14px -8px hsl(30 40% 20% / .6); }
+.wb-marquee { position: absolute; z-index: 25; border: 1px solid hsl(${HERMES_HUE} 85% 50%); background: hsl(${HERMES_HUE} 90% 60% / .1); border-radius: 4px; pointer-events: none; }
+.wb-badge { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 99px; font: 600 10px/16px var(--font-sans, system-ui); background: hsl(${HERMES_HUE} 90% 55%); color: ${INK}; text-align: center; }
+.wb-btn:disabled { opacity: .45; cursor: default; }
+.wb-btn.wb-go { background: hsl(${HERMES_HUE} 92% 56%); color: ${INK}; font-weight: 600; }
+.wb-btn.wb-go:hover { background: hsl(${HERMES_HUE} 95% 62%); color: ${INK}; }
+.wb-btn.wb-go .wb-badge { background: ${INK}; color: hsl(${HERMES_HUE} 92% 62%); }
+.wb-compose-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.wb-compose-row .wb-next { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px var(--font-sans, system-ui); color: var(--ui-text-secondary); }
+.wb-arrow-hit { pointer-events: stroke; cursor: pointer; }
+.wb-unlink { position: absolute; z-index: 26; transform: translate(-50%, -50%); }
+.wb-unlink .wb-btn { background: var(--ui-surface-background); border-color: var(--ui-stroke-secondary); box-shadow: 0 10px 22px -14px hsl(230 30% 10% / .6); }
+@media (prefers-reduced-motion: reduce) { .wb-item, .wb-cursor, .wb-world.wb-glide { transition: none; } .wb-work-dot, .wb-postmark { animation: none; } }
 `
 
 function installStyles() {
@@ -122,6 +156,7 @@ const STICKERS: Record<string, { hue: number; fill: string[]; ink: string[] }> =
   chart: { hue: 152, fill: ['M16 38h7v12h-7Z', 'M28 30h7v20h-7Z', 'M40 22h7v28h-7Z'], ink: ['M16 38h7v12h-7ZM28 30h7v20h-7ZM40 22h7v28h-7Z', 'M14 27l12-9 8 5 14-11', 'M42 12h6v6'] },
   gear: { hue: 220, fill: ['M32 16l4 1 2-3 5 3-1 4 3 3 4-1 3 5-3 2 1 4-1 4 3 2-3 5-4-1-3 3 1 4-5 3-2-3-4 1-4-1-2 3-5-3 1-4-3-3-4 1-3-5 3-2-1-4 1-4-3-2 3-5 4 1 3-3-1-4 5-3 2 3Z'], ink: ['M32 16l4 1 2-3 5 3-1 4 3 3 4-1 3 5-3 2 1 4-1 4 3 2-3 5-4-1-3 3 1 4-5 3-2-3-4 1-4-1-2 3-5-3 1-4-3-3-4 1-3-5 3-2-1-4 1-4-3-2 3-5 4 1 3-3-1-4 5-3 2 3Z', 'M32 25a7 7 0 1 0 0.1 0'] },
   pin: { hue: 8, fill: ['M32 51C22 39 18 32 18 26a14 14 0 0 1 28 0c0 6-4 13-14 25Z'], ink: ['M32 51C22 39 18 32 18 26a14 14 0 0 1 28 0c0 6-4 13-14 25Z', 'M32 21a5 5 0 1 0 0.1 0'] },
+  sandal: { hue: 41, fill: ['M15 42c0-12 9-22 22-25 7-2 12 0 14 2-6 1-10 3-13 6 6-1 11 0 13 2-6 1-10 3-12 6 5 0 9 1 11 3-7 2-12 5-17 8-6 4-12 4-18-2Z'], ink: ['M15 42c0-12 9-22 22-25 7-2 12 0 14 2-6 1-10 3-13 6 6-1 11 0 13 2-6 1-10 3-12 6 5 0 9 1 11 3-7 2-12 5-17 8-6 4-12 4-18-2Z', 'M21 38c4-7 10-12 17-15M25 41c4-5 9-8 14-10M29 44c3-3 7-5 11-6'] },
   spark: { hue: 266, fill: ['M32 12c2 11 6 16 17 18-11 2-15 7-17 18-2-11-6-16-17-18 11-2 15-7 17-18Z'], ink: ['M32 12c2 11 6 16 17 18-11 2-15 7-17 18-2-11-6-16-17-18 11-2 15-7 17-18Z', 'M48 44c1 3 2 4 5 5-3 1-4 2-5 5-1-3-2-4-5-5 3-1 4-2 5-5Z'] }
 }
 
@@ -166,9 +201,64 @@ const anchorOf = (stop: any) =>
 const centerOf = (item: any) => ({ x: item.x + item.w / 2, y: item.y + item.h / 2 })
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
-function Links({ items, links, at }: { items: any[]; links: any[]; at: (item: any) => any }) {
-  const byId = new Map(items.map(item => [item.id, item]))
-  const route = items.filter(item => item.kind === 'waypoint').map(at)
+/** Small line icons whiteboard draws itself (same weight as the app's). */
+const LINE: Record<string, string> = {
+  hand: 'M5 12h11M12 6l6 6-6 6',
+  play: 'M8 5l11 7-11 7Z',
+  wand: 'M5 19L15 9M14 4v3M19 9h-3M17.5 5.5l-2 2M11 4.5l.8 1.6M19.5 13l-1.6-.8',
+  check: 'M5 12l5 5L20 7',
+  unlink: 'M5 19L19 5M10 5h9v9M5 5l4 4M15 15l4 4'
+}
+
+function Line({ name }: { name: string }) {
+  return jsx('svg', {
+    'aria-hidden': true, fill: 'none', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 1.8,
+    viewBox: '0 0 24 24', children: jsx('path', { d: LINE[name] })
+  })
+}
+
+/** Cursors for the agents at work: Hermes is gold, each other profile takes the next hue. */
+const AGENT_HUES = [262, 172, 12, 205, 330]
+function hueOf(name: string) {
+  if (!name || name === 'default' || name === 'hermes') return HERMES_HUE
+  let hash = 0
+  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) | 0
+  return AGENT_HUES[Math.abs(hash) % AGENT_HUES.length]
+}
+
+function Cursor({ x, y, label, hue }: { x: number; y: number; label: string; hue: number }) {
+  const gold = hue === HERMES_HUE
+  const fill = `hsl(${hue} 88% ${gold ? 56 : 62}%)`
+  return jsxs('div', {
+    className: 'wb-cursor',
+    'data-wb-cursor': label,
+    style: { transform: `translate(${Math.round(x)}px, ${Math.round(y)}px)` },
+    children: [
+      jsxs('svg', {
+        'aria-hidden': true, height: 30, width: 30, viewBox: '0 0 30 30', style: { overflow: 'visible' },
+        children: [
+          // The wing: Hermes travels.
+          jsx('path', { d: 'M10 4c-4-3-9-3-10-1 3 0 5 1 7 3-3-1-6 0-7 2 3-1 6 0 8 1', fill: 'none', stroke: fill, strokeLinecap: 'round', strokeWidth: 2, transform: 'translate(-2 8)' }, 'w'),
+          jsx('path', { d: 'M3 2l17 8-7.5 2.2L9 20Z', fill, stroke: INK, strokeLinejoin: 'round', strokeWidth: 1.6 }, 'a')
+        ]
+      }, 'svg'),
+      jsx('div', { className: 'wb-cursor-label', style: { background: fill }, children: label }, 'l')
+    ]
+  })
+}
+
+function edgePoint(rect: any, toward: { x: number; y: number }) {
+  const c = centerOf(rect)
+  const dx = toward.x - c.x
+  const dy = toward.y - c.y
+  if (!dx && !dy) return c
+  const scale = Math.min(dx ? (rect.w / 2 + 6) / Math.abs(dx) : Infinity, dy ? (rect.h / 2 + 6) / Math.abs(dy) : Infinity)
+  return { x: c.x + dx * scale, y: c.y + dy * scale }
+}
+
+function Links({ items, links, arrows, at, wire, picked, onPick }: any) {
+  const byId = new Map<string, any>(items.map((item: any) => [item.id, item]))
+  const route = items.filter((item: any) => item.kind === 'waypoint').map(at)
   const anchors = route.map(anchorOf)
   const lead = anchors.length > 1
     ? [{ x: anchors[0].x - 140, y: anchors[0].y + 24 }, ...anchors, { x: anchors[anchors.length - 1].x + 140, y: anchors[anchors.length - 1].y - 24 }]
@@ -176,7 +266,7 @@ function Links({ items, links, at }: { items: any[]; links: any[]; at: (item: an
   const road = smoothPath(lead)
   const children: any[] = []
   // The road turns gold up to the last stop passed, in order — a milestone card done.
-  const travelled = route.findIndex(stop => !stop.done)
+  const travelled = route.findIndex((stop: any) => !stop.done)
   const doneCount = travelled < 0 ? route.length : travelled
   const fraction = doneCount === 0 || lead.length < 2 ? 0 : doneCount === route.length ? 1 : pathFractions(lead)[doneCount]
 
@@ -188,7 +278,7 @@ function Links({ items, links, at }: { items: any[]; links: any[]; at: (item: an
     )
   }
 
-  route.forEach((stop, index) => {
+  route.forEach((stop: any, index: number) => {
     const anchor = anchors[index]
     const edge = stop.side === 'below' ? stop.y : stop.y + stop.h
     children.push(
@@ -212,16 +302,49 @@ function Links({ items, links, at }: { items: any[]; links: any[]; at: (item: an
     children.push(jsx('path', { d: `M${p.x} ${p.y} Q${mx} ${my} ${q.x} ${q.y}`, fill: 'none', stroke: LINE_INK, strokeLinecap: 'round', strokeOpacity: 0.34, strokeWidth: 2.4 }, link.id))
   }
 
+  // Dependencies: whiteboard's arrow, drawn between two cards; a click picks it (to unlink).
+  for (const arrow of arrows) {
+    const a = byId.get(arrow.from)
+    const b = byId.get(arrow.to)
+    if (!a || !b) continue
+    const A = at(a)
+    const B = at(b)
+    const p = edgePoint(A, centerOf(B))
+    const q = edgePoint(B, centerOf(A))
+    const angle = Math.atan2(q.y - p.y, q.x - p.x)
+    const wing = (turn: number) => `${q.x - 14 * Math.cos(angle + turn)},${q.y - 14 * Math.sin(angle + turn)}`
+    const on = picked === arrow.id
+    const ink = on ? GOLD : LINE_INK
+    const d = `M${p.x} ${p.y} L${q.x - 6 * Math.cos(angle)} ${q.y - 6 * Math.sin(angle)}`
+    children.push(
+      jsx('path', { d, fill: 'none', stroke: ink, strokeLinecap: 'round', strokeWidth: on ? 3.2 : 2.4, 'data-wb-arrow': arrow.id }, arrow.id),
+      jsx('polygon', { fill: ink, points: `${q.x},${q.y} ${wing(0.42)} ${wing(-0.42)}` }, `${arrow.id}head`),
+      jsx('path', { className: 'wb-arrow-hit', d, fill: 'none', stroke: 'transparent', strokeWidth: 16, 'data-arrow': arrow.id, onPointerDown: (event: any) => { event.stopPropagation(); onPick?.(arrow.id) } }, `${arrow.id}hit`)
+    )
+  }
+
+  const source = wire ? byId.get(wire.from) : null
+  if (source) {
+    const p = edgePoint(at(source), wire)
+    children.push(
+      jsx('path', { d: `M${p.x} ${p.y} L${wire.x} ${wire.y}`, fill: 'none', stroke: GOLD, strokeDasharray: '6 6', strokeLinecap: 'round', strokeWidth: 2.6 }, 'wire'),
+      jsx('circle', { cx: wire.x, cy: wire.y, fill: GOLD, r: 5 }, 'wireend')
+    )
+  }
+
   return jsx('svg', { className: 'wb-links', children })
 }
 
 /* ─────────────────────────────── item views ──────────────────────────────── */
 
-function NoteView({ item, i18n, k, far }: any) {
+const stop = (event: any) => event.stopPropagation()
+
+function NoteView({ item, i18n, k, far, onHand, canHand }: any) {
   const tone = TONES[item.tone] || TONES.butter
   const running = item.stage === 'running'
   const owner = item.owner && item.owner !== 'jalon' ? item.owner : null
   const meta = !running && !far
+  const handable = canHand && !far && onHand
   const lines = Math.max(1, Math.floor((item.h - 30 - (running || meta ? 26 : 0)) / (14 * k * 1.34)))
   return jsxs('div', {
     className: 'wb-note',
@@ -242,16 +365,40 @@ function NoteView({ item, i18n, k, far }: any) {
         ? jsxs('div', {
             className: 'wb-work',
             children: [
-              jsx('div', { className: 'wb-work-dot', style: { background: `hsl(${HERMES_HUE} 80% 50%)` } }, 'd'),
+              jsx('div', { className: 'wb-work-dot', style: { background: `hsl(${hueOf(owner || '')} 80% 50%)` } }, 'd'),
               jsx('span', { children: item.summary || (owner ? `${i18n.wbStages?.running} · ${owner}` : i18n.wbStages?.running) }, 't')
             ]
           }, 'work')
+        : null,
+      handable
+        ? jsxs('button', {
+            className: 'wb-hand',
+            type: 'button',
+            'data-nodrag': true,
+            title: i18n.wbHandHint,
+            onPointerDown: stop,
+            onClick: (event: any) => { event.stopPropagation(); onHand([item.taskId]) },
+            children: [jsx(Line, { name: 'hand' }, 'i'), i18n.wbHand]
+          }, 'hand')
         : null
     ]
   })
 }
 
-function WaypointView({ item, i18n }: any) {
+/** A milestone whose phase is done waits for a human: the stop (or frame) offers to pass it. */
+function PassButton({ item, i18n, onPass }: any) {
+  return jsxs('button', {
+    className: 'wb-hand wb-show',
+    type: 'button',
+    'data-nodrag': true,
+    title: i18n.wbPassHint,
+    onPointerDown: stop,
+    onClick: (event: any) => { event.stopPropagation(); onPass(item.taskId) },
+    children: [jsx(Line, { name: 'check' }, 'i'), i18n.wbPass]
+  })
+}
+
+function WaypointView({ item, i18n, passable, onPass }: any) {
   const label = item.role === 'milestone' ? i18n.wbStep(item.step) : i18n.wbLoose
   return jsxs('div', {
     className: `wb-card${item.done ? ' wb-card-done' : ''}`,
@@ -264,21 +411,25 @@ function WaypointView({ item, i18n }: any) {
           jsx('span', { className: 'wb-label', children: label }, 'l'),
           jsx('b', { children: item.role === 'milestone' ? item.title : i18n.wbLoose }, 't')
         ]
-      }, 'body')
+      }, 'body'),
+      passable ? jsx(PassButton, { item, i18n, onPass }, 'pass') : null
     ]
   })
 }
 
-function FrameView({ item, i18n }: any) {
-  return jsx('div', {
+function FrameView({ item, i18n, passable, onPass }: any) {
+  return jsxs('div', {
     className: 'wb-frame',
-    children: jsxs('div', {
-      className: 'wb-frame-head',
-      children: [
-        item.sticker ? jsx('div', { className: 'wb-frame-stamp', children: jsx(Sticker, { name: item.sticker, size: 54, tilt: -6 }) }, 's') : null,
-        jsx('b', { children: item.role === 'milestone' ? item.title : i18n.wbLoose }, 't')
-      ]
-    })
+    children: [
+      jsxs('div', {
+        className: 'wb-frame-head',
+        children: [
+          item.sticker ? jsx('div', { className: 'wb-frame-stamp', children: jsx(Sticker, { name: item.sticker, size: 54, tilt: -6 }) }, 's') : null,
+          jsx('b', { children: item.role === 'milestone' ? item.title : i18n.wbLoose }, 't')
+        ]
+      }, 'head'),
+      passable ? jsx(PassButton, { item, i18n, onPass }, 'pass') : null
+    ]
   })
 }
 
@@ -293,10 +444,37 @@ function TitleView({ item }: any) {
   return jsx('div', { className: 'wb-free', children: jsx('div', { className: 'wb-titletext', children: item.text }) })
 }
 
+/** Whiteboard's delivered card: the card's result (or a milestone's brief), postmarked. */
+function ResultView({ item, i18n }: any) {
+  const Markdown = typeof Streamdown === 'function' || (Streamdown && typeof Streamdown === 'object') ? Streamdown : null
+  return jsxs('div', {
+    className: `wb-result${item.brief ? ' wb-brief' : ''}`,
+    children: [
+      jsxs('div', {
+        className: 'wb-result-head',
+        children: [
+          item.brief ? jsx(Sticker, { name: 'sandal', size: 34, tilt: -8 }, 's') : null,
+          jsx('b', { children: item.title }, 't'),
+          jsx('span', { className: 'wb-postmark', children: item.brief ? i18n.wbBrief : i18n.wbDelivered }, 'p')
+        ]
+      }, 'head'),
+      jsx('div', {
+        className: 'wb-result-body',
+        'data-nodrag': true,
+        onPointerDown: stop,
+        onWheel: stop,
+        children: Markdown ? jsx(Markdown as any, { controls: false, children: item.text || '' }) : item.text
+      }, 'body')
+    ]
+  })
+}
+
 /* ──────────────────────────────── the view ───────────────────────────────── */
 
 const LAYOUTS = ['route', 'columns', 'map'] as const
-const MOVABLE = new Set(['note', 'waypoint', 'frame', 'hub', 'text'])
+const MOVABLE = new Set(['note', 'waypoint', 'frame', 'hub', 'text', 'result'])
+const LINKABLE = new Set(['note', 'waypoint', 'frame'])
+const MAX_UNDO = 60
 
 export function WhiteboardView({
   tasks = [],
@@ -308,7 +486,13 @@ export function WhiteboardView({
   onLayout,
   positions = {},
   onPositions,
-  onOpen
+  onOpen,
+  onCreate,
+  onLink,
+  onUnlink,
+  onHand,
+  onPass,
+  onCopy
 }: {
   tasks?: any[]
   i18n: any
@@ -320,21 +504,60 @@ export function WhiteboardView({
   positions?: Record<string, { x: number; y: number }>
   onPositions?: (next: Record<string, { x: number; y: number }>) => void
   onOpen?: (id: string) => void
+  /** a new card, under that milestone (or none) — the page's own creation dialog */
+  onCreate?: (parentId: string | null) => void
+  /** parent -> child: the child waits for the parent */
+  onLink?: (parentId: string, childId: string) => void
+  onUnlink?: (parentId: string, childId: string) => void
+  /** hand these cards to Hermes: a profile takes them and they become ready */
+  onHand?: (taskIds: string[]) => void
+  /** pass a milestone (complete it) — always a human's click */
+  onPass?: (taskId: string) => void
+  onCopy?: (text: string, kind: 'md' | 'csv') => void
 }) {
-  installStyles()
+  useEffect(() => { installStyles() }, [])
   const ref = useRef<HTMLDivElement | null>(null)
   const gesture = useRef<any>(null)
+  const undoStack = useRef<any[]>([])
+  const redoStack = useRef<any[]>([])
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 })
   const [glide, setGlide] = useState(false)
   const [drag, setDrag] = useState<any>(null)
   const [panning, setPanning] = useState(false)
+  const [selection, setSelection] = useState<string[]>([])
+  const [marquee, setMarquee] = useState<any>(null)
+  const [wire, setWire] = useState<any>(null)
+  const [picked, setPicked] = useState<string | null>(null)
 
   const model = useMemo(
-    () => boardFromTasks(tasks || [], { title: title || 'Board', layout, id: board || 'board' }),
-    [tasks, title, layout, board]
+    () => boardFromTasks(tasks || [], { title: title || 'Board', layout, id: board || 'board', looseLabel: i18n.wbLoose }),
+    [tasks, title, layout, board, i18n]
   )
   const scene = useMemo(() => applyPositions(layoutBoard(model), positionsFor(positions, layout)), [model, positions, layout])
+  const arrows = useMemo(() => arrowsOf(tasks || [], scene.items), [tasks, scene.items])
+  const next = useMemo(() => planNext(model), [model])
+  const canHand = useMemo(() => handable(model), [model])
   const bounds = useMemo(() => boundsOf(scene.items), [scene.items])
+  const byId = useMemo(() => new Map<string, any>(scene.items.map(item => [item.id, item])), [scene.items])
+
+  // Every position change goes through here, so it can be undone.
+  const commit = (nextPositions: Record<string, { x: number; y: number }>) => {
+    undoStack.current = [...undoStack.current.slice(-MAX_UNDO + 1), positions || {}]
+    redoStack.current = []
+    onPositions?.(nextPositions)
+  }
+  const undo = () => {
+    const prev = undoStack.current.pop()
+    if (!prev) return
+    redoStack.current.push(positions || {})
+    onPositions?.(prev)
+  }
+  const redo = () => {
+    const again = redoStack.current.pop()
+    if (!again) return
+    undoStack.current.push(positions || {})
+    onPositions?.(again)
+  }
 
   // Whiteboard's `fitView`: the whole plan, centred above the bar at the bottom.
   const fit = (animate: boolean) => {
@@ -342,12 +565,12 @@ export function WhiteboardView({
     const w = node?.clientWidth || 1100
     const h = node?.clientHeight || 720
     const pad = 120
-    const zoom = clamp(Math.min((w - pad) / Math.max(bounds.w, 1), (h - pad - 90) / Math.max(bounds.h, 1)), 0.2, 1.1)
+    const zoom = clamp(Math.min((w - pad) / Math.max(bounds.w, 1), (h - pad - 130) / Math.max(bounds.h, 1)), 0.2, 1.1)
     if (animate) {
       setGlide(true)
       setTimeout(() => setGlide(false), 700)
     }
-    setView({ x: Math.round(w / 2 - (bounds.x + bounds.w / 2) * zoom), y: Math.round((h - 90) / 2 - (bounds.y + bounds.h / 2) * zoom), zoom })
+    setView({ x: Math.round(w / 2 - (bounds.x + bounds.w / 2) * zoom), y: Math.round((h - 130) / 2 - (bounds.y + bounds.h / 2) * zoom), zoom })
   }
   const zoomBy = (factor: number) => {
     const node = ref.current
@@ -366,6 +589,7 @@ export function WhiteboardView({
     const node = ref.current
     if (!node) return undefined
     const onWheel = (event: WheelEvent) => {
+      if ((event.target as any)?.closest?.('[data-nodrag]')) return
       event.preventDefault()
       const rect = node.getBoundingClientRect()
       if (event.ctrlKey || event.metaKey) {
@@ -378,8 +602,19 @@ export function WhiteboardView({
     return () => node.removeEventListener('wheel', onWheel)
   }, [])
 
-  // A stop or a frame carries the notes that hang off it, as on whiteboard.
-  const moving = (id: string) => scene.items.filter(item => item.id === id || item.frame === id).map(item => item.id)
+  const pointAt = (event: any) => {
+    const rect = ref.current?.getBoundingClientRect() || { left: 0, top: 0 }
+    return { x: (event.clientX - rect.left - view.x) / view.zoom, y: (event.clientY - rect.top - view.y) / view.zoom }
+  }
+  // A stop or a frame carries what hangs off it (its notes, their results), as on whiteboard.
+  const withChildren = (ids: string[]) => {
+    const set = new Set(ids)
+    for (const item of scene.items) {
+      if ((item.frame && set.has(item.frame)) || (item.for && set.has(item.for))) set.add(item.id)
+    }
+    for (const item of scene.items) if (item.for && set.has(item.for)) set.add(item.id)
+    return [...set]
+  }
   const offsets = useMemo(() => {
     const map = new Map<string, { x: number; y: number }>()
     if (drag) for (const id of drag.ids) map.set(id, { x: drag.dx, y: drag.dy })
@@ -390,14 +625,34 @@ export function WhiteboardView({
     return offset ? { ...item, x: item.x + offset.x, y: item.y + offset.y } : item
   }
 
+  const chrome = (target: any) => target?.closest?.('.wb-zoom, .wb-compose, .wb-unlink')
+
   const onPointerDown = (event: any) => {
-    if (event.button !== 0 || event.target.closest?.('.wb-zoom, .wb-compose')) return
+    if (event.button !== 0 || chrome(event.target)) return
+    if (event.target.closest?.('[data-nodrag]')) return
+    const port = event.target.closest?.('[data-port]')
+    if (port) {
+      const from = port.getAttribute('data-port')
+      gesture.current = { kind: 'connect', from, moved: false, x: event.clientX, y: event.clientY }
+      setWire({ from, ...pointAt(event) })
+      return
+    }
+    setPicked(null)
     const hit = event.target.closest?.('[data-item]')
     const id = hit?.getAttribute('data-item')
-    const item = id ? scene.items.find(i => i.id === id) : null
-    gesture.current = item && MOVABLE.has(item.kind)
-      ? { kind: 'drag', item, ids: moving(item.id), moved: false, x: event.clientX, y: event.clientY }
-      : { kind: 'pan', moved: false, view, x: event.clientX, y: event.clientY }
+    const item = id ? byId.get(id) : null
+    if (item && MOVABLE.has(item.kind)) {
+      const picks = selection.includes(id) ? selection : event.shiftKey ? [...selection, id] : [id]
+      gesture.current = { kind: 'drag', item, picks, ids: withChildren(picks), moved: false, shift: event.shiftKey, x: event.clientX, y: event.clientY }
+      return
+    }
+    if (event.shiftKey) {
+      const rect = ref.current?.getBoundingClientRect() || { left: 0, top: 0 }
+      gesture.current = { kind: 'marquee', start: pointAt(event), moved: false, x: event.clientX, y: event.clientY }
+      setMarquee({ x: event.clientX - rect.left, y: event.clientY - rect.top, w: 0, h: 0 })
+      return
+    }
+    gesture.current = { kind: 'pan', moved: false, view, x: event.clientX, y: event.clientY }
   }
   const onPointerMove = (event: any) => {
     const current = gesture.current
@@ -407,7 +662,11 @@ export function WhiteboardView({
     if (!current.moved && Math.hypot(dx, dy) < 3) return
     current.moved = true
     if (current.kind === 'drag') setDrag({ ids: current.ids, dx: dx / view.zoom, dy: dy / view.zoom })
-    else {
+    else if (current.kind === 'connect') setWire({ from: current.from, ...pointAt(event) })
+    else if (current.kind === 'marquee') {
+      const rect = ref.current?.getBoundingClientRect() || { left: 0, top: 0 }
+      setMarquee({ x: Math.min(current.x, event.clientX) - rect.left, y: Math.min(current.y, event.clientY) - rect.top, w: Math.abs(dx), h: Math.abs(dy) })
+    } else {
       setPanning(true)
       setView({ ...current.view, x: current.view.x + dx, y: current.view.y + dy })
     }
@@ -420,66 +679,131 @@ export function WhiteboardView({
     if (current.kind === 'drag' && current.moved) {
       const dx = (event.clientX - current.x) / view.zoom
       const dy = (event.clientY - current.y) / view.zoom
-      let next = { ...(positions || {}) }
+      let nextPositions = { ...(positions || {}) }
       for (const id of current.ids) {
-        const item = scene.items.find(i => i.id === id)
-        if (item) next = withPosition(next, layout, id, { x: item.x + dx, y: item.y + dy })
+        const item = byId.get(id)
+        if (item) nextPositions = withPosition(nextPositions, layout, id, { x: item.x + dx, y: item.y + dy })
       }
       setDrag(null)
-      onPositions?.(next)
+      setSelection(current.picks)
+      commit(nextPositions)
     } else if (current.kind === 'drag') {
       setDrag(null)
-      if (current.item.taskId) onOpen?.(current.item.taskId)
+      if (current.shift) {
+        const id = current.item.id
+        setSelection(sel => (sel.includes(id) ? sel.filter(s => s !== id) : [...sel, id]))
+      } else {
+        setSelection([current.item.id])
+        if (current.item.taskId) onOpen?.(current.item.taskId)
+      }
+    } else if (current.kind === 'connect') {
+      setWire(null)
+      const target = typeof document !== 'undefined'
+        ? document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-item]')?.getAttribute('data-item')
+        : null
+      const from = byId.get(current.from)
+      const to = target ? byId.get(target) : null
+      if (from?.taskId && to?.taskId && from.taskId !== to.taskId) onLink?.(from.taskId, to.taskId)
+    } else if (current.kind === 'marquee') {
+      const end = pointAt(event)
+      const box = { x: Math.min(end.x, current.start.x), y: Math.min(end.y, current.start.y), w: Math.abs(end.x - current.start.x), h: Math.abs(end.y - current.start.y) }
+      setSelection(scene.items.filter(item => item.kind !== 'frame' && item.kind !== 'text' && overlaps(box, item)).map(item => item.id))
+      setMarquee(null)
+    } else if (current.kind === 'pan' && !current.moved) {
+      setSelection([])
     }
+  }
+
+  // Double-click on the board: a new card, under the milestone of the phase it lands in.
+  const onDoubleClick = (event: any) => {
+    if (chrome(event.target) || event.target.closest?.('[data-nodrag]')) return
+    const point = pointAt(event)
+    const hit = event.target.closest?.('[data-item]')
+    const item = hit ? byId.get(hit.getAttribute('data-item')) : null
+    if (item && item.kind === 'note') return
+    const holder = item && (item.kind === 'frame' || item.kind === 'waypoint') ? item
+      : scene.items.find(i => i.kind === 'frame' && point.x >= i.x && point.x <= i.x + i.w && point.y >= i.y && point.y <= i.y + i.h)
+        || nearestStop(scene.items, point)
+    onCreate?.(holder?.role === 'milestone' ? holder.taskId || null : null)
   }
 
   // Moves and releases are tracked on the window, so a drag that leaves the canvas still ends.
   const handlers = useRef<any>({})
-  handlers.current = { move: onPointerMove, up: onPointerUp }
+  handlers.current = { move: onPointerMove, up: onPointerUp, undo, redo, picked, arrows, selection }
   useEffect(() => {
     const move = (event: any) => handlers.current.move(event)
     const up = (event: any) => handlers.current.up(event)
+    const key = (event: KeyboardEvent) => {
+      const target = event.target as any
+      if (target && (target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName || ''))) return
+      if (!ref.current || !ref.current.isConnected) return
+      const mod = event.ctrlKey || event.metaKey
+      if (event.key === 'Escape') {
+        setSelection([])
+        setPicked(null)
+        setWire(null)
+        gesture.current = null
+      } else if (mod && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) handlers.current.redo()
+        else handlers.current.undo()
+      } else if (mod && event.key.toLowerCase() === 'y') {
+        event.preventDefault()
+        handlers.current.redo()
+      }
+    }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', up)
+    window.addEventListener('keydown', key)
     return () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
+      window.removeEventListener('keydown', key)
     }
   }, [])
 
   const notes = scene.items.filter(item => item.kind === 'note')
-  const empty = scene.items.every(item => item.kind === 'text' || item.kind === 'hub') && notes.length === 0 &&
-    !scene.items.some(item => item.taskId)
+  const empty = !(tasks || []).length
   const dots = 24 * view.zoom
   const far = view.zoom < 0.55
   // Text grows as the board shrinks, so a board fitted to the window still reads.
   const k = clamp(0.62 / view.zoom, 1, 1.5)
   const ordered = [...scene.items].sort((a, b) => (a.kind === 'frame' ? 0 : 1) - (b.kind === 'frame' ? 0 : 1))
   const zIndex = (kind: string) => (kind === 'frame' ? 1 : kind === 'text' ? 2 : 5)
+  const lit = new Set<string>(next ? scene.items.filter(i => i.taskId && (next.hand.includes(i.taskId) || next.pass === i.taskId) && i.kind !== 'result').map(i => i.id) : [])
+  const pickedArrow = picked ? arrows.find(a => a.id === picked) : null
 
   const itemView = (item: any) => {
-    const body = item.kind === 'note' ? jsx(NoteView, { item, i18n, k, far })
-      : item.kind === 'waypoint' ? jsx(WaypointView, { item, i18n })
-        : item.kind === 'frame' ? jsx(FrameView, { item, i18n })
+    const passable = !!next?.pass && next.pass === item.taskId && !!onPass
+    const body = item.kind === 'note' ? jsx(NoteView, { item, i18n, k, far, onHand, canHand: canHand.has(item.taskId) })
+      : item.kind === 'waypoint' ? jsx(WaypointView, { item, i18n, passable, onPass })
+        : item.kind === 'frame' ? jsx(FrameView, { item, i18n, passable, onPass })
           : item.kind === 'hub' ? jsx(HubView, { item })
-            : jsx(TitleView, { item })
+            : item.kind === 'result' ? jsx(ResultView, { item, i18n })
+              : jsx(TitleView, { item })
     const offset = offsets.get(item.id)
-    const selected = !!selectedId && item.taskId === selectedId
-    return jsx('div', {
-      className: `wb-item${selected ? ' wb-selected' : ''}${offset ? ' wb-dragging' : ''}`,
+    const selected = selection.includes(item.id) || (!!selectedId && item.taskId === selectedId && item.kind !== 'result')
+    return jsxs('div', {
+      className: `wb-item${selected ? ' wb-selected' : ''}${lit.has(item.id) ? ' wb-lit' : ''}${offset ? ' wb-dragging' : ''}`,
       'data-item': item.id,
       'data-wb-note': item.kind === 'note' ? item.taskId : undefined,
       'data-wb-frame': item.kind === 'frame' ? item.phase : undefined,
       'data-wb-marker': item.kind === 'waypoint' ? item.phase : undefined,
-      title: item.taskId ? item.text : undefined,
+      'data-wb-result': item.kind === 'result' ? item.taskId : undefined,
+      title: item.taskId && item.kind !== 'result' ? item.text : undefined,
       style: {
         left: item.x, top: item.y, width: item.w, height: item.h,
         transform: offset ? `translate(${offset.x}px, ${offset.y}px)` : undefined,
         zIndex: selected ? 20 : zIndex(item.kind)
       },
-      children: jsx('div', { style: { height: '100%', position: 'relative' }, children: body })
+      children: [
+        jsx('div', { style: { height: '100%', position: 'relative' }, children: body }, 'body'),
+        item.taskId && LINKABLE.has(item.kind) && onLink && !offset
+          ? jsx('div', { className: 'wb-port', 'data-port': item.id, title: i18n.wbLinkHint }, 'port')
+          : null
+      ]
     }, item.id)
   }
 
@@ -490,6 +814,36 @@ export function WhiteboardView({
       : jsx(Codicon, { name: codicon, size: '0.85rem' })
   }
 
+  // The agents at work, one cursor per running card, at its top-right corner (screen space).
+  const cursors = notes.filter(n => n.stage === 'running').map(n => {
+    const c = at(n)
+    const label = n.owner && n.owner !== 'jalon' ? n.owner : 'Hermes'
+    return { id: n.id, label, hue: hueOf(n.owner || ''), x: (c.x + c.w - 14) * view.zoom + view.x, y: (c.y + 6) * view.zoom + view.y }
+  })
+
+  const runPlan = () => {
+    if (!next) return
+    if (next.hand.length) onHand?.(next.hand)
+    else if (next.pass) onPass?.(next.pass)
+  }
+  const nextPhase = next ? model.phases.find(p => p.id === next.phase) : null
+  const nextLabel = !next ? i18n.wbPlanDone
+    : next.hand.length ? i18n.wbNextHand(nextPhase?.kind === 'loose' ? i18n.wbLoose : nextPhase?.label || '', next.hand.length)
+      : next.pass ? i18n.wbNextPass(nextPhase?.label || '')
+        : i18n.wbNextWaiting(nextPhase?.kind === 'loose' ? i18n.wbLoose : nextPhase?.label || '', next.waiting.length)
+  const copy = (kind: 'md' | 'csv') => {
+    const text = kind === 'md' ? boardMarkdown(model) : toDelimited(boardTable(model, i18n.wbTableHead), ',')
+    onCopy?.(text, kind)
+  }
+  const unlinkAt = pickedArrow ? (() => {
+    const a = byId.get(pickedArrow.from)
+    const b = byId.get(pickedArrow.to)
+    if (!a || !b) return null
+    const p = centerOf(at(a))
+    const q = centerOf(at(b))
+    return { x: ((p.x + q.x) / 2) * view.zoom + view.x, y: ((p.y + q.y) / 2) * view.zoom + view.y }
+  })() : null
+
   return jsxs('div', {
     className: 'wb-page',
     children: [
@@ -497,34 +851,76 @@ export function WhiteboardView({
         className: `wb-canvas${panning ? ' wb-panning' : ''}`,
         ref,
         onPointerDown,
+        onDoubleClick,
         style: { backgroundPosition: `${view.x}px ${view.y}px`, backgroundSize: `${dots}px ${dots}px` },
         children: [
           empty
             ? jsx('div', { className: 'wb-empty', children: jsx('p', { children: i18n.wbEmpty }) }, 'empty')
             : jsxs('div', {
                 className: `wb-world${glide ? ' wb-glide' : ''}${far ? ' wb-far' : ''}`,
-                style: { '--wb-k': k, transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` } as any,
-                children: [jsx(Links, { items: scene.items, links: scene.links, at }, 'links'), ...ordered.map(itemView)]
+                style: { '--wb-k': k, '--wb-inv': Math.min(3, 1 / view.zoom), transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` } as any,
+                children: [
+                  jsx(Links, { items: scene.items, links: scene.links, arrows, at, wire, picked, onPick: setPicked }, 'links'),
+                  ...ordered.map(itemView)
+                ]
               }, 'world'),
-          jsx('div', {
-            className: 'wb-compose',
-            children: jsxs('div', {
-              className: 'wb-layouts',
-              children: [
-                ...LAYOUTS.map(mode => jsx('button', {
+          ...cursors.map(c => jsx(Cursor, { x: c.x, y: c.y, label: c.label, hue: c.hue }, `cursor${c.id}`)),
+          marquee ? jsx('div', { className: 'wb-marquee', style: { left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h } }, 'marquee') : null,
+          unlinkAt && pickedArrow && onUnlink
+            ? jsx('div', {
+                className: 'wb-unlink',
+                style: { left: unlinkAt.x, top: unlinkAt.y },
+                children: jsxs('button', {
+                  className: 'wb-btn',
                   type: 'button',
-                  className: layout === mode ? 'wb-on' : undefined,
-                  'aria-pressed': layout === mode,
-                  onClick: () => onLayout?.(mode),
-                  children: mode === 'route' ? i18n.wbRoute : mode === 'columns' ? i18n.wbColumns : i18n.wbMap
-                }, mode)),
-                jsx('span', { className: 'wb-hint', children: i18n.wbHint }, 'hint')
-              ]
-            })
+                  onClick: () => { onUnlink(pickedArrow.parent, pickedArrow.child); setPicked(null) },
+                  children: [jsx(Line, { name: 'unlink' }, 'i'), i18n.wbUnlink]
+                })
+              }, 'unlink')
+            : null,
+          jsxs('div', {
+            className: 'wb-compose',
+            children: [
+              jsxs('div', {
+                className: 'wb-compose-row',
+                children: [
+                  jsxs('button', {
+                    className: 'wb-btn wb-go',
+                    type: 'button',
+                    'data-wb-run': true,
+                    disabled: !next || (!next.hand.length && !next.pass) || (!onHand && !onPass),
+                    title: i18n.wbRunHint,
+                    onClick: runPlan,
+                    children: [
+                      jsx(Line, { name: next && !next.hand.length && next.pass ? 'check' : 'play' }, 'i'),
+                      next && !next.hand.length && next.pass ? i18n.wbPass : i18n.wbRun,
+                      next && next.hand.length ? jsx('span', { className: 'wb-badge', children: String(next.hand.length) }, 'n') : null
+                    ]
+                  }, 'run'),
+                  jsx('span', { className: 'wb-next', children: nextLabel }, 'next'),
+                  jsx('button', { className: 'wb-btn', type: 'button', onClick: () => copy('md'), title: i18n.wbCopyMd, children: i18n.wbCopyMd }, 'md'),
+                  jsx('button', { className: 'wb-btn', type: 'button', onClick: () => copy('csv'), title: i18n.wbCopyCsv, children: i18n.wbCopyCsv }, 'csv')
+                ]
+              }, 'row'),
+              jsxs('div', {
+                className: 'wb-layouts',
+                children: [
+                  ...LAYOUTS.map(mode => jsx('button', {
+                    type: 'button',
+                    className: layout === mode ? 'wb-on' : undefined,
+                    'aria-pressed': layout === mode,
+                    onClick: () => onLayout?.(mode),
+                    children: mode === 'route' ? i18n.wbRoute : mode === 'columns' ? i18n.wbColumns : i18n.wbMap
+                  }, mode)),
+                  jsx('span', { className: 'wb-hint', children: i18n.wbHint }, 'hint')
+                ]
+              }, 'layouts')
+            ]
           }, 'compose'),
           jsxs('div', {
             className: 'wb-zoom',
             children: [
+              jsx('button', { className: 'wb-btn wb-icon', type: 'button', title: i18n.wbTidy, onClick: () => commit(withoutLayout(positions, layout)), children: jsx(Line, { name: 'wand' }) }, 'tidy'),
               jsx('button', { className: 'wb-btn wb-icon', type: 'button', title: i18n.wbZoomOut, onClick: () => zoomBy(1 / 1.25), children: Icon('ZoomOut', 'zoom-out') }, 'out'),
               jsx('span', { children: `${Math.round(view.zoom * 100)}%` }, 'pct'),
               jsx('button', { className: 'wb-btn wb-icon', type: 'button', title: i18n.wbZoomIn, onClick: () => zoomBy(1.25), children: Icon('ZoomIn', 'zoom-in') }, 'in'),
@@ -535,6 +931,18 @@ export function WhiteboardView({
       })
     ]
   })
+}
+
+/** On a route the stops hold their phase: a double-click belongs to the nearest one. */
+function nearestStop(items: any[], point: { x: number; y: number }) {
+  let best: any = null
+  let distance = Infinity
+  for (const item of items) {
+    if (item.kind !== 'waypoint') continue
+    const d = Math.abs(item.x + item.w / 2 - point.x)
+    if (d < distance) { best = item; distance = d }
+  }
+  return best
 }
 
 function zoomAt(view: { x: number; y: number; zoom: number }, point: { x: number; y: number }, factor: number) {

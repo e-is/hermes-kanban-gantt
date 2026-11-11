@@ -9,6 +9,8 @@ var ROUTE_STEP = 300;
 var HUB_W = 320;
 var HUB_H = 150;
 var STACK = 4;
+var RESULT_W = 236;
+var RESULT_GAP = 14;
 var MAX_ITEMS = 600;
 var STAGE_OF = {
   triage: "queued",
@@ -84,7 +86,7 @@ function phasesOf(tasks) {
     taskIds: []
   }));
   const byPhase = new Map(phases.map((p) => [p.id, p]));
-  const loose = { id: "loose", label: "Sans jalon", kind: "loose", taskIds: [] };
+  const loose = { id: "loose", label: "No milestone", kind: "loose", taskIds: [] };
   for (const task of tasks) {
     if (isMilestone(task)) continue;
     const owner = phaseOf(task.id, tasks);
@@ -100,8 +102,10 @@ function boardFromTasks(tasks, options = {}) {
   const max = Math.max(1, options.max ?? MAX_ITEMS);
   const kept = tasks.slice(0, max);
   const phases = phasesOf(kept);
+  for (const phase of phases) if (phase.kind === "loose" && options.looseLabel) phase.label = options.looseLabel;
   const phaseByTask = /* @__PURE__ */ new Map();
   for (const phase of phases) for (const id of phase.taskIds) phaseByTask.set(id, phase.id);
+  const byKept = index(kept);
   const items = kept.map((task) => ({
     id: `n:${task.id}`,
     kind: "note",
@@ -116,7 +120,10 @@ function boardFromTasks(tasks, options = {}) {
     stage: stageOf(task.status),
     owner: task.assignee ?? null,
     label: task.label ?? null,
-    summary: task.latest_summary || ""
+    summary: task.latest_summary || "",
+    gated: (task.parents ?? []).some((p) => stageOf(byKept.get(p)?.status) !== "done" && byKept.has(p)),
+    // What a finished card delivered: its result, else the summary it was closed with.
+    result: stageOf(task.status) === "done" ? String(task.result || task.latest_summary || "").trim() : ""
   }));
   return {
     id: options.id ?? "board",
@@ -125,6 +132,7 @@ function boardFromTasks(tasks, options = {}) {
     phases,
     items,
     links: [],
+    results: options.results !== false,
     dropped: Math.max(0, tasks.length - kept.length)
   };
 }
@@ -150,17 +158,17 @@ function fitFrames(items) {
     return { ...item, ...box };
   });
 }
-function frameSlots(frame, count, cols = 2) {
+function frameSlots(frame, count, cols = 2, cell = NOTE_W) {
   return Array.from({ length: count }, (_, i) => ({
-    x: frame.x + GAP + i % cols * (NOTE_W + GAP),
+    x: frame.x + GAP + i % cols * (cell + GAP),
     y: frame.y + 64 + Math.floor(i / cols) * (NOTE_H + GAP)
   }));
 }
-function frameSize(count, cols = 2, title = "") {
+function frameSize(count, cols = 2, title = "", cell = NOTE_W) {
   const rows = Math.max(1, Math.ceil(count / cols));
   return {
     h: 64 + rows * (NOTE_H + GAP) + 4,
-    w: Math.max(GAP + cols * (NOTE_W + GAP), Math.round(78 + String(title).length * 10.5))
+    w: Math.max(GAP + cols * (cell + GAP), Math.round(78 + String(title).length * 10.5))
   };
 }
 function pathFractions(points) {
@@ -197,6 +205,24 @@ var titleItem = (board, x, y) => ({
   w: 900,
   h: 84
 });
+function resultFor(owner, x, y, h, w = RESULT_W) {
+  return {
+    id: `r:${owner.taskId}`,
+    kind: "result",
+    text: owner.result || "",
+    title: owner.text,
+    for: owner.id,
+    taskId: owner.taskId,
+    brief: owner.role === "milestone",
+    stage: "done",
+    x,
+    y,
+    w,
+    h
+  };
+}
+var delivers = (board, note) => Boolean(board.results !== false && note && note.result);
+var cellOf = (board, notes) => NOTE_W + (notes.some((n) => delivers(board, n)) ? RESULT_GAP + RESULT_W : 0);
 function routeLayout(board) {
   const items = [];
   const links = [];
@@ -208,7 +234,11 @@ function routeLayout(board) {
   for (const section of sectionsOfBoard(board)) {
     const { phase, index: index2, head, notes } = section;
     const cols = Math.max(1, Math.ceil(notes.length / STACK));
-    const block = Math.max(WAYPOINT_W, cols * NOTE_W + (cols - 1) * 14);
+    const cell = cellOf(board, notes);
+    const colsW = cols * cell + (cols - 1) * 14;
+    const brief = delivers(board, head);
+    const stopW = WAYPOINT_W + (brief ? RESULT_GAP + RESULT_W : 0);
+    const block = Math.max(stopW, colsW);
     const road = base + Math.round(Math.sin(index2 * 1.15) * 64);
     const above = index2 % 2 === 0;
     const stop = {
@@ -221,6 +251,7 @@ function routeLayout(board) {
       taskId: head?.taskId,
       stage: head?.stage,
       owner: head?.owner,
+      result: head?.result,
       step: index2 + 1,
       side: above ? "above" : "below",
       sticker: stickerFor(phase, index2),
@@ -228,20 +259,23 @@ function routeLayout(board) {
       done: section.done,
       w: WAYPOINT_W,
       h: WAYPOINT_H,
-      x: x + (block - WAYPOINT_W) / 2,
+      x: x + (block - stopW) / 2,
       y: above ? road - 56 - WAYPOINT_H : road + 56
     };
     items.push(stop);
-    const left = x + (block - (cols * NOTE_W + (cols - 1) * 14)) / 2;
+    if (brief) items.push(resultFor(stop, stop.x + WAYPOINT_W + RESULT_GAP, stop.y, WAYPOINT_H));
+    const left = x + (block - colsW) / 2;
     notes.forEach((note, n) => {
       const col = Math.floor(n / STACK);
       const row = n % STACK;
-      items.push({
+      const placed = {
         ...note,
         frame: stop.id,
-        x: left + col * (NOTE_W + 14),
+        x: left + col * (cell + 14),
         y: above ? stop.y - 26 - (row + 1) * (NOTE_H + 14) : stop.y + WAYPOINT_H + 14 + row * (NOTE_H + 14)
-      });
+      };
+      items.push(placed);
+      if (delivers(board, note)) items.push({ ...resultFor(placed, placed.x + NOTE_W + RESULT_GAP, placed.y, NOTE_H), frame: stop.id });
     });
     if (previous) links.push({ id: `r:${previous.id}>${stop.id}`, from: previous.id, to: stop.id, kind: "route" });
     previous = stop;
@@ -251,9 +285,14 @@ function routeLayout(board) {
   title.y = (rest.length ? Math.min(...rest.map((i) => i.y)) : 0) - 160;
   return { items, links };
 }
-function framed(section, cols, x, y) {
+function blockSize(board, section, cols) {
+  const cell = cellOf(board, section.notes);
+  const slots = section.notes.length + (delivers(board, section.head) ? 1 : 0);
+  return { cell, slots, size: frameSize(Math.max(1, slots), cols, section.phase.label, cell) };
+}
+function framed(board, section, cols, x, y) {
   const { phase, index: index2, head, notes } = section;
-  const size = frameSize(Math.max(1, notes.length), cols, phase.label);
+  const { cell, slots, size } = blockSize(board, section, cols);
   const frame = {
     id: `f:${phase.id}`,
     kind: "frame",
@@ -263,21 +302,32 @@ function framed(section, cols, x, y) {
     role: phase.kind === "milestone" ? "milestone" : "task",
     taskId: head?.taskId,
     stage: head?.stage,
+    result: head?.result,
     sticker: stickerFor(phase, index2),
     done: section.done,
     ...size,
     x: Math.round(x),
     y: Math.round(y)
   };
-  const slots = frameSlots(frame, notes.length, cols);
-  return [frame, ...notes.map((note, n) => ({ ...note, frame: frame.id, ...slots[n] }))];
+  const grid = frameSlots(frame, slots, cols, cell);
+  const out = [frame];
+  notes.forEach((note, n) => {
+    const placed = { ...note, frame: frame.id, ...grid[n] };
+    out.push(placed);
+    if (delivers(board, note)) out.push({ ...resultFor(placed, placed.x + NOTE_W + RESULT_GAP, placed.y, NOTE_H), frame: frame.id });
+  });
+  if (delivers(board, head)) {
+    const spot = grid[notes.length];
+    out.push({ ...resultFor(frame, spot.x, spot.y, NOTE_H, cell), frame: frame.id });
+  }
+  return out;
 }
 function columnsLayout(board) {
   const items = [titleItem(board, 0, 0)];
   let x = 0;
   for (const section of sectionsOfBoard(board)) {
     const cols = section.notes.length > 3 ? 2 : 1;
-    const block = framed(section, cols, x, 120);
+    const block = framed(board, section, cols, x, 120);
     items.push(...block);
     x += block[0].w + 56;
   }
@@ -286,7 +336,8 @@ function columnsLayout(board) {
 function mapLayout(board) {
   const sections = sectionsOfBoard(board);
   const count = Math.max(1, sections.length);
-  const sizes = sections.map((s) => frameSize(Math.max(1, s.notes.length), s.notes.length > 2 ? 2 : 1, s.phase.label));
+  const colsOf = (s) => s.notes.length > 2 ? 2 : 1;
+  const sizes = sections.map((s) => blockSize(board, s, colsOf(s)).size);
   const reach = Math.max(0, ...sizes.map((s) => Math.max(s.w, s.h)));
   const rx = Math.max(300 + count * 70, HUB_W / 2 + reach / 2 + 60);
   const ry = Math.max(220 + count * 40, HUB_H / 2 + reach / 2 + 40);
@@ -308,11 +359,53 @@ function mapLayout(board) {
     const size = sizes[i];
     const cx = hub.x + hub.w / 2 + Math.cos(angle) * rx;
     const cy = hub.y + hub.h / 2 + Math.sin(angle) * ry;
-    const block = framed(section, section.notes.length > 2 ? 2 : 1, cx - size.w / 2, cy - size.h / 2);
+    const block = framed(board, section, colsOf(section), cx - size.w / 2, cy - size.h / 2);
     items.push(...block);
     links.push({ id: `b:${block[0].id}`, from: hub.id, to: block[0].id, kind: "branch" });
   });
   return { items, links };
+}
+function arrowsOf(tasks, items) {
+  const drawn = /* @__PURE__ */ new Map();
+  for (const item of items) if (item.taskId && item.kind !== "result" && !drawn.has(item.taskId)) drawn.set(item.taskId, item.id);
+  const byId = index(tasks);
+  const out = [];
+  for (const child of tasks) {
+    for (const parentId of child.parents ?? []) {
+      const parent = byId.get(parentId);
+      if (!parent || isMilestone(parent)) continue;
+      const from = drawn.get(parentId);
+      const to = drawn.get(child.id);
+      if (!from || !to) continue;
+      out.push({ id: `a:${parentId}>${child.id}`, parent: parentId, child: child.id, from, to });
+    }
+  }
+  return out;
+}
+var isOpen = (section) => section.phase.kind === "loose" || section.head?.stage === "done";
+function handable(board) {
+  const out = /* @__PURE__ */ new Set();
+  for (const section of sectionsOfBoard(board)) {
+    if (!isOpen(section)) continue;
+    for (const note of section.notes) if (note.stage === "queued" && !note.gated && note.taskId) out.add(note.taskId);
+  }
+  return out;
+}
+function planNext(board) {
+  const sections = sectionsOfBoard(board);
+  const milestones = sections.filter((s) => s.phase.kind === "milestone");
+  const loose = sections.filter((s) => s.phase.kind === "loose");
+  for (const section of [...milestones, ...loose]) {
+    const { phase, head, notes } = section;
+    if (!isOpen(section)) {
+      return { phase: phase.id, hand: [], pass: head?.taskId ?? null, waiting: [] };
+    }
+    const open = notes.filter((n) => n.stage !== "done");
+    const hand = open.filter((n) => n.stage === "queued" && !n.gated).map((n) => n.taskId);
+    const waiting = open.filter((n) => n.stage !== "queued" || n.gated).map((n) => n.taskId);
+    if (hand.length || waiting.length) return { phase: phase.id, hand, pass: null, waiting };
+  }
+  return null;
 }
 function layoutBoard(board) {
   if (board.layout === "columns") return columnsLayout(board);
@@ -349,8 +442,8 @@ function boardMarkdown(board) {
   }
   return lines.join("\n");
 }
-function boardTable(board) {
-  const rows = [["Phase", "Tâche", "Statut", "Assigné", "Rôle"]];
+function boardTable(board, header = ["Phase", "Card", "Status", "Owner", "Role"]) {
+  const rows = [header];
   for (const phase of board.phases) {
     for (const note of board.items.filter((i) => i.phase === phase.id && i.kind === "note")) {
       rows.push([phase.label, note.text, note.stage ?? "", note.owner ?? "", note.role ?? ""]);
@@ -387,6 +480,12 @@ function positionsFor(stored, layout) {
 function withPosition(stored, layout, id, spot) {
   return { ...stored || {}, [`${layout}|${id}`]: { x: Math.round(spot.x), y: Math.round(spot.y) } };
 }
+function withoutLayout(stored, layout) {
+  const prefix = `${layout}|`;
+  const out = {};
+  for (const [key, spot] of Object.entries(stored || {})) if (!key.startsWith(prefix)) out[key] = spot;
+  return out;
+}
 export {
   GAP,
   HUB_H,
@@ -395,11 +494,14 @@ export {
   MILESTONE_LANE,
   NOTE_H,
   NOTE_W,
+  RESULT_GAP,
+  RESULT_W,
   ROUTE_STEP,
   STACK,
   WAYPOINT_H,
   WAYPOINT_W,
   applyPositions,
+  arrowsOf,
   badgeFor,
   boardFromTasks,
   boardMarkdown,
@@ -408,11 +510,13 @@ export {
   fitFrames,
   frameSize,
   frameSlots,
+  handable,
   layoutBoard,
   overlaps,
   pathFractions,
   phaseOf,
   phasesOf,
+  planNext,
   planStops,
   positionsFor,
   rectOf,
@@ -422,5 +526,6 @@ export {
   tiltOf,
   toDelimited,
   toneOf,
-  withPosition
+  withPosition,
+  withoutLayout
 };

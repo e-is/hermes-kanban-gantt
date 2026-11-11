@@ -14,7 +14,7 @@ import test from 'node:test'
 import {
   MILESTONE_LANE, NOTE_H, NOTE_W,
   applyPositions, badgeFor, boardFromTasks, boardMarkdown, boundsOf, boardTable,
-  frameSize, frameSlots, fitFrames, layoutBoard, overlaps, pathFractions, positionsFor, withPosition, phaseOf, phasesOf, planStops,
+  arrowsOf, frameSize, frameSlots, fitFrames, layoutBoard, overlaps, pathFractions, handable, planNext, positionsFor, withPosition, withoutLayout, phaseOf, phasesOf, planStops,
   rectOf, roleOf, stageCounts, stageOf, tiltOf, toDelimited, toneOf
 } from '../src/core/whiteboard-core.ts'
 
@@ -29,8 +29,8 @@ const task = (id, title, extra = {}) => ({
 // A board shaped like the one the mode is for: two milestones in a chain, work under each,
 // one loose card with no milestone above it.
 const TASKS = [
-  task('m1', 'Kickoff', { assignee: MILESTONE_LANE, status: 'done', completed_at: 1100, children: ['t1', 't2', 'm2'] }),
-  task('t1', 'Compare three suppliers', { status: 'done', parents: ['m1'], children: [], assignee: 'default' }),
+  task('m1', 'Kickoff', { assignee: MILESTONE_LANE, status: 'done', completed_at: 1100, children: ['t1', 't2', 'm2'], latest_summary: 'Scope and budget approved' }),
+  task('t1', 'Compare three suppliers', { status: 'done', parents: ['m1'], children: [], assignee: 'default', result: 'Supplier B: cheapest, ships in 3 days.' }),
   task('t2', 'Price the box', { status: 'running', parents: ['m1'], assignee: 'default' }),
   task('m2', 'Ship it', { assignee: MILESTONE_LANE, parents: ['m1'], children: ['t3'] }),
   task('t3', 'Pick the courier', { status: 'ready', parents: ['m2'], assignee: 'default' }),
@@ -139,7 +139,8 @@ const noOverlap = (items) => {
   }
 }
 
-const drawnCards = items => items.filter(i => i.taskId).map(i => i.taskId).sort()
+// A delivered card carries its task id too, but it is not the card: count the cards themselves.
+const drawnCards = items => items.filter(i => i.taskId && i.kind !== 'result').map(i => i.taskId).sort()
 
 test('a route lays one stop per phase along a road without overlapping cards', () => {
   const board = boardFromTasks(TASKS, { layout: 'route', title: 'Spring bake sale' })
@@ -280,6 +281,139 @@ test('the stage counts add up to the cards on the board', () => {
   assert.equal(Object.values(counts).reduce((a, b) => a + b, 0), board.items.filter(i => i.kind === 'note').length)
 })
 
+
+/* ── delivered results ────────────────────────────────────────────────────── */
+
+const resultsOf = items => items.filter(i => i.kind === 'result')
+
+test('a finished card with a result gets whiteboard\'s delivered card right beside it', () => {
+  for (const layout of ['route', 'columns', 'map']) {
+    const { items } = layoutBoard(boardFromTasks(TASKS, { layout }))
+    const results = resultsOf(items)
+    const r1 = results.find(r => r.taskId === 't1')
+    const owner = items.find(i => i.kind !== 'result' && i.taskId === 't1')
+
+    assert.ok(r1, `${layout}: t1 delivered nothing`)
+    assert.equal(r1.text, 'Supplier B: cheapest, ships in 3 days.')
+    assert.equal(r1.for, owner.id)
+    assert.ok(r1.x >= owner.x + owner.w, `${layout}: the result sits right of its card`)
+    assert.ok(!results.some(r => r.taskId === 't2'), 'an unfinished card delivers nothing')
+    // Every box keeps clear of every other.
+    const boxes = items.filter(i => ['note', 'waypoint', 'result'].includes(i.kind))
+    for (let a = 0; a < boxes.length; a += 1) {
+      for (let b = a + 1; b < boxes.length; b += 1) {
+        assert.equal(overlaps(boxes[a], boxes[b]), false, `${layout}: ${boxes[a].id} overlaps ${boxes[b].id}`)
+      }
+    }
+  }
+})
+
+test('a passed milestone delivers its brief (the summary it was closed with)', () => {
+  const { items } = layoutBoard(boardFromTasks(TASKS, { layout: 'route' }))
+  const brief = resultsOf(items).find(r => r.taskId === 'm1')
+
+  assert.ok(brief)
+  assert.equal(brief.brief, true)
+  assert.equal(brief.text, 'Scope and budget approved')
+  const { items: framed } = layoutBoard(boardFromTasks(TASKS, { layout: 'columns' }))
+  const frame = framed.find(i => i.kind === 'frame' && i.taskId === 'm1')
+  const inFrame = resultsOf(framed).find(r => r.taskId === 'm1')
+  assert.ok(inFrame.x >= frame.x && inFrame.x + inFrame.w <= frame.x + frame.w && inFrame.y + inFrame.h <= frame.y + frame.h, 'a frame holds its brief')
+})
+
+test('results can be turned off', () => {
+  const { items } = layoutBoard(boardFromTasks(TASKS, { layout: 'route', results: false }))
+  assert.equal(resultsOf(items).length, 0)
+})
+
+/* ── arrows are task links ────────────────────────────────────────────────── */
+
+test('an arrow is a real dependency, not the membership a phase already shows', () => {
+  const tasks = [
+    task('m', 'Gate', { assignee: MILESTONE_LANE, children: ['a', 'b', 'n'] }),
+    task('a', 'Prerequisite', { parents: ['m'], children: ['b'] }),
+    task('b', 'Needs a', { parents: ['m', 'a'] }),
+    task('n', 'Next gate', { assignee: MILESTONE_LANE, parents: ['m'] })
+  ]
+  const { items } = layoutBoard(boardFromTasks(tasks, { layout: 'route' }))
+  const arrows = arrowsOf(tasks, items)
+
+  assert.deepEqual(arrows.map(a => [a.parent, a.child]), [['a', 'b']])
+  assert.equal(arrows[0].from, 'n:a')
+  assert.equal(arrows[0].to, 'n:b')
+})
+
+/* ── running the plan ─────────────────────────────────────────────────────── */
+
+test('a milestone is the gate INTO its phase: its cards wait for it, the plan says so', () => {
+  const set = changes => TASKS.map(t => (changes[t.id] ? { ...t, status: changes[t.id] } : t))
+
+  // m1 is passed and its phase is at work (t2 running): nothing to hand, nothing to pass.
+  let next = planNext(boardFromTasks(TASKS))
+  assert.equal(next.phase, 'm1')
+  assert.deepEqual(next.hand, [])
+  assert.equal(next.pass, null)
+  assert.deepEqual(next.waiting, ['t2'])
+
+  // m1's phase done: what is left is m2, the gate into the next phase — a human passes it.
+  next = planNext(boardFromTasks(set({ t2: 'done' })))
+  assert.equal(next.phase, 'm2')
+  assert.equal(next.pass, 'm2')
+  assert.deepEqual(next.hand, [], 'm2\'s own cards wait for m2: never handed before it is passed')
+
+  // m2 passed: its cards are the plan now.
+  next = planNext(boardFromTasks(set({ t2: 'done', m2: 'done' })))
+  assert.equal(next.phase, 'm2')
+  assert.deepEqual(next.hand, ['t3'])
+  assert.equal(next.pass, null)
+
+  // A running card is not handed twice.
+  assert.deepEqual(planNext(boardFromTasks(set({ t2: 'done', m2: 'done', t3: 'running' }))).hand, [])
+})
+
+test('with every milestone passed and its work done, the loose cards are the plan', () => {
+  const all = TASKS.map(t => (['t2', 'm2', 't3'].includes(t.id) ? { ...t, status: 'done' } : t.id === 'loose' ? { ...t, status: 'todo' } : t))
+  const next = planNext(boardFromTasks(all))
+  assert.equal(next.phase, 'loose')
+  assert.deepEqual(next.hand, ['loose'])
+})
+
+test('only a card behind an open gate can be handed to Hermes', () => {
+  const ids = [...handable(boardFromTasks(TASKS))].sort()
+  // t3 is behind m2 (not passed); t2 runs; t1 is done; the loose card is blocked.
+  assert.deepEqual(ids, [])
+  const open = TASKS.map(t => (t.id === 'm2' ? { ...t, status: 'done' } : t.id === 'loose' ? { ...t, status: 'todo' } : t))
+  assert.deepEqual([...handable(boardFromTasks(open))].sort(), ['loose', 't3'])
+})
+
+test('a card still waiting for a prerequisite is never handed over (the ready action would force it)', () => {
+  const tasks = TASKS.map(t => (t.id === 'm2' ? { ...t, status: 'done' } : t))
+    .concat([task('pre', 'Prerequisite', { status: 'blocked', parents: ['m2'], children: ['t4'] }),
+             task('t4', 'Needs the prerequisite', { status: 'todo', parents: ['m2', 'pre'] })])
+  const ids = handable(boardFromTasks(tasks))
+  assert.equal(ids.has('t3'), true)
+  assert.equal(ids.has('t4'), false, 't4 waits for « pre », which is blocked')
+  assert.equal(planNext(boardFromTasks(tasks)).hand.includes('t4'), false)
+})
+
+/* ── tidy ─────────────────────────────────────────────────────────────────── */
+
+test('tidying a layout drops only that layout\'s positions', () => {
+  let stored = withPosition({}, 'map', 'n:t1', { x: 1, y: 1 })
+  stored = withPosition(stored, 'route', 'n:t1', { x: 2, y: 2 })
+  const tidy = withoutLayout(stored, 'map')
+
+  assert.deepEqual(positionsFor(tidy, 'map'), {})
+  assert.deepEqual(positionsFor(tidy, 'route'), { 'n:t1': { x: 2, y: 2 } })
+})
+
+test('the exports take their labels from the caller (no French in the core)', () => {
+  const board = boardFromTasks(TASKS, { title: 'Bake sale', looseLabel: 'No milestone' })
+  assert.match(boardMarkdown(board), /## No milestone/)
+  const table = boardTable(board, ['Phase', 'Card', 'Status', 'Owner', 'Role'])
+  assert.deepEqual(table[0], ['Phase', 'Card', 'Status', 'Owner', 'Role'])
+})
+
 /* ── geometry ─────────────────────────────────────────────────────────────── */
 
 test('rectangles know when they overlap and when they only touch', () => {
@@ -358,7 +492,7 @@ test('Markdown follows the road and marks milestones and finished cards', () => 
   assert.ok(md.indexOf('## ◆ Kickoff') < md.indexOf('## ◆ Ship it'))
   assert.match(md, /- \[x\] Compare three suppliers/)
   assert.match(md, /- \[ \] Pick the courier/)
-  assert.match(md, /## Sans jalon/)
+  assert.match(md, /## No milestone/)
 })
 
 test('a CSV quotes what needs quoting and keeps reading order', () => {

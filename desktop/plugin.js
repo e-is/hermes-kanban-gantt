@@ -400,7 +400,7 @@ var en = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -410,6 +410,29 @@ var en = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -700,7 +723,7 @@ var fr = {
   wbRoute: "Route",
   wbColumns: "Colonnes",
   wbMap: "Carte",
-  wbHint: "Glissez une note pour l’arranger · cliquez pour ouvrir la carte",
+  wbHint: "Glisser pour ranger · clic pour ouvrir · double-clic pour ajouter · Maj+glisser pour sélectionner",
   wbStops: (n) => `${n} phases`,
   wbDone: "terminées",
   wbFit: "Ajuster",
@@ -710,6 +733,29 @@ var fr = {
   wbMilestone: "Jalon",
   wbStep: (n) => `Jalon ${n}`,
   wbLoose: "Sans jalon",
+  wbHand: "Confier à Hermes",
+  wbHandHint: "Un profil Hermes prend la carte et elle passe prête : le dispatcher fait le travail",
+  wbPass: "Passer le jalon",
+  wbPassHint: "La phase précédente est terminée : passer ce jalon libère les cartes qui l’attendent",
+  wbRun: "Dérouler le plan",
+  wbRunHint: "Confie à Hermes les cartes de la phase ouverte, ou passe le jalon suivant une fois la phase terminée",
+  wbNextHand: (phase, n) => `Ensuite : ${phase} — ${n} carte${n > 1 ? "s" : ""} à confier`,
+  wbNextPass: (phase) => `Ensuite : passer le jalon « ${phase} » pour ouvrir sa phase`,
+  wbNextWaiting: (phase, n) => `${phase} : ${n} carte${n > 1 ? "s" : ""} en cours`,
+  wbPlanDone: "Tous les jalons sont passés",
+  wbDelivered: "Livré",
+  wbBrief: "Bilan",
+  wbCopyMd: "Copier en Markdown",
+  wbCopyCsv: "Copier en CSV",
+  wbCopied: "Copié dans le presse-papiers",
+  wbTidy: "Ranger : oublier les déplacements de ce layout",
+  wbUnlink: "Délier",
+  wbLinkHint: "Glissez vers une autre carte : elle attendra celle-ci",
+  wbHanded: (n) => `${n} carte${n > 1 ? "s" : ""} confiée${n > 1 ? "s" : ""} à Hermes`,
+  wbHandFailed: (title) => `Impossible de confier « ${title} »`,
+  wbPassed: (title) => `Jalon passé : ${title}`,
+  wbPassSummary: (title) => `Jalon « ${title} » passé depuis le tableau blanc`,
+  wbTableHead: ["Phase", "Carte", "Statut", "Assigné", "Rôle"],
   wbStages: { queued: "En attente", running: "En cours", review: "Revue", blocked: "Bloquée", done: "Terminée" }
 };
 
@@ -997,7 +1043,7 @@ var zh = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -1007,6 +1053,29 @@ var zh = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -1299,7 +1368,7 @@ var af = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -1309,6 +1378,29 @@ var af = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -1601,7 +1693,7 @@ var ar = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -1611,6 +1703,29 @@ var ar = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -1903,7 +2018,7 @@ var de = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -1913,6 +2028,29 @@ var de = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -2205,7 +2343,7 @@ var es = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -2215,6 +2353,29 @@ var es = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -2507,7 +2668,7 @@ var ga = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -2517,6 +2678,29 @@ var ga = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -2809,7 +2993,7 @@ var hu = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -2819,6 +3003,29 @@ var hu = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -3111,7 +3318,7 @@ var it = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -3121,6 +3328,29 @@ var it = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -3413,7 +3643,7 @@ var ja = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -3423,6 +3653,29 @@ var ja = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -3715,7 +3968,7 @@ var ko = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -3725,6 +3978,29 @@ var ko = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -4017,7 +4293,7 @@ var pt = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -4027,6 +4303,29 @@ var pt = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -4314,7 +4613,7 @@ var ru = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -4324,6 +4623,29 @@ var ru = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -4616,7 +4938,7 @@ var tr = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -4626,6 +4948,29 @@ var tr = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -4913,7 +5258,7 @@ var uk = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -4923,6 +5268,29 @@ var uk = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -5215,7 +5583,7 @@ var zhHant = {
   wbRoute: "Route",
   wbColumns: "Columns",
   wbMap: "Map",
-  wbHint: "Drag a note to arrange it · click to open the card",
+  wbHint: "Drag to arrange · click to open · double-click to add · shift-drag to select",
   wbStops: (n) => `${n} phases`,
   wbDone: "done",
   wbFit: "Fit",
@@ -5225,6 +5593,29 @@ var zhHant = {
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
+  wbHand: "Hand to Hermes",
+  wbHandHint: "A Hermes profile takes this card and it becomes ready: the dispatcher does the work",
+  wbPass: "Pass milestone",
+  wbPassHint: "The phase before is done: passing this milestone frees the cards waiting for it",
+  wbRun: "Run the plan",
+  wbRunHint: "Hands the open phase's cards to Hermes, or passes the next milestone once the phase is done",
+  wbNextHand: (phase, n) => `Next: ${phase} — ${n} card${n === 1 ? "" : "s"} to hand over`,
+  wbNextPass: (phase) => `Next: pass « ${phase} » to open its phase`,
+  wbNextWaiting: (phase, n) => `${phase}: ${n} card${n === 1 ? "" : "s"} in progress`,
+  wbPlanDone: "Every milestone is passed",
+  wbDelivered: "Delivered",
+  wbBrief: "Brief",
+  wbCopyMd: "Copy Markdown",
+  wbCopyCsv: "Copy CSV",
+  wbCopied: "Copied to the clipboard",
+  wbTidy: "Tidy: forget where things were dragged in this layout",
+  wbUnlink: "Unlink",
+  wbLinkHint: "Drag to another card: it will wait for this one",
+  wbHanded: (n) => `${n} card${n === 1 ? "" : "s"} handed to Hermes`,
+  wbHandFailed: (title) => `Could not hand « ${title} » over`,
+  wbPassed: (title) => `Milestone passed: ${title}`,
+  wbPassSummary: (title) => `Milestone « ${title} » passed from the whiteboard`,
+  wbTableHead: ["Phase", "Card", "Status", "Owner", "Role"],
   wbStages: { queued: "Queued", running: "Running", review: "Review", blocked: "Blocked", done: "Done" }
 };
 
@@ -6601,7 +6992,7 @@ function MoveUnderDialog({
 }
 
 // src/ui/WhiteboardView.tsx
-import { Codicon as Codicon5, icons } from "@hermes/plugin-sdk";
+import { Codicon as Codicon5, icons, Streamdown } from "@hermes/plugin-sdk";
 import { useEffect as useEffect3, useMemo as useMemo2, useRef as useRef2, useState as useState4 } from "react";
 import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
 
@@ -6616,6 +7007,8 @@ var ROUTE_STEP = 300;
 var HUB_W = 320;
 var HUB_H = 150;
 var STACK = 4;
+var RESULT_W = 236;
+var RESULT_GAP = 14;
 var MAX_ITEMS = 600;
 var STAGE_OF = {
   triage: "queued",
@@ -6691,7 +7084,7 @@ function phasesOf(tasks) {
     taskIds: []
   }));
   const byPhase = new Map(phases.map((p) => [p.id, p]));
-  const loose = { id: "loose", label: "Sans jalon", kind: "loose", taskIds: [] };
+  const loose = { id: "loose", label: "No milestone", kind: "loose", taskIds: [] };
   for (const task of tasks) {
     if (isMilestone(task)) continue;
     const owner = phaseOf(task.id, tasks);
@@ -6707,8 +7100,10 @@ function boardFromTasks(tasks, options = {}) {
   const max = Math.max(1, options.max ?? MAX_ITEMS);
   const kept = tasks.slice(0, max);
   const phases = phasesOf(kept);
+  for (const phase of phases) if (phase.kind === "loose" && options.looseLabel) phase.label = options.looseLabel;
   const phaseByTask = /* @__PURE__ */ new Map();
   for (const phase of phases) for (const id of phase.taskIds) phaseByTask.set(id, phase.id);
+  const byKept = index(kept);
   const items = kept.map((task) => ({
     id: `n:${task.id}`,
     kind: "note",
@@ -6723,7 +7118,10 @@ function boardFromTasks(tasks, options = {}) {
     stage: stageOf(task.status),
     owner: task.assignee ?? null,
     label: task.label ?? null,
-    summary: task.latest_summary || ""
+    summary: task.latest_summary || "",
+    gated: (task.parents ?? []).some((p) => stageOf(byKept.get(p)?.status) !== "done" && byKept.has(p)),
+    // What a finished card delivered: its result, else the summary it was closed with.
+    result: stageOf(task.status) === "done" ? String(task.result || task.latest_summary || "").trim() : ""
   }));
   return {
     id: options.id ?? "board",
@@ -6732,8 +7130,12 @@ function boardFromTasks(tasks, options = {}) {
     phases,
     items,
     links: [],
+    results: options.results !== false,
     dropped: Math.max(0, tasks.length - kept.length)
   };
+}
+function overlaps(a, b) {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 function boundsOf(items) {
   if (items.length === 0) return { x: 0, y: 0, w: 0, h: 0 };
@@ -6743,17 +7145,17 @@ function boundsOf(items) {
   const bottom = Math.max(...items.map((i) => i.y + i.h));
   return { x, y, w: right - x, h: bottom - y };
 }
-function frameSlots(frame, count, cols = 2) {
+function frameSlots(frame, count, cols = 2, cell = NOTE_W) {
   return Array.from({ length: count }, (_, i) => ({
-    x: frame.x + GAP + i % cols * (NOTE_W + GAP),
+    x: frame.x + GAP + i % cols * (cell + GAP),
     y: frame.y + 64 + Math.floor(i / cols) * (NOTE_H + GAP)
   }));
 }
-function frameSize(count, cols = 2, title = "") {
+function frameSize(count, cols = 2, title = "", cell = NOTE_W) {
   const rows = Math.max(1, Math.ceil(count / cols));
   return {
     h: 64 + rows * (NOTE_H + GAP) + 4,
-    w: Math.max(GAP + cols * (NOTE_W + GAP), Math.round(78 + String(title).length * 10.5))
+    w: Math.max(GAP + cols * (cell + GAP), Math.round(78 + String(title).length * 10.5))
   };
 }
 function pathFractions(points) {
@@ -6790,6 +7192,24 @@ var titleItem = (board, x, y) => ({
   w: 900,
   h: 84
 });
+function resultFor(owner, x, y, h, w = RESULT_W) {
+  return {
+    id: `r:${owner.taskId}`,
+    kind: "result",
+    text: owner.result || "",
+    title: owner.text,
+    for: owner.id,
+    taskId: owner.taskId,
+    brief: owner.role === "milestone",
+    stage: "done",
+    x,
+    y,
+    w,
+    h
+  };
+}
+var delivers = (board, note) => Boolean(board.results !== false && note && note.result);
+var cellOf = (board, notes) => NOTE_W + (notes.some((n) => delivers(board, n)) ? RESULT_GAP + RESULT_W : 0);
 function routeLayout(board) {
   const items = [];
   const links = [];
@@ -6801,10 +7221,14 @@ function routeLayout(board) {
   for (const section of sectionsOfBoard(board)) {
     const { phase, index: index2, head, notes } = section;
     const cols = Math.max(1, Math.ceil(notes.length / STACK));
-    const block = Math.max(WAYPOINT_W, cols * NOTE_W + (cols - 1) * 14);
+    const cell = cellOf(board, notes);
+    const colsW = cols * cell + (cols - 1) * 14;
+    const brief = delivers(board, head);
+    const stopW = WAYPOINT_W + (brief ? RESULT_GAP + RESULT_W : 0);
+    const block = Math.max(stopW, colsW);
     const road = base + Math.round(Math.sin(index2 * 1.15) * 64);
     const above = index2 % 2 === 0;
-    const stop = {
+    const stop2 = {
       id: `p:${phase.id}`,
       kind: "waypoint",
       text: phase.label,
@@ -6814,6 +7238,7 @@ function routeLayout(board) {
       taskId: head?.taskId,
       stage: head?.stage,
       owner: head?.owner,
+      result: head?.result,
       step: index2 + 1,
       side: above ? "above" : "below",
       sticker: stickerFor(phase, index2),
@@ -6821,32 +7246,40 @@ function routeLayout(board) {
       done: section.done,
       w: WAYPOINT_W,
       h: WAYPOINT_H,
-      x: x + (block - WAYPOINT_W) / 2,
+      x: x + (block - stopW) / 2,
       y: above ? road - 56 - WAYPOINT_H : road + 56
     };
-    items.push(stop);
-    const left = x + (block - (cols * NOTE_W + (cols - 1) * 14)) / 2;
+    items.push(stop2);
+    if (brief) items.push(resultFor(stop2, stop2.x + WAYPOINT_W + RESULT_GAP, stop2.y, WAYPOINT_H));
+    const left = x + (block - colsW) / 2;
     notes.forEach((note, n) => {
       const col = Math.floor(n / STACK);
       const row = n % STACK;
-      items.push({
+      const placed = {
         ...note,
-        frame: stop.id,
-        x: left + col * (NOTE_W + 14),
-        y: above ? stop.y - 26 - (row + 1) * (NOTE_H + 14) : stop.y + WAYPOINT_H + 14 + row * (NOTE_H + 14)
-      });
+        frame: stop2.id,
+        x: left + col * (cell + 14),
+        y: above ? stop2.y - 26 - (row + 1) * (NOTE_H + 14) : stop2.y + WAYPOINT_H + 14 + row * (NOTE_H + 14)
+      };
+      items.push(placed);
+      if (delivers(board, note)) items.push({ ...resultFor(placed, placed.x + NOTE_W + RESULT_GAP, placed.y, NOTE_H), frame: stop2.id });
     });
-    if (previous) links.push({ id: `r:${previous.id}>${stop.id}`, from: previous.id, to: stop.id, kind: "route" });
-    previous = stop;
+    if (previous) links.push({ id: `r:${previous.id}>${stop2.id}`, from: previous.id, to: stop2.id, kind: "route" });
+    previous = stop2;
     x += Math.max(ROUTE_STEP, block + 56);
   }
   const rest2 = items.filter((i) => i !== title);
   title.y = (rest2.length ? Math.min(...rest2.map((i) => i.y)) : 0) - 160;
   return { items, links };
 }
-function framed(section, cols, x, y) {
+function blockSize(board, section, cols) {
+  const cell = cellOf(board, section.notes);
+  const slots = section.notes.length + (delivers(board, section.head) ? 1 : 0);
+  return { cell, slots, size: frameSize(Math.max(1, slots), cols, section.phase.label, cell) };
+}
+function framed(board, section, cols, x, y) {
   const { phase, index: index2, head, notes } = section;
-  const size = frameSize(Math.max(1, notes.length), cols, phase.label);
+  const { cell, slots, size } = blockSize(board, section, cols);
   const frame = {
     id: `f:${phase.id}`,
     kind: "frame",
@@ -6856,21 +7289,32 @@ function framed(section, cols, x, y) {
     role: phase.kind === "milestone" ? "milestone" : "task",
     taskId: head?.taskId,
     stage: head?.stage,
+    result: head?.result,
     sticker: stickerFor(phase, index2),
     done: section.done,
     ...size,
     x: Math.round(x),
     y: Math.round(y)
   };
-  const slots = frameSlots(frame, notes.length, cols);
-  return [frame, ...notes.map((note, n) => ({ ...note, frame: frame.id, ...slots[n] }))];
+  const grid = frameSlots(frame, slots, cols, cell);
+  const out = [frame];
+  notes.forEach((note, n) => {
+    const placed = { ...note, frame: frame.id, ...grid[n] };
+    out.push(placed);
+    if (delivers(board, note)) out.push({ ...resultFor(placed, placed.x + NOTE_W + RESULT_GAP, placed.y, NOTE_H), frame: frame.id });
+  });
+  if (delivers(board, head)) {
+    const spot = grid[notes.length];
+    out.push({ ...resultFor(frame, spot.x, spot.y, NOTE_H, cell), frame: frame.id });
+  }
+  return out;
 }
 function columnsLayout(board) {
   const items = [titleItem(board, 0, 0)];
   let x = 0;
   for (const section of sectionsOfBoard(board)) {
     const cols = section.notes.length > 3 ? 2 : 1;
-    const block = framed(section, cols, x, 120);
+    const block = framed(board, section, cols, x, 120);
     items.push(...block);
     x += block[0].w + 56;
   }
@@ -6879,7 +7323,8 @@ function columnsLayout(board) {
 function mapLayout(board) {
   const sections = sectionsOfBoard(board);
   const count = Math.max(1, sections.length);
-  const sizes = sections.map((s) => frameSize(Math.max(1, s.notes.length), s.notes.length > 2 ? 2 : 1, s.phase.label));
+  const colsOf = (s) => s.notes.length > 2 ? 2 : 1;
+  const sizes = sections.map((s) => blockSize(board, s, colsOf(s)).size);
   const reach = Math.max(0, ...sizes.map((s) => Math.max(s.w, s.h)));
   const rx = Math.max(300 + count * 70, HUB_W / 2 + reach / 2 + 60);
   const ry = Math.max(220 + count * 40, HUB_H / 2 + reach / 2 + 40);
@@ -6901,16 +7346,86 @@ function mapLayout(board) {
     const size = sizes[i];
     const cx = hub.x + hub.w / 2 + Math.cos(angle) * rx;
     const cy = hub.y + hub.h / 2 + Math.sin(angle) * ry;
-    const block = framed(section, section.notes.length > 2 ? 2 : 1, cx - size.w / 2, cy - size.h / 2);
+    const block = framed(board, section, colsOf(section), cx - size.w / 2, cy - size.h / 2);
     items.push(...block);
     links.push({ id: `b:${block[0].id}`, from: hub.id, to: block[0].id, kind: "branch" });
   });
   return { items, links };
 }
+function arrowsOf(tasks, items) {
+  const drawn = /* @__PURE__ */ new Map();
+  for (const item of items) if (item.taskId && item.kind !== "result" && !drawn.has(item.taskId)) drawn.set(item.taskId, item.id);
+  const byId = index(tasks);
+  const out = [];
+  for (const child of tasks) {
+    for (const parentId of child.parents ?? []) {
+      const parent = byId.get(parentId);
+      if (!parent || isMilestone(parent)) continue;
+      const from = drawn.get(parentId);
+      const to = drawn.get(child.id);
+      if (!from || !to) continue;
+      out.push({ id: `a:${parentId}>${child.id}`, parent: parentId, child: child.id, from, to });
+    }
+  }
+  return out;
+}
+var isOpen = (section) => section.phase.kind === "loose" || section.head?.stage === "done";
+function handable(board) {
+  const out = /* @__PURE__ */ new Set();
+  for (const section of sectionsOfBoard(board)) {
+    if (!isOpen(section)) continue;
+    for (const note of section.notes) if (note.stage === "queued" && !note.gated && note.taskId) out.add(note.taskId);
+  }
+  return out;
+}
+function planNext(board) {
+  const sections = sectionsOfBoard(board);
+  const milestones = sections.filter((s) => s.phase.kind === "milestone");
+  const loose = sections.filter((s) => s.phase.kind === "loose");
+  for (const section of [...milestones, ...loose]) {
+    const { phase, head, notes } = section;
+    if (!isOpen(section)) {
+      return { phase: phase.id, hand: [], pass: head?.taskId ?? null, waiting: [] };
+    }
+    const open = notes.filter((n) => n.stage !== "done");
+    const hand = open.filter((n) => n.stage === "queued" && !n.gated).map((n) => n.taskId);
+    const waiting = open.filter((n) => n.stage !== "queued" || n.gated).map((n) => n.taskId);
+    if (hand.length || waiting.length) return { phase: phase.id, hand, pass: null, waiting };
+  }
+  return null;
+}
 function layoutBoard(board) {
   if (board.layout === "columns") return columnsLayout(board);
   if (board.layout === "map") return mapLayout(board);
   return routeLayout(board);
+}
+function boardMarkdown(board) {
+  const lines = [`# ${board.title}`, ""];
+  for (const phase of board.phases) {
+    lines.push(phase.kind === "milestone" ? `## ◆ ${phase.label}` : `## ${phase.label}`);
+    const notes = board.items.filter((i) => i.phase === phase.id && i.kind === "note");
+    for (const note of notes) {
+      lines.push(`- [${note.stage === "done" ? "x" : " "}] ${note.text}`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+function boardTable(board, header = ["Phase", "Card", "Status", "Owner", "Role"]) {
+  const rows = [header];
+  for (const phase of board.phases) {
+    for (const note of board.items.filter((i) => i.phase === phase.id && i.kind === "note")) {
+      rows.push([phase.label, note.text, note.stage ?? "", note.owner ?? "", note.role ?? ""]);
+    }
+  }
+  return rows;
+}
+function toDelimited(rows, delimiter = ",") {
+  const cell = (value) => {
+    const text = String(value ?? "");
+    return text.includes(delimiter) || text.includes('"') || text.includes("\n") ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  return rows.map((row) => row.map(cell).join(delimiter)).join("\n");
 }
 function applyPositions(layout, positions) {
   const items = layout.items.map((item) => {
@@ -6933,6 +7448,12 @@ function positionsFor(stored, layout) {
 }
 function withPosition(stored, layout, id, spot) {
   return { ...stored || {}, [`${layout}|${id}`]: { x: Math.round(spot.x), y: Math.round(spot.y) } };
+}
+function withoutLayout(stored, layout) {
+  const prefix = `${layout}|`;
+  const out = {};
+  for (const [key, spot] of Object.entries(stored || {})) if (!key.startsWith(prefix)) out[key] = spot;
+  return out;
 }
 
 // src/ui/WhiteboardView.tsx
@@ -7012,7 +7533,40 @@ var CSS = `
 .wb-layouts .wb-hint { margin-left: auto; font: 11px var(--font-sans, system-ui); color: var(--ui-text-quaternary); }
 .wb-empty { position: absolute; z-index: 4; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(560px, calc(100% - 48px)); text-align: center; pointer-events: none; }
 .wb-empty p { margin: 0 auto 18px; max-width: 440px; font: 14px/1.5 var(--font-sans, system-ui); color: var(--ui-text-secondary); }
-@media (prefers-reduced-motion: reduce) { .wb-item, .wb-world.wb-glide { transition: none; } .wb-work-dot { animation: none; } }
+.wb-hand { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 99px; border: 1px solid hsl(30 40% 25% / .25); background: hsl(40 60% 99% / .9); color: ${INK}; font: 600 11px var(--font-sans, system-ui); cursor: pointer; opacity: 0; transform: translateY(3px); transition: opacity .15s, transform .15s; z-index: 2; }
+.wb-item:hover .wb-hand, .wb-selected .wb-hand, .wb-hand.wb-show { opacity: 1; transform: none; }
+.wb-hand:hover { background: hsl(${HERMES_HUE} 95% 62%); border-color: hsl(${HERMES_HUE} 70% 40% / .5); }
+.wb-hand svg { width: 13px; height: 13px; }
+.wb-far .wb-hand { display: none; }
+.wb-selected > div > .wb-result { outline: 2px solid hsl(${HERMES_HUE} 85% 52%); outline-offset: 3px; }
+.wb-lit > div > .wb-note, .wb-lit > div > .wb-card, .wb-lit > div > .wb-frame { outline: 2px dashed hsl(${HERMES_HUE} 85% 50%); outline-offset: 4px; }
+.wb-result { position: absolute; inset: 0; border-radius: 14px; padding: 14px 16px 12px; background: hsl(40 50% 99%); color: ${INK}; border: 1px solid hsl(${HERMES_HUE} 60% 50% / .35); box-shadow: 0 16px 34px -20px hsl(30 40% 20% / .6); display: flex; flex-direction: column; gap: 6px; cursor: grab; overflow: hidden; }
+.wb-result-head { display: flex; align-items: flex-start; gap: 8px; }
+.wb-result-head b { flex: 1; font: 400 calc(18px * min(var(--wb-k, 1), 1.35))/1.15 ${DISPLAY}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-postmark { flex-shrink: 0; transform: rotate(-8deg); animation: wb-stamp .55s cubic-bezier(.2, 1.5, .4, 1) .3s both; white-space: nowrap; text-transform: uppercase; padding: 2px 7px; border: 1.5px solid hsl(${HERMES_HUE} 70% 38%); border-radius: 6px; color: hsl(${HERMES_HUE} 70% 32%); font: 700 9.5px var(--font-sans, system-ui); letter-spacing: .08em; }
+.wb-result-body { flex: 1; min-height: 0; overflow: auto; font: 12.5px/1.45 var(--font-sans, system-ui); cursor: text; user-select: text; }
+.wb-result-body, .wb-result-body * { color: ${INK} !important; background-color: transparent !important; }
+.wb-result-body p { margin: 0 0 6px; }
+.wb-result-body ul, .wb-result-body ol { margin: 0 0 6px; padding-left: 18px; }
+.wb-result-body h1, .wb-result-body h2, .wb-result-body h3 { font-size: 13px; margin: 4px 0; }
+@keyframes wb-stamp { from { opacity: 0; transform: rotate(-22deg) scale(2.6); } to { opacity: 1; transform: rotate(-8deg) scale(1); } }
+.wb-brief { border: 2px solid hsl(${HERMES_HUE} 85% 52%); }
+.wb-port { position: absolute; right: -11px; top: 50%; width: 16px; height: 16px; margin-top: -8px; border-radius: 99px; background: hsl(${HERMES_HUE} 92% 56%); border: 2px solid hsl(40 60% 99%); box-shadow: 0 2px 6px hsl(30 30% 20% / .35); cursor: crosshair; z-index: 3; transform: scale(var(--wb-inv, 1)); opacity: 0; transition: opacity .15s; }
+.wb-item:hover > .wb-port, .wb-selected > .wb-port { opacity: 1; }
+.wb-cursor { position: absolute; left: 0; top: 0; z-index: 30; pointer-events: none; transition: transform .55s cubic-bezier(.2, .8, .2, 1), opacity .3s; }
+.wb-cursor-label { position: absolute; left: 20px; top: 20px; height: 22px; padding: 0 9px; border-radius: 7px 99px 99px 99px; font: 600 11.5px/22px var(--font-sans, system-ui); color: ${INK}; white-space: nowrap; box-shadow: 0 6px 14px -8px hsl(30 40% 20% / .6); }
+.wb-marquee { position: absolute; z-index: 25; border: 1px solid hsl(${HERMES_HUE} 85% 50%); background: hsl(${HERMES_HUE} 90% 60% / .1); border-radius: 4px; pointer-events: none; }
+.wb-badge { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 99px; font: 600 10px/16px var(--font-sans, system-ui); background: hsl(${HERMES_HUE} 90% 55%); color: ${INK}; text-align: center; }
+.wb-btn:disabled { opacity: .45; cursor: default; }
+.wb-btn.wb-go { background: hsl(${HERMES_HUE} 92% 56%); color: ${INK}; font-weight: 600; }
+.wb-btn.wb-go:hover { background: hsl(${HERMES_HUE} 95% 62%); color: ${INK}; }
+.wb-btn.wb-go .wb-badge { background: ${INK}; color: hsl(${HERMES_HUE} 92% 62%); }
+.wb-compose-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.wb-compose-row .wb-next { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px var(--font-sans, system-ui); color: var(--ui-text-secondary); }
+.wb-arrow-hit { pointer-events: stroke; cursor: pointer; }
+.wb-unlink { position: absolute; z-index: 26; transform: translate(-50%, -50%); }
+.wb-unlink .wb-btn { background: var(--ui-surface-background); border-color: var(--ui-stroke-secondary); box-shadow: 0 10px 22px -14px hsl(230 30% 10% / .6); }
+@media (prefers-reduced-motion: reduce) { .wb-item, .wb-cursor, .wb-world.wb-glide { transition: none; } .wb-work-dot, .wb-postmark { animation: none; } }
 `;
 function installStyles() {
   if (typeof document === "undefined" || typeof document.head?.append !== "function") return;
@@ -7032,6 +7586,7 @@ var STICKERS = {
   chart: { hue: 152, fill: ["M16 38h7v12h-7Z", "M28 30h7v20h-7Z", "M40 22h7v28h-7Z"], ink: ["M16 38h7v12h-7ZM28 30h7v20h-7ZM40 22h7v28h-7Z", "M14 27l12-9 8 5 14-11", "M42 12h6v6"] },
   gear: { hue: 220, fill: ["M32 16l4 1 2-3 5 3-1 4 3 3 4-1 3 5-3 2 1 4-1 4 3 2-3 5-4-1-3 3 1 4-5 3-2-3-4 1-4-1-2 3-5-3 1-4-3-3-4 1-3-5 3-2-1-4 1-4-3-2 3-5 4 1 3-3-1-4 5-3 2 3Z"], ink: ["M32 16l4 1 2-3 5 3-1 4 3 3 4-1 3 5-3 2 1 4-1 4 3 2-3 5-4-1-3 3 1 4-5 3-2-3-4 1-4-1-2 3-5-3 1-4-3-3-4 1-3-5 3-2-1-4 1-4-3-2 3-5 4 1 3-3-1-4 5-3 2 3Z", "M32 25a7 7 0 1 0 0.1 0"] },
   pin: { hue: 8, fill: ["M32 51C22 39 18 32 18 26a14 14 0 0 1 28 0c0 6-4 13-14 25Z"], ink: ["M32 51C22 39 18 32 18 26a14 14 0 0 1 28 0c0 6-4 13-14 25Z", "M32 21a5 5 0 1 0 0.1 0"] },
+  sandal: { hue: 41, fill: ["M15 42c0-12 9-22 22-25 7-2 12 0 14 2-6 1-10 3-13 6 6-1 11 0 13 2-6 1-10 3-12 6 5 0 9 1 11 3-7 2-12 5-17 8-6 4-12 4-18-2Z"], ink: ["M15 42c0-12 9-22 22-25 7-2 12 0 14 2-6 1-10 3-13 6 6-1 11 0 13 2-6 1-10 3-12 6 5 0 9 1 11 3-7 2-12 5-17 8-6 4-12 4-18-2Z", "M21 38c4-7 10-12 17-15M25 41c4-5 9-8 14-10M29 44c3-3 7-5 11-6"] },
   spark: { hue: 266, fill: ["M32 12c2 11 6 16 17 18-11 2-15 7-17 18-2-11-6-16-17-18 11-2 15-7 17-18Z"], ink: ["M32 12c2 11 6 16 17 18-11 2-15 7-17 18-2-11-6-16-17-18 11-2 15-7 17-18Z", "M48 44c1 3 2 4 5 5-3 1-4 2-5 5-1-3-2-4-5-5 3-1 4-2 5-5Z"] }
 };
 function Sticker({ name, size = 56, tilt = 0 }) {
@@ -7070,17 +7625,75 @@ function smoothPath(points) {
   }
   return d;
 }
-var anchorOf = (stop) => stop.side === "below" ? { x: stop.x + stop.w / 2, y: stop.y - 56 } : { x: stop.x + stop.w / 2, y: stop.y + stop.h + 56 };
+var anchorOf = (stop2) => stop2.side === "below" ? { x: stop2.x + stop2.w / 2, y: stop2.y - 56 } : { x: stop2.x + stop2.w / 2, y: stop2.y + stop2.h + 56 };
 var centerOf = (item) => ({ x: item.x + item.w / 2, y: item.y + item.h / 2 });
 var clamp = (v, min, max) => Math.min(max, Math.max(min, v));
-function Links({ items, links, at }) {
+var LINE = {
+  hand: "M5 12h11M12 6l6 6-6 6",
+  play: "M8 5l11 7-11 7Z",
+  wand: "M5 19L15 9M14 4v3M19 9h-3M17.5 5.5l-2 2M11 4.5l.8 1.6M19.5 13l-1.6-.8",
+  check: "M5 12l5 5L20 7",
+  unlink: "M5 19L19 5M10 5h9v9M5 5l4 4M15 15l4 4"
+};
+function Line({ name }) {
+  return jsx6("svg", {
+    "aria-hidden": true,
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    strokeWidth: 1.8,
+    viewBox: "0 0 24 24",
+    children: jsx6("path", { d: LINE[name] })
+  });
+}
+var AGENT_HUES = [262, 172, 12, 205, 330];
+function hueOf(name) {
+  if (!name || name === "default" || name === "hermes") return HERMES_HUE;
+  let hash = 0;
+  for (const char of name) hash = hash * 31 + char.charCodeAt(0) | 0;
+  return AGENT_HUES[Math.abs(hash) % AGENT_HUES.length];
+}
+function Cursor({ x, y, label, hue }) {
+  const gold = hue === HERMES_HUE;
+  const fill = `hsl(${hue} 88% ${gold ? 56 : 62}%)`;
+  return jsxs6("div", {
+    className: "wb-cursor",
+    "data-wb-cursor": label,
+    style: { transform: `translate(${Math.round(x)}px, ${Math.round(y)}px)` },
+    children: [
+      jsxs6("svg", {
+        "aria-hidden": true,
+        height: 30,
+        width: 30,
+        viewBox: "0 0 30 30",
+        style: { overflow: "visible" },
+        children: [
+          // The wing: Hermes travels.
+          jsx6("path", { d: "M10 4c-4-3-9-3-10-1 3 0 5 1 7 3-3-1-6 0-7 2 3-1 6 0 8 1", fill: "none", stroke: fill, strokeLinecap: "round", strokeWidth: 2, transform: "translate(-2 8)" }, "w"),
+          jsx6("path", { d: "M3 2l17 8-7.5 2.2L9 20Z", fill, stroke: INK, strokeLinejoin: "round", strokeWidth: 1.6 }, "a")
+        ]
+      }, "svg"),
+      jsx6("div", { className: "wb-cursor-label", style: { background: fill }, children: label }, "l")
+    ]
+  });
+}
+function edgePoint(rect, toward) {
+  const c = centerOf(rect);
+  const dx = toward.x - c.x;
+  const dy = toward.y - c.y;
+  if (!dx && !dy) return c;
+  const scale = Math.min(dx ? (rect.w / 2 + 6) / Math.abs(dx) : Infinity, dy ? (rect.h / 2 + 6) / Math.abs(dy) : Infinity);
+  return { x: c.x + dx * scale, y: c.y + dy * scale };
+}
+function Links({ items, links, arrows, at, wire, picked, onPick }) {
   const byId = new Map(items.map((item) => [item.id, item]));
   const route = items.filter((item) => item.kind === "waypoint").map(at);
   const anchors = route.map(anchorOf);
   const lead = anchors.length > 1 ? [{ x: anchors[0].x - 140, y: anchors[0].y + 24 }, ...anchors, { x: anchors[anchors.length - 1].x + 140, y: anchors[anchors.length - 1].y - 24 }] : anchors;
   const road = smoothPath(lead);
   const children = [];
-  const travelled = route.findIndex((stop) => !stop.done);
+  const travelled = route.findIndex((stop2) => !stop2.done);
   const doneCount = travelled < 0 ? route.length : travelled;
   const fraction = doneCount === 0 || lead.length < 2 ? 0 : doneCount === route.length ? 1 : pathFractions(lead)[doneCount];
   if (road) {
@@ -7090,13 +7703,13 @@ function Links({ items, links, at }) {
       jsx6("path", { d: road, fill: "none", stroke: LINE_INK, strokeDasharray: "2 11", strokeLinecap: "round", strokeWidth: 2.4 }, "lane")
     );
   }
-  route.forEach((stop, index2) => {
+  route.forEach((stop2, index2) => {
     const anchor = anchors[index2];
-    const edge = stop.side === "below" ? stop.y : stop.y + stop.h;
+    const edge = stop2.side === "below" ? stop2.y : stop2.y + stop2.h;
     children.push(
-      jsx6("path", { d: `M${anchor.x} ${anchor.y} L${anchor.x} ${edge}`, stroke: LINE_INK, strokeDasharray: "1 5", strokeLinecap: "round", strokeWidth: 2 }, `stem${stop.id}`),
-      jsx6("circle", { cx: anchor.x, cy: anchor.y, fill: stop.done ? GOLD : "hsl(42 55% 97%)", r: 15, stroke: INK, strokeWidth: 2.2 }, `dot${stop.id}`),
-      stop.done ? jsx6("path", { d: `M${anchor.x - 6} ${anchor.y + 0.5} l4.5 4.5 l7.5 -9`, fill: "none", stroke: INK, strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2.6 }, `ok${stop.id}`) : jsx6("text", { fill: INK, fontFamily: "var(--font-sans, system-ui)", fontSize: 12, fontWeight: 700, textAnchor: "middle", x: anchor.x, y: anchor.y + 4, children: String(index2 + 1) }, `num${stop.id}`)
+      jsx6("path", { d: `M${anchor.x} ${anchor.y} L${anchor.x} ${edge}`, stroke: LINE_INK, strokeDasharray: "1 5", strokeLinecap: "round", strokeWidth: 2 }, `stem${stop2.id}`),
+      jsx6("circle", { cx: anchor.x, cy: anchor.y, fill: stop2.done ? GOLD : "hsl(42 55% 97%)", r: 15, stroke: INK, strokeWidth: 2.2 }, `dot${stop2.id}`),
+      stop2.done ? jsx6("path", { d: `M${anchor.x - 6} ${anchor.y + 0.5} l4.5 4.5 l7.5 -9`, fill: "none", stroke: INK, strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2.6 }, `ok${stop2.id}`) : jsx6("text", { fill: INK, fontFamily: "var(--font-sans, system-ui)", fontSize: 12, fontWeight: 700, textAnchor: "middle", x: anchor.x, y: anchor.y + 4, children: String(index2 + 1) }, `num${stop2.id}`)
     );
   });
   for (const link of links) {
@@ -7110,13 +7723,45 @@ function Links({ items, links, at }) {
     const my = (p.y + q.y) / 2 - 40;
     children.push(jsx6("path", { d: `M${p.x} ${p.y} Q${mx} ${my} ${q.x} ${q.y}`, fill: "none", stroke: LINE_INK, strokeLinecap: "round", strokeOpacity: 0.34, strokeWidth: 2.4 }, link.id));
   }
+  for (const arrow of arrows) {
+    const a = byId.get(arrow.from);
+    const b = byId.get(arrow.to);
+    if (!a || !b) continue;
+    const A = at(a);
+    const B = at(b);
+    const p = edgePoint(A, centerOf(B));
+    const q = edgePoint(B, centerOf(A));
+    const angle = Math.atan2(q.y - p.y, q.x - p.x);
+    const wing = (turn) => `${q.x - 14 * Math.cos(angle + turn)},${q.y - 14 * Math.sin(angle + turn)}`;
+    const on = picked === arrow.id;
+    const ink = on ? GOLD : LINE_INK;
+    const d = `M${p.x} ${p.y} L${q.x - 6 * Math.cos(angle)} ${q.y - 6 * Math.sin(angle)}`;
+    children.push(
+      jsx6("path", { d, fill: "none", stroke: ink, strokeLinecap: "round", strokeWidth: on ? 3.2 : 2.4, "data-wb-arrow": arrow.id }, arrow.id),
+      jsx6("polygon", { fill: ink, points: `${q.x},${q.y} ${wing(0.42)} ${wing(-0.42)}` }, `${arrow.id}head`),
+      jsx6("path", { className: "wb-arrow-hit", d, fill: "none", stroke: "transparent", strokeWidth: 16, "data-arrow": arrow.id, onPointerDown: (event) => {
+        event.stopPropagation();
+        onPick?.(arrow.id);
+      } }, `${arrow.id}hit`)
+    );
+  }
+  const source = wire ? byId.get(wire.from) : null;
+  if (source) {
+    const p = edgePoint(at(source), wire);
+    children.push(
+      jsx6("path", { d: `M${p.x} ${p.y} L${wire.x} ${wire.y}`, fill: "none", stroke: GOLD, strokeDasharray: "6 6", strokeLinecap: "round", strokeWidth: 2.6 }, "wire"),
+      jsx6("circle", { cx: wire.x, cy: wire.y, fill: GOLD, r: 5 }, "wireend")
+    );
+  }
   return jsx6("svg", { className: "wb-links", children });
 }
-function NoteView({ item, i18n, k, far }) {
+var stop = (event) => event.stopPropagation();
+function NoteView({ item, i18n, k, far, onHand, canHand }) {
   const tone = TONES[item.tone] || TONES.butter;
   const running = item.stage === "running";
   const owner = item.owner && item.owner !== "jalon" ? item.owner : null;
   const meta = !running && !far;
+  const handable2 = canHand && !far && onHand;
   const lines = Math.max(1, Math.floor((item.h - 30 - (running || meta ? 26 : 0)) / (14 * k * 1.34)));
   return jsxs6("div", {
     className: "wb-note",
@@ -7134,14 +7779,40 @@ function NoteView({ item, i18n, k, far }) {
       running ? jsxs6("div", {
         className: "wb-work",
         children: [
-          jsx6("div", { className: "wb-work-dot", style: { background: `hsl(${HERMES_HUE} 80% 50%)` } }, "d"),
+          jsx6("div", { className: "wb-work-dot", style: { background: `hsl(${hueOf(owner || "")} 80% 50%)` } }, "d"),
           jsx6("span", { children: item.summary || (owner ? `${i18n.wbStages?.running} · ${owner}` : i18n.wbStages?.running) }, "t")
         ]
-      }, "work") : null
+      }, "work") : null,
+      handable2 ? jsxs6("button", {
+        className: "wb-hand",
+        type: "button",
+        "data-nodrag": true,
+        title: i18n.wbHandHint,
+        onPointerDown: stop,
+        onClick: (event) => {
+          event.stopPropagation();
+          onHand([item.taskId]);
+        },
+        children: [jsx6(Line, { name: "hand" }, "i"), i18n.wbHand]
+      }, "hand") : null
     ]
   });
 }
-function WaypointView({ item, i18n }) {
+function PassButton({ item, i18n, onPass }) {
+  return jsxs6("button", {
+    className: "wb-hand wb-show",
+    type: "button",
+    "data-nodrag": true,
+    title: i18n.wbPassHint,
+    onPointerDown: stop,
+    onClick: (event) => {
+      event.stopPropagation();
+      onPass(item.taskId);
+    },
+    children: [jsx6(Line, { name: "check" }, "i"), i18n.wbPass]
+  });
+}
+function WaypointView({ item, i18n, passable, onPass }) {
   const label = item.role === "milestone" ? i18n.wbStep(item.step) : i18n.wbLoose;
   return jsxs6("div", {
     className: `wb-card${item.done ? " wb-card-done" : ""}`,
@@ -7154,20 +7825,24 @@ function WaypointView({ item, i18n }) {
           jsx6("span", { className: "wb-label", children: label }, "l"),
           jsx6("b", { children: item.role === "milestone" ? item.title : i18n.wbLoose }, "t")
         ]
-      }, "body")
+      }, "body"),
+      passable ? jsx6(PassButton, { item, i18n, onPass }, "pass") : null
     ]
   });
 }
-function FrameView({ item, i18n }) {
-  return jsx6("div", {
+function FrameView({ item, i18n, passable, onPass }) {
+  return jsxs6("div", {
     className: "wb-frame",
-    children: jsxs6("div", {
-      className: "wb-frame-head",
-      children: [
-        item.sticker ? jsx6("div", { className: "wb-frame-stamp", children: jsx6(Sticker, { name: item.sticker, size: 54, tilt: -6 }) }, "s") : null,
-        jsx6("b", { children: item.role === "milestone" ? item.title : i18n.wbLoose }, "t")
-      ]
-    })
+    children: [
+      jsxs6("div", {
+        className: "wb-frame-head",
+        children: [
+          item.sticker ? jsx6("div", { className: "wb-frame-stamp", children: jsx6(Sticker, { name: item.sticker, size: 54, tilt: -6 }) }, "s") : null,
+          jsx6("b", { children: item.role === "milestone" ? item.title : i18n.wbLoose }, "t")
+        ]
+      }, "head"),
+      passable ? jsx6(PassButton, { item, i18n, onPass }, "pass") : null
+    ]
   });
 }
 function HubView({ item }) {
@@ -7179,8 +7854,33 @@ function HubView({ item }) {
 function TitleView({ item }) {
   return jsx6("div", { className: "wb-free", children: jsx6("div", { className: "wb-titletext", children: item.text }) });
 }
+function ResultView({ item, i18n }) {
+  const Markdown = typeof Streamdown === "function" || Streamdown && typeof Streamdown === "object" ? Streamdown : null;
+  return jsxs6("div", {
+    className: `wb-result${item.brief ? " wb-brief" : ""}`,
+    children: [
+      jsxs6("div", {
+        className: "wb-result-head",
+        children: [
+          item.brief ? jsx6(Sticker, { name: "sandal", size: 34, tilt: -8 }, "s") : null,
+          jsx6("b", { children: item.title }, "t"),
+          jsx6("span", { className: "wb-postmark", children: item.brief ? i18n.wbBrief : i18n.wbDelivered }, "p")
+        ]
+      }, "head"),
+      jsx6("div", {
+        className: "wb-result-body",
+        "data-nodrag": true,
+        onPointerDown: stop,
+        onWheel: stop,
+        children: Markdown ? jsx6(Markdown, { controls: false, children: item.text || "" }) : item.text
+      }, "body")
+    ]
+  });
+}
 var LAYOUTS = ["route", "columns", "map"];
-var MOVABLE = /* @__PURE__ */ new Set(["note", "waypoint", "frame", "hub", "text"]);
+var MOVABLE = /* @__PURE__ */ new Set(["note", "waypoint", "frame", "hub", "text", "result"]);
+var LINKABLE = /* @__PURE__ */ new Set(["note", "waypoint", "frame"]);
+var MAX_UNDO = 60;
 function WhiteboardView({
   tasks = [],
   i18n,
@@ -7191,32 +7891,67 @@ function WhiteboardView({
   onLayout,
   positions = {},
   onPositions,
-  onOpen
+  onOpen,
+  onCreate,
+  onLink,
+  onUnlink,
+  onHand,
+  onPass,
+  onCopy
 }) {
-  installStyles();
+  useEffect3(() => {
+    installStyles();
+  }, []);
   const ref = useRef2(null);
   const gesture = useRef2(null);
+  const undoStack = useRef2([]);
+  const redoStack = useRef2([]);
   const [view, setView] = useState4({ x: 0, y: 0, zoom: 1 });
   const [glide, setGlide] = useState4(false);
   const [drag, setDrag] = useState4(null);
   const [panning, setPanning] = useState4(false);
+  const [selection, setSelection] = useState4([]);
+  const [marquee, setMarquee] = useState4(null);
+  const [wire, setWire] = useState4(null);
+  const [picked, setPicked] = useState4(null);
   const model = useMemo2(
-    () => boardFromTasks(tasks || [], { title: title || "Board", layout, id: board || "board" }),
-    [tasks, title, layout, board]
+    () => boardFromTasks(tasks || [], { title: title || "Board", layout, id: board || "board", looseLabel: i18n.wbLoose }),
+    [tasks, title, layout, board, i18n]
   );
   const scene = useMemo2(() => applyPositions(layoutBoard(model), positionsFor(positions, layout)), [model, positions, layout]);
+  const arrows = useMemo2(() => arrowsOf(tasks || [], scene.items), [tasks, scene.items]);
+  const next = useMemo2(() => planNext(model), [model]);
+  const canHand = useMemo2(() => handable(model), [model]);
   const bounds = useMemo2(() => boundsOf(scene.items), [scene.items]);
+  const byId = useMemo2(() => new Map(scene.items.map((item) => [item.id, item])), [scene.items]);
+  const commit = (nextPositions) => {
+    undoStack.current = [...undoStack.current.slice(-MAX_UNDO + 1), positions || {}];
+    redoStack.current = [];
+    onPositions?.(nextPositions);
+  };
+  const undo = () => {
+    const prev = undoStack.current.pop();
+    if (!prev) return;
+    redoStack.current.push(positions || {});
+    onPositions?.(prev);
+  };
+  const redo = () => {
+    const again = redoStack.current.pop();
+    if (!again) return;
+    undoStack.current.push(positions || {});
+    onPositions?.(again);
+  };
   const fit = (animate) => {
     const node = ref.current;
     const w = node?.clientWidth || 1100;
     const h = node?.clientHeight || 720;
     const pad = 120;
-    const zoom = clamp(Math.min((w - pad) / Math.max(bounds.w, 1), (h - pad - 90) / Math.max(bounds.h, 1)), 0.2, 1.1);
+    const zoom = clamp(Math.min((w - pad) / Math.max(bounds.w, 1), (h - pad - 130) / Math.max(bounds.h, 1)), 0.2, 1.1);
     if (animate) {
       setGlide(true);
       setTimeout(() => setGlide(false), 700);
     }
-    setView({ x: Math.round(w / 2 - (bounds.x + bounds.w / 2) * zoom), y: Math.round((h - 90) / 2 - (bounds.y + bounds.h / 2) * zoom), zoom });
+    setView({ x: Math.round(w / 2 - (bounds.x + bounds.w / 2) * zoom), y: Math.round((h - 130) / 2 - (bounds.y + bounds.h / 2) * zoom), zoom });
   };
   const zoomBy = (factor) => {
     const node = ref.current;
@@ -7232,6 +7967,7 @@ function WhiteboardView({
     const node = ref.current;
     if (!node) return void 0;
     const onWheel = (event) => {
+      if (event.target?.closest?.("[data-nodrag]")) return;
       event.preventDefault();
       const rect = node.getBoundingClientRect();
       if (event.ctrlKey || event.metaKey) {
@@ -7243,7 +7979,18 @@ function WhiteboardView({
     node.addEventListener("wheel", onWheel, { passive: false });
     return () => node.removeEventListener("wheel", onWheel);
   }, []);
-  const moving = (id) => scene.items.filter((item) => item.id === id || item.frame === id).map((item) => item.id);
+  const pointAt = (event) => {
+    const rect = ref.current?.getBoundingClientRect() || { left: 0, top: 0 };
+    return { x: (event.clientX - rect.left - view.x) / view.zoom, y: (event.clientY - rect.top - view.y) / view.zoom };
+  };
+  const withChildren = (ids) => {
+    const set = new Set(ids);
+    for (const item of scene.items) {
+      if (item.frame && set.has(item.frame) || item.for && set.has(item.for)) set.add(item.id);
+    }
+    for (const item of scene.items) if (item.for && set.has(item.for)) set.add(item.id);
+    return [...set];
+  };
   const offsets = useMemo2(() => {
     const map = /* @__PURE__ */ new Map();
     if (drag) for (const id of drag.ids) map.set(id, { x: drag.dx, y: drag.dy });
@@ -7253,12 +8000,33 @@ function WhiteboardView({
     const offset = offsets.get(item.id);
     return offset ? { ...item, x: item.x + offset.x, y: item.y + offset.y } : item;
   };
+  const chrome = (target) => target?.closest?.(".wb-zoom, .wb-compose, .wb-unlink");
   const onPointerDown = (event) => {
-    if (event.button !== 0 || event.target.closest?.(".wb-zoom, .wb-compose")) return;
+    if (event.button !== 0 || chrome(event.target)) return;
+    if (event.target.closest?.("[data-nodrag]")) return;
+    const port = event.target.closest?.("[data-port]");
+    if (port) {
+      const from = port.getAttribute("data-port");
+      gesture.current = { kind: "connect", from, moved: false, x: event.clientX, y: event.clientY };
+      setWire({ from, ...pointAt(event) });
+      return;
+    }
+    setPicked(null);
     const hit = event.target.closest?.("[data-item]");
     const id = hit?.getAttribute("data-item");
-    const item = id ? scene.items.find((i) => i.id === id) : null;
-    gesture.current = item && MOVABLE.has(item.kind) ? { kind: "drag", item, ids: moving(item.id), moved: false, x: event.clientX, y: event.clientY } : { kind: "pan", moved: false, view, x: event.clientX, y: event.clientY };
+    const item = id ? byId.get(id) : null;
+    if (item && MOVABLE.has(item.kind)) {
+      const picks = selection.includes(id) ? selection : event.shiftKey ? [...selection, id] : [id];
+      gesture.current = { kind: "drag", item, picks, ids: withChildren(picks), moved: false, shift: event.shiftKey, x: event.clientX, y: event.clientY };
+      return;
+    }
+    if (event.shiftKey) {
+      const rect = ref.current?.getBoundingClientRect() || { left: 0, top: 0 };
+      gesture.current = { kind: "marquee", start: pointAt(event), moved: false, x: event.clientX, y: event.clientY };
+      setMarquee({ x: event.clientX - rect.left, y: event.clientY - rect.top, w: 0, h: 0 });
+      return;
+    }
+    gesture.current = { kind: "pan", moved: false, view, x: event.clientX, y: event.clientY };
   };
   const onPointerMove = (event) => {
     const current = gesture.current;
@@ -7268,7 +8036,11 @@ function WhiteboardView({
     if (!current.moved && Math.hypot(dx, dy) < 3) return;
     current.moved = true;
     if (current.kind === "drag") setDrag({ ids: current.ids, dx: dx / view.zoom, dy: dy / view.zoom });
-    else {
+    else if (current.kind === "connect") setWire({ from: current.from, ...pointAt(event) });
+    else if (current.kind === "marquee") {
+      const rect = ref.current?.getBoundingClientRect() || { left: 0, top: 0 };
+      setMarquee({ x: Math.min(current.x, event.clientX) - rect.left, y: Math.min(current.y, event.clientY) - rect.top, w: Math.abs(dx), h: Math.abs(dy) });
+    } else {
       setPanning(true);
       setView({ ...current.view, x: current.view.x + dx, y: current.view.y + dy });
     }
@@ -7281,50 +8053,104 @@ function WhiteboardView({
     if (current.kind === "drag" && current.moved) {
       const dx = (event.clientX - current.x) / view.zoom;
       const dy = (event.clientY - current.y) / view.zoom;
-      let next = { ...positions || {} };
+      let nextPositions = { ...positions || {} };
       for (const id of current.ids) {
-        const item = scene.items.find((i) => i.id === id);
-        if (item) next = withPosition(next, layout, id, { x: item.x + dx, y: item.y + dy });
+        const item = byId.get(id);
+        if (item) nextPositions = withPosition(nextPositions, layout, id, { x: item.x + dx, y: item.y + dy });
       }
       setDrag(null);
-      onPositions?.(next);
+      setSelection(current.picks);
+      commit(nextPositions);
     } else if (current.kind === "drag") {
       setDrag(null);
-      if (current.item.taskId) onOpen?.(current.item.taskId);
+      if (current.shift) {
+        const id = current.item.id;
+        setSelection((sel) => sel.includes(id) ? sel.filter((s) => s !== id) : [...sel, id]);
+      } else {
+        setSelection([current.item.id]);
+        if (current.item.taskId) onOpen?.(current.item.taskId);
+      }
+    } else if (current.kind === "connect") {
+      setWire(null);
+      const target = typeof document !== "undefined" ? document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-item]")?.getAttribute("data-item") : null;
+      const from = byId.get(current.from);
+      const to = target ? byId.get(target) : null;
+      if (from?.taskId && to?.taskId && from.taskId !== to.taskId) onLink?.(from.taskId, to.taskId);
+    } else if (current.kind === "marquee") {
+      const end = pointAt(event);
+      const box = { x: Math.min(end.x, current.start.x), y: Math.min(end.y, current.start.y), w: Math.abs(end.x - current.start.x), h: Math.abs(end.y - current.start.y) };
+      setSelection(scene.items.filter((item) => item.kind !== "frame" && item.kind !== "text" && overlaps(box, item)).map((item) => item.id));
+      setMarquee(null);
+    } else if (current.kind === "pan" && !current.moved) {
+      setSelection([]);
     }
   };
+  const onDoubleClick = (event) => {
+    if (chrome(event.target) || event.target.closest?.("[data-nodrag]")) return;
+    const point = pointAt(event);
+    const hit = event.target.closest?.("[data-item]");
+    const item = hit ? byId.get(hit.getAttribute("data-item")) : null;
+    if (item && item.kind === "note") return;
+    const holder = item && (item.kind === "frame" || item.kind === "waypoint") ? item : scene.items.find((i) => i.kind === "frame" && point.x >= i.x && point.x <= i.x + i.w && point.y >= i.y && point.y <= i.y + i.h) || nearestStop(scene.items, point);
+    onCreate?.(holder?.role === "milestone" ? holder.taskId || null : null);
+  };
   const handlers = useRef2({});
-  handlers.current = { move: onPointerMove, up: onPointerUp };
+  handlers.current = { move: onPointerMove, up: onPointerUp, undo, redo, picked, arrows, selection };
   useEffect3(() => {
     const move = (event) => handlers.current.move(event);
     const up = (event) => handlers.current.up(event);
+    const key = (event) => {
+      const target = event.target;
+      if (target && (target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName || ""))) return;
+      if (!ref.current || !ref.current.isConnected) return;
+      const mod = event.ctrlKey || event.metaKey;
+      if (event.key === "Escape") {
+        setSelection([]);
+        setPicked(null);
+        setWire(null);
+        gesture.current = null;
+      } else if (mod && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) handlers.current.redo();
+        else handlers.current.undo();
+      } else if (mod && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        handlers.current.redo();
+      }
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
+    window.addEventListener("keydown", key);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      window.removeEventListener("keydown", key);
     };
   }, []);
   const notes = scene.items.filter((item) => item.kind === "note");
-  const empty = scene.items.every((item) => item.kind === "text" || item.kind === "hub") && notes.length === 0 && !scene.items.some((item) => item.taskId);
+  const empty = !(tasks || []).length;
   const dots = 24 * view.zoom;
   const far = view.zoom < 0.55;
   const k = clamp(0.62 / view.zoom, 1, 1.5);
   const ordered = [...scene.items].sort((a, b) => (a.kind === "frame" ? 0 : 1) - (b.kind === "frame" ? 0 : 1));
   const zIndex = (kind) => kind === "frame" ? 1 : kind === "text" ? 2 : 5;
+  const lit = new Set(next ? scene.items.filter((i) => i.taskId && (next.hand.includes(i.taskId) || next.pass === i.taskId) && i.kind !== "result").map((i) => i.id) : []);
+  const pickedArrow = picked ? arrows.find((a) => a.id === picked) : null;
   const itemView = (item) => {
-    const body = item.kind === "note" ? jsx6(NoteView, { item, i18n, k, far }) : item.kind === "waypoint" ? jsx6(WaypointView, { item, i18n }) : item.kind === "frame" ? jsx6(FrameView, { item, i18n }) : item.kind === "hub" ? jsx6(HubView, { item }) : jsx6(TitleView, { item });
+    const passable = !!next?.pass && next.pass === item.taskId && !!onPass;
+    const body = item.kind === "note" ? jsx6(NoteView, { item, i18n, k, far, onHand, canHand: canHand.has(item.taskId) }) : item.kind === "waypoint" ? jsx6(WaypointView, { item, i18n, passable, onPass }) : item.kind === "frame" ? jsx6(FrameView, { item, i18n, passable, onPass }) : item.kind === "hub" ? jsx6(HubView, { item }) : item.kind === "result" ? jsx6(ResultView, { item, i18n }) : jsx6(TitleView, { item });
     const offset = offsets.get(item.id);
-    const selected = !!selectedId && item.taskId === selectedId;
-    return jsx6("div", {
-      className: `wb-item${selected ? " wb-selected" : ""}${offset ? " wb-dragging" : ""}`,
+    const selected = selection.includes(item.id) || !!selectedId && item.taskId === selectedId && item.kind !== "result";
+    return jsxs6("div", {
+      className: `wb-item${selected ? " wb-selected" : ""}${lit.has(item.id) ? " wb-lit" : ""}${offset ? " wb-dragging" : ""}`,
       "data-item": item.id,
       "data-wb-note": item.kind === "note" ? item.taskId : void 0,
       "data-wb-frame": item.kind === "frame" ? item.phase : void 0,
       "data-wb-marker": item.kind === "waypoint" ? item.phase : void 0,
-      title: item.taskId ? item.text : void 0,
+      "data-wb-result": item.kind === "result" ? item.taskId : void 0,
+      title: item.taskId && item.kind !== "result" ? item.text : void 0,
       style: {
         left: item.x,
         top: item.y,
@@ -7333,13 +8159,40 @@ function WhiteboardView({
         transform: offset ? `translate(${offset.x}px, ${offset.y}px)` : void 0,
         zIndex: selected ? 20 : zIndex(item.kind)
       },
-      children: jsx6("div", { style: { height: "100%", position: "relative" }, children: body })
+      children: [
+        jsx6("div", { style: { height: "100%", position: "relative" }, children: body }, "body"),
+        item.taskId && LINKABLE.has(item.kind) && onLink && !offset ? jsx6("div", { className: "wb-port", "data-port": item.id, title: i18n.wbLinkHint }, "port") : null
+      ]
     }, item.id);
   };
   const Icon = (name, codicon) => {
     const Glyph = icons?.[name];
     return typeof Glyph === "function" || Glyph && typeof Glyph === "object" ? jsx6(Glyph, { size: 15 }) : jsx6(Codicon5, { name: codicon, size: "0.85rem" });
   };
+  const cursors = notes.filter((n) => n.stage === "running").map((n) => {
+    const c = at(n);
+    const label = n.owner && n.owner !== "jalon" ? n.owner : "Hermes";
+    return { id: n.id, label, hue: hueOf(n.owner || ""), x: (c.x + c.w - 14) * view.zoom + view.x, y: (c.y + 6) * view.zoom + view.y };
+  });
+  const runPlan = () => {
+    if (!next) return;
+    if (next.hand.length) onHand?.(next.hand);
+    else if (next.pass) onPass?.(next.pass);
+  };
+  const nextPhase = next ? model.phases.find((p) => p.id === next.phase) : null;
+  const nextLabel = !next ? i18n.wbPlanDone : next.hand.length ? i18n.wbNextHand(nextPhase?.kind === "loose" ? i18n.wbLoose : nextPhase?.label || "", next.hand.length) : next.pass ? i18n.wbNextPass(nextPhase?.label || "") : i18n.wbNextWaiting(nextPhase?.kind === "loose" ? i18n.wbLoose : nextPhase?.label || "", next.waiting.length);
+  const copy = (kind) => {
+    const text = kind === "md" ? boardMarkdown(model) : toDelimited(boardTable(model, i18n.wbTableHead), ",");
+    onCopy?.(text, kind);
+  };
+  const unlinkAt = pickedArrow ? (() => {
+    const a = byId.get(pickedArrow.from);
+    const b = byId.get(pickedArrow.to);
+    if (!a || !b) return null;
+    const p = centerOf(at(a));
+    const q = centerOf(at(b));
+    return { x: (p.x + q.x) / 2 * view.zoom + view.x, y: (p.y + q.y) / 2 * view.zoom + view.y };
+  })() : null;
   return jsxs6("div", {
     className: "wb-page",
     children: [
@@ -7347,32 +8200,75 @@ function WhiteboardView({
         className: `wb-canvas${panning ? " wb-panning" : ""}`,
         ref,
         onPointerDown,
+        onDoubleClick,
         style: { backgroundPosition: `${view.x}px ${view.y}px`, backgroundSize: `${dots}px ${dots}px` },
         children: [
           empty ? jsx6("div", { className: "wb-empty", children: jsx6("p", { children: i18n.wbEmpty }) }, "empty") : jsxs6("div", {
             className: `wb-world${glide ? " wb-glide" : ""}${far ? " wb-far" : ""}`,
-            style: { "--wb-k": k, transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` },
-            children: [jsx6(Links, { items: scene.items, links: scene.links, at }, "links"), ...ordered.map(itemView)]
+            style: { "--wb-k": k, "--wb-inv": Math.min(3, 1 / view.zoom), transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` },
+            children: [
+              jsx6(Links, { items: scene.items, links: scene.links, arrows, at, wire, picked, onPick: setPicked }, "links"),
+              ...ordered.map(itemView)
+            ]
           }, "world"),
-          jsx6("div", {
-            className: "wb-compose",
-            children: jsxs6("div", {
-              className: "wb-layouts",
-              children: [
-                ...LAYOUTS.map((mode) => jsx6("button", {
-                  type: "button",
-                  className: layout === mode ? "wb-on" : void 0,
-                  "aria-pressed": layout === mode,
-                  onClick: () => onLayout?.(mode),
-                  children: mode === "route" ? i18n.wbRoute : mode === "columns" ? i18n.wbColumns : i18n.wbMap
-                }, mode)),
-                jsx6("span", { className: "wb-hint", children: i18n.wbHint }, "hint")
-              ]
+          ...cursors.map((c) => jsx6(Cursor, { x: c.x, y: c.y, label: c.label, hue: c.hue }, `cursor${c.id}`)),
+          marquee ? jsx6("div", { className: "wb-marquee", style: { left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h } }, "marquee") : null,
+          unlinkAt && pickedArrow && onUnlink ? jsx6("div", {
+            className: "wb-unlink",
+            style: { left: unlinkAt.x, top: unlinkAt.y },
+            children: jsxs6("button", {
+              className: "wb-btn",
+              type: "button",
+              onClick: () => {
+                onUnlink(pickedArrow.parent, pickedArrow.child);
+                setPicked(null);
+              },
+              children: [jsx6(Line, { name: "unlink" }, "i"), i18n.wbUnlink]
             })
+          }, "unlink") : null,
+          jsxs6("div", {
+            className: "wb-compose",
+            children: [
+              jsxs6("div", {
+                className: "wb-compose-row",
+                children: [
+                  jsxs6("button", {
+                    className: "wb-btn wb-go",
+                    type: "button",
+                    "data-wb-run": true,
+                    disabled: !next || !next.hand.length && !next.pass || !onHand && !onPass,
+                    title: i18n.wbRunHint,
+                    onClick: runPlan,
+                    children: [
+                      jsx6(Line, { name: next && !next.hand.length && next.pass ? "check" : "play" }, "i"),
+                      next && !next.hand.length && next.pass ? i18n.wbPass : i18n.wbRun,
+                      next && next.hand.length ? jsx6("span", { className: "wb-badge", children: String(next.hand.length) }, "n") : null
+                    ]
+                  }, "run"),
+                  jsx6("span", { className: "wb-next", children: nextLabel }, "next"),
+                  jsx6("button", { className: "wb-btn", type: "button", onClick: () => copy("md"), title: i18n.wbCopyMd, children: i18n.wbCopyMd }, "md"),
+                  jsx6("button", { className: "wb-btn", type: "button", onClick: () => copy("csv"), title: i18n.wbCopyCsv, children: i18n.wbCopyCsv }, "csv")
+                ]
+              }, "row"),
+              jsxs6("div", {
+                className: "wb-layouts",
+                children: [
+                  ...LAYOUTS.map((mode) => jsx6("button", {
+                    type: "button",
+                    className: layout === mode ? "wb-on" : void 0,
+                    "aria-pressed": layout === mode,
+                    onClick: () => onLayout?.(mode),
+                    children: mode === "route" ? i18n.wbRoute : mode === "columns" ? i18n.wbColumns : i18n.wbMap
+                  }, mode)),
+                  jsx6("span", { className: "wb-hint", children: i18n.wbHint }, "hint")
+                ]
+              }, "layouts")
+            ]
           }, "compose"),
           jsxs6("div", {
             className: "wb-zoom",
             children: [
+              jsx6("button", { className: "wb-btn wb-icon", type: "button", title: i18n.wbTidy, onClick: () => commit(withoutLayout(positions, layout)), children: jsx6(Line, { name: "wand" }) }, "tidy"),
               jsx6("button", { className: "wb-btn wb-icon", type: "button", title: i18n.wbZoomOut, onClick: () => zoomBy(1 / 1.25), children: Icon("ZoomOut", "zoom-out") }, "out"),
               jsx6("span", { children: `${Math.round(view.zoom * 100)}%` }, "pct"),
               jsx6("button", { className: "wb-btn wb-icon", type: "button", title: i18n.wbZoomIn, onClick: () => zoomBy(1.25), children: Icon("ZoomIn", "zoom-in") }, "in"),
@@ -7383,6 +8279,19 @@ function WhiteboardView({
       })
     ]
   });
+}
+function nearestStop(items, point) {
+  let best = null;
+  let distance = Infinity;
+  for (const item of items) {
+    if (item.kind !== "waypoint") continue;
+    const d = Math.abs(item.x + item.w / 2 - point.x);
+    if (d < distance) {
+      best = item;
+      distance = d;
+    }
+  }
+  return best;
 }
 function zoomAt(view, point, factor) {
   const zoom = clamp(view.zoom * factor, 0.15, 2.5);
@@ -11690,6 +12599,56 @@ function KanbanGanttPage() {
     },
     onError: (error2) => toast("error", humanReparentError(error2, i18n))
   });
+  const wbQuery = () => board ? `?board=${encodeURIComponent(board)}` : "";
+  const wbStatus = (id, action) => apiFetch(`/tasks/${encodeURIComponent(id)}/status${wbQuery()}`, { method: "PATCH", body: { action } });
+  const wbAssign = (id, profile) => apiFetch(`/tasks/${encodeURIComponent(id)}/assignee${wbQuery()}`, { method: "PATCH", body: { profile } });
+  const handleWbHand = async (ids) => {
+    let profile = "default";
+    try {
+      const listed = await fetchProfiles();
+      profile = listed && listed.profiles && listed.profiles[0] || "default";
+    } catch {
+    }
+    let handed = 0;
+    for (const id of ids || []) {
+      const task = allTasks.find((t) => t.id === id);
+      const waiting = !task || (task.parents || []).some((p) => {
+        const parent = allTasks.find((t) => t.id === p);
+        return parent && parent.status !== "done" && parent.status !== "archived";
+      });
+      if (waiting) {
+        toast("error", i18n.wbHandFailed(task ? task.title : id));
+        continue;
+      }
+      try {
+        if (!task || !task.assignee || task.assignee === MILESTONE_LANE) await wbAssign(id, profile);
+        if (task && ["todo", "triage", "scheduled"].includes(task.status)) await wbStatus(id, "ready");
+        handed += 1;
+      } catch {
+        toast("error", i18n.wbHandFailed(task ? task.title : id));
+      }
+    }
+    if (handed) toast("info", i18n.wbHanded(handed));
+    void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
+  };
+  const handleWbPass = async (id) => {
+    const task = allTasks.find((t) => t.id === id);
+    try {
+      await apiFetch(`/tasks/${encodeURIComponent(id)}/status${wbQuery()}`, {
+        method: "PATCH",
+        body: { action: "done", summary: i18n.wbPassSummary(task ? task.title : id) }
+      });
+      toast("info", i18n.wbPassed(task ? task.title : id));
+    } catch (error2) {
+      toast("error", String(error2 && error2.message || error2));
+    }
+    void queryClient.invalidateQueries({ queryKey: ["kanban-gantt"] });
+  };
+  const handleWbCopy = (text) => {
+    const clip = typeof navigator !== "undefined" && navigator.clipboard;
+    if (!clip) return;
+    clip.writeText(text).then(() => toast("info", i18n.wbCopied), (error2) => toast("error", String(error2 && error2.message || error2)));
+  };
   const handleDragStart = (id) => {
     setDragId(id);
   };
@@ -12455,7 +13414,13 @@ function KanbanGanttPage() {
             onLayout: handleWbLayout,
             positions: wbPos,
             onPositions: handleWbPos,
-            onOpen: (id) => $openTaskId.set(id)
+            onOpen: (id) => $openTaskId.set(id),
+            onCreate: (parentId) => $newTask.set({ parentId: parentId || "" }),
+            onLink: (parentId, childId) => reparentMutation.mutate({ childId, parentId, mode: "add" }),
+            onUnlink: (parentId, childId) => unlinkMutation.mutate({ childId, parentId }),
+            onHand: handleWbHand,
+            onPass: handleWbPass,
+            onCopy: handleWbCopy
           }) : rows.length === 0 ? jsxs7("div", {
             className: "py-10 flex flex-col items-center gap-3",
             children: [

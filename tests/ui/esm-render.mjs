@@ -746,11 +746,13 @@ check(nav && nav.data && nav.data.path === '/kanban-gantt', 'sidebar nav path')
 // answers `{}`, while a fixture board exercises the real layouts (route, columns, map).
 if (typeof pluginModule.WhiteboardView === 'function') {
   const wbTasks = [
-    { id: 'a', title: 'Kickoff', status: 'done', assignee: 'jalon', children: ['b'], parents: [], created_at: 1 },
+    { id: 'a', title: 'Kickoff', status: 'done', assignee: 'jalon', children: ['b'], parents: [], created_at: 1, latest_summary: 'Scope approved' },
     { id: 'b', title: 'Compare suppliers', status: 'running', assignee: 'default', children: [], parents: ['a'], created_at: 2 },
     { id: 'c', title: 'Ask about permits', status: 'todo', assignee: null, children: [], parents: [], created_at: 3 }
   ]
-  const WB_PLAIN = new Set(['wbEmpty', 'wbRoute', 'wbColumns', 'wbMap', 'wbHint', 'wbDone', 'wbFit', 'wbMilestone', 'wbLoose', 'wbZoomIn', 'wbZoomOut'])
+  const WB_PLAIN = new Set(['wbEmpty', 'wbRoute', 'wbColumns', 'wbMap', 'wbHint', 'wbDone', 'wbFit', 'wbMilestone', 'wbLoose', 'wbZoomIn', 'wbZoomOut',
+    'wbHand', 'wbHandHint', 'wbPass', 'wbPassHint', 'wbRun', 'wbRunHint', 'wbPlanDone', 'wbDelivered', 'wbBrief', 'wbCopyMd', 'wbCopyCsv',
+    'wbTidy', 'wbUnlink', 'wbLinkHint'])
   const wi18n = new Proxy({ wbStages: { queued: 'Queued', running: 'Running', review: 'Review', blocked: 'Blocked', done: 'Done' } }, {
     get: (target, key) => key === 'wbStages' ? target.wbStages
       : WB_PLAIN.has(String(key)) ? String(key)
@@ -766,6 +768,15 @@ if (typeof pluginModule.WhiteboardView === 'function') {
   check(wb.includes('2 11'), 'the road is whiteboard\'s dashed lane')
   check(wb.includes('Kickoff'), 'the milestone stop is named after its card')
   check(wb.includes('wb-zoom') && wb.includes('wb-layouts'), 'the zoom bar and the layout pills are whiteboard\'s')
+  check(wb.includes('"data-wb-result"') && wb.includes('wbBrief'), 'a passed milestone shows its brief, postmarked')
+  check(wb.includes('Scope approved'), 'the brief is the summary the milestone was closed with')
+  const wbActive = JSON.stringify(renderWb({ onHand: () => {}, onPass: () => {} }))
+  check(wbActive.includes('wbHand') && wbActive.includes('wb-hand'), 'a queued card offers « Hand to Hermes »')
+  // The fixture's open phase is at work (b runs): the bar says so rather than offering a hand-over.
+  check(wbActive.includes('"data-wb-run"') && wbActive.includes('wbNextWaiting'), 'the bar offers to run the plan, and says what comes next')
+  check(!wb.includes('"wb-hand"'), 'without a hand-over handler, no hand button is drawn')
+  check(wb.includes('wbCopyMd') && wb.includes('wbTidy'), 'copy-as-Markdown and tidy are on the canvas chrome')
+  check(wb.includes('"data-wb-cursor":"default"'), 'a running card carries its agent\'s cursor, labelled with the profile')
   const wbCols = JSON.stringify(renderWb({ layout: 'columns' }))
   check((wbCols.match(/"data-wb-frame"/g) || []).length === 2, 'columns draw one frame per phase')
   const wbMap = JSON.stringify(renderWb({ layout: 'map' }))

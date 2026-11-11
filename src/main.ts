@@ -4254,9 +4254,9 @@ export function KanbanGanttPage() {
     setViewMode(mode)
     writePref('viewMode', mode)
   }
-  // The whiteboard's own two preferences: which layout, and where the reader dropped a note.
-  // Positions are keyed by item id and board-scoped by `prefKey`, so switching boards never
-  // drags another board's arrangement along.
+  // The whiteboard's own two preferences: which layout, and where the reader dropped things.
+  // Positions are keyed `<layout>|<item id>` and board-scoped by `prefKey`, so switching boards
+  // never drags another board's arrangement along, nor a map drag the route.
   const [wbLayout, setWbLayout] = useState(() => {
     const v = readPref('wbLayout')
     return v === 'columns' || v === 'map' ? v : 'route'
@@ -4458,6 +4458,66 @@ export function KanbanGanttPage() {
     },
     onError: error => toast('error', humanReparentError(error, i18n))
   })
+
+  // ── whiteboard actions ────────────────────────────────────────────────────
+  // All through the routes the drawer already uses: a status action, an assignee. Handing a
+  // card to Hermes = a profile takes it (the first one the gateway lists, `default` first) and
+  // it becomes ready, so the dispatcher runs it. Passing a milestone = completing its card, and
+  // it is always a human's click: the lane is never dispatched.
+  const wbQuery = () => (board ? `?board=${encodeURIComponent(board)}` : '')
+  const wbStatus = (id, action) => apiFetch(`/tasks/${encodeURIComponent(id)}/status${wbQuery()}`, { method: 'PATCH', body: { action } })
+  const wbAssign = (id, profile) => apiFetch(`/tasks/${encodeURIComponent(id)}/assignee${wbQuery()}`, { method: 'PATCH', body: { profile } })
+  const handleWbHand = async ids => {
+    let profile = 'default'
+    try {
+      const listed = await fetchProfiles()
+      profile = (listed && listed.profiles && listed.profiles[0]) || 'default'
+    } catch { /* the gateway lists no profiles: `default` is the one that always exists */ }
+    let handed = 0
+    for (const id of ids || []) {
+      const task = allTasks.find(t => t.id === id)
+      // The status route's `ready` FORCES the status (it is the drawer's manual override), so the
+      // gate is checked here: a card still waiting for a prerequisite is never handed over —
+      // measured: a gated card went ready and the dispatcher claimed it within seconds.
+      const waiting = !task || (task.parents || []).some(p => {
+        const parent = allTasks.find(t => t.id === p)
+        return parent && parent.status !== 'done' && parent.status !== 'archived'
+      })
+      if (waiting) {
+        toast('error', i18n.wbHandFailed(task ? task.title : id))
+        continue
+      }
+      try {
+        if (!task || !task.assignee || task.assignee === MILESTONE_LANE) await wbAssign(id, profile)
+        if (task && ['todo', 'triage', 'scheduled'].includes(task.status)) await wbStatus(id, 'ready')
+        handed += 1
+      } catch {
+        toast('error', i18n.wbHandFailed(task ? task.title : id))
+      }
+    }
+    if (handed) toast('info', i18n.wbHanded(handed))
+    void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+  }
+  const handleWbPass = async id => {
+    const task = allTasks.find(t => t.id === id)
+    try {
+      // A completion needs evidence (the domain refuses an empty one), and a milestone has no
+      // worker to write a result: the summary says who passed it, and from where.
+      await apiFetch(`/tasks/${encodeURIComponent(id)}/status${wbQuery()}`, {
+        method: 'PATCH',
+        body: { action: 'done', summary: i18n.wbPassSummary(task ? task.title : id) }
+      })
+      toast('info', i18n.wbPassed(task ? task.title : id))
+    } catch (error) {
+      toast('error', String((error && error.message) || error))
+    }
+    void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+  }
+  const handleWbCopy = text => {
+    const clip = typeof navigator !== 'undefined' && navigator.clipboard
+    if (!clip) return
+    clip.writeText(text).then(() => toast('info', i18n.wbCopied), error => toast('error', String((error && error.message) || error)))
+  }
 
   const handleDragStart = id => {
     setDragId(id)
@@ -5386,7 +5446,13 @@ export function KanbanGanttPage() {
             onLayout: handleWbLayout,
             positions: wbPos,
             onPositions: handleWbPos,
-            onOpen: id => $openTaskId.set(id)
+            onOpen: id => $openTaskId.set(id),
+            onCreate: parentId => $newTask.set({ parentId: parentId || '' }),
+            onLink: (parentId, childId) => reparentMutation.mutate({ childId, parentId, mode: 'add' }),
+            onUnlink: (parentId, childId) => unlinkMutation.mutate({ childId, parentId }),
+            onHand: handleWbHand,
+            onPass: handleWbPass,
+            onCopy: handleWbCopy
           })
         : rows.length === 0
         ? jsxs('div', {
