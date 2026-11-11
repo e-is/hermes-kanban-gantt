@@ -188,6 +188,10 @@ that file *is* the source, and editing it (or the constants at the top of
 
 ![](docs/catalog-card.png)
 
+## Credits
+
+The whiteboard view is adapted from [hermes-whiteboard](https://github.com/Adolanium/hermes-whiteboard) by **Adolanium** — Copyright (c) 2026 Adolanium, MIT licence. Its look, its canvas and its layout geometry are ported; the full notice and the list of adapted files are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and the built artifacts carry the notice too. Thank you!
+
 ## License
 
 GPL-3.0 — see [LICENSE](LICENSE).

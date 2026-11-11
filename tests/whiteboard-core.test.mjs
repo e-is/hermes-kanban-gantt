@@ -1,6 +1,7 @@
 // Whiteboard mode — pure core specs.
 //
-// Ported from Adolanium/hermes-whiteboard `tests/board.test.mjs` (MIT), whose 30 tests
+// Ported from Adolanium/hermes-whiteboard `tests/board.test.mjs` — Copyright (c) 2026 Adolanium,
+// MIT licence (full notice in THIRD_PARTY_NOTICES.md) — whose 30 tests
 // pinned the geometry, the route planning and the no-overlap invariants of its canvas.
 // The model changed (cards instead of free notes, a milestone lane instead of `delivered`),
 // so the fixtures are rewritten; the invariants are the ones worth keeping.

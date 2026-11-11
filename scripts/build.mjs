@@ -22,7 +22,9 @@ const common = {
   format: 'esm',
   target: 'es2022',
   charset: 'utf8',
-  legalComments: 'none',
+  // `/*!` comments are licence notices: the whiteboard view ports MIT code, whose notice must
+  // travel with every copy — so the artifacts keep them, gathered at the end of the file.
+  legalComments: 'eof',
   logLevel: 'info',
   jsx: 'automatic',
   external: ['@hermes/plugin-sdk', 'react', 'react/jsx-runtime']
