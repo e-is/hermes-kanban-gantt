@@ -689,6 +689,22 @@ def test_status_done_and_archive(client):
     assert by_id[board["solo"]]["archived"] is True
 
 
+def test_status_done_without_evidence_is_a_409_not_a_500(client):
+    # The domain refuses an empty completion (EmptyCompletionError). That is a refusal the
+    # reader can act on — say "give a result" — not a server crash: it used to answer 500.
+    http, board = client
+    r = http.patch(f"/tasks/{board['solo']}/status?board={board['slug']}",
+                   json={"action": "done"})
+    if r.status_code == 200:
+        pytest.skip("this hermes_cli accepts an empty completion")
+    assert r.status_code == 409
+    assert "result" in r.json()["detail"] or "summary" in r.json()["detail"]
+    # The same transition with a summary goes through.
+    r = http.patch(f"/tasks/{board['solo']}/status?board={board['slug']}",
+                   json={"action": "done", "summary": "passed on the whiteboard"})
+    assert r.status_code == 200
+
+
 def test_status_unblock_refused_when_not_blocked(client):
     http, board = client
     r = http.patch(f"/tasks/{board['child']}/status?board={board['slug']}",

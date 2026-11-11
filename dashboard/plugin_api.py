@@ -932,7 +932,15 @@ def change_status(task_id: str, payload: StatusBody, board: Optional[str] = Quer
                 slug = "default"
     conn = _connect(slug, ro=False)
     try:
-        ok = _apply_action(conn, kanban_db, action, task_id, payload)
+        try:
+            ok = _apply_action(conn, kanban_db, action, task_id, payload)
+        except Exception as exc:
+            # The domain's own refusals (an empty completion, for one) are 409s the reader can
+            # act on, not a server crash: `EmptyCompletionError` used to surface as a 500.
+            refused = getattr(kanban_db, "EmptyCompletionError", None)
+            if refused is not None and isinstance(exc, refused):
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise
         if not ok:
             raise HTTPException(
                 status_code=409,

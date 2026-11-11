@@ -50,6 +50,7 @@ import {
   useQuery,
   useQueryClient,
   useValue,
+  KANBAN_CARD_AREAS,
   PALETTE_AREA,
   ROUTES_AREA,
   SIDEBAR_NAV_AREA,
@@ -77,6 +78,12 @@ import { NewTaskDialog } from './ui/NewTaskDialog'
 import { MoveTaskDialog } from './ui/MoveTaskDialog'
 import { TaskRelations } from './ui/TaskRelations'
 import { ReparentChoiceDialog, MoveUnderDialog, reasonLabel } from './ui/ReparentChooser'
+import { WhiteboardView } from './ui/WhiteboardView'
+import { MILESTONE_LANE, badgeFor } from './core/whiteboard-core'
+
+// The smoke harness renders the view directly with a fixture board (the page's REST stub
+// answers `{}`), the same door the graph view opened for its own anatomy checks.
+export { WhiteboardView }
 
 const ID = 'kanban-gantt'
 
@@ -1132,7 +1139,10 @@ function ViewToggle({ value, onChange }) {
       item('timeline', 'graph-line', i18n.viewTimeline),
       // Third value, same persistence and same chrome as the other two. The icon is the
       // hierarchy glyph because the view answers "what hangs off what", not "when".
-      item('graph', 'type-hierarchy', i18n.viewGraph)
+      item('graph', 'type-hierarchy', i18n.viewGraph),
+      // The fourth view: the board as a spatial plan. Same data, same drawer, a different
+      // question — where the work sits, not when it happened or what hangs off what.
+      item('whiteboard', 'layout', i18n.viewWhiteboard)
     ]
   })
 }
@@ -4161,7 +4171,7 @@ export function KanbanGanttPage() {
 
   const [viewMode, setViewMode] = useState(() => {
     const saved = readPref('viewMode')
-    return saved === 'list' || saved === 'graph' ? saved : 'timeline'
+    return saved === 'list' || saved === 'graph' || saved === 'whiteboard' ? saved : 'timeline'
   })
   const graphMode = viewMode === 'graph'
 
@@ -4239,9 +4249,34 @@ export function KanbanGanttPage() {
     return Math.abs(zoom - calibrated) / calibrated <= 0.25 ? span : null
   })
   const listMode = viewMode === 'list'
+  const whiteboardMode = viewMode === 'whiteboard'
   const handleViewMode = mode => {
     setViewMode(mode)
     writePref('viewMode', mode)
+  }
+  // The whiteboard's own two preferences: which layout, and where the reader dropped things.
+  // Positions are keyed `<layout>|<item id>` and board-scoped by `prefKey`, so switching boards
+  // never drags another board's arrangement along, nor a map drag the route.
+  const [wbLayout, setWbLayout] = useState(() => {
+    const v = readPref('wbLayout')
+    return v === 'columns' || v === 'map' ? v : 'route'
+  })
+  const handleWbLayout = mode => {
+    setWbLayout(mode)
+    writePref('wbLayout', mode)
+  }
+  const [wbPos, setWbPos] = useState(() => {
+    try {
+      const raw = readPref('wbPos', '{}')
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
+    }
+  })
+  const handleWbPos = next => {
+    setWbPos(next)
+    writePref('wbPos', JSON.stringify(next))
   }
   const [zoomPct, setZoomPct] = useState(() => {
     const s = getStorage()
@@ -4423,6 +4458,66 @@ export function KanbanGanttPage() {
     },
     onError: error => toast('error', humanReparentError(error, i18n))
   })
+
+  // ── whiteboard actions ────────────────────────────────────────────────────
+  // All through the routes the drawer already uses: a status action, an assignee. Handing a
+  // card to Hermes = a profile takes it (the first one the gateway lists, `default` first) and
+  // it becomes ready, so the dispatcher runs it. Passing a milestone = completing its card, and
+  // it is always a human's click: the lane is never dispatched.
+  const wbQuery = () => (board ? `?board=${encodeURIComponent(board)}` : '')
+  const wbStatus = (id, action) => apiFetch(`/tasks/${encodeURIComponent(id)}/status${wbQuery()}`, { method: 'PATCH', body: { action } })
+  const wbAssign = (id, profile) => apiFetch(`/tasks/${encodeURIComponent(id)}/assignee${wbQuery()}`, { method: 'PATCH', body: { profile } })
+  const handleWbHand = async ids => {
+    let profile = 'default'
+    try {
+      const listed = await fetchProfiles()
+      profile = (listed && listed.profiles && listed.profiles[0]) || 'default'
+    } catch { /* the gateway lists no profiles: `default` is the one that always exists */ }
+    let handed = 0
+    for (const id of ids || []) {
+      const task = allTasks.find(t => t.id === id)
+      // The status route's `ready` FORCES the status (it is the drawer's manual override), so the
+      // gate is checked here: a card still waiting for a prerequisite is never handed over —
+      // measured: a gated card went ready and the dispatcher claimed it within seconds.
+      const waiting = !task || (task.parents || []).some(p => {
+        const parent = allTasks.find(t => t.id === p)
+        return parent && parent.status !== 'done' && parent.status !== 'archived'
+      })
+      if (waiting) {
+        toast('error', i18n.wbHandFailed(task ? task.title : id))
+        continue
+      }
+      try {
+        if (!task || !task.assignee || task.assignee === MILESTONE_LANE) await wbAssign(id, profile)
+        if (task && ['todo', 'triage', 'scheduled'].includes(task.status)) await wbStatus(id, 'ready')
+        handed += 1
+      } catch {
+        toast('error', i18n.wbHandFailed(task ? task.title : id))
+      }
+    }
+    if (handed) toast('info', i18n.wbHanded(handed))
+    void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+  }
+  const handleWbPass = async id => {
+    const task = allTasks.find(t => t.id === id)
+    try {
+      // A completion needs evidence (the domain refuses an empty one), and a milestone has no
+      // worker to write a result: the summary says who passed it, and from where.
+      await apiFetch(`/tasks/${encodeURIComponent(id)}/status${wbQuery()}`, {
+        method: 'PATCH',
+        body: { action: 'done', summary: i18n.wbPassSummary(task ? task.title : id) }
+      })
+      toast('info', i18n.wbPassed(task ? task.title : id))
+    } catch (error) {
+      toast('error', String((error && error.message) || error))
+    }
+    void queryClient.invalidateQueries({ queryKey: ['kanban-gantt'] })
+  }
+  const handleWbCopy = text => {
+    const clip = typeof navigator !== 'undefined' && navigator.clipboard
+    if (!clip) return
+    clip.writeText(text).then(() => toast('info', i18n.wbCopied), error => toast('error', String((error && error.message) || error)))
+  }
 
   const handleDragStart = id => {
     setDragId(id)
@@ -5092,12 +5187,12 @@ export function KanbanGanttPage() {
               // window to tune.
               graphMode
                 ? jsx(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
-                : listMode ? null : jsx(PeriodSelector, {
+                : (listMode || whiteboardMode) ? null : jsx(PeriodSelector, {
                     value: period,
                     onChange: handlePeriod,
                     disabled: false
                   }),
-              listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
+              (listMode || whiteboardMode) ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {
                   type: 'range',
                   min: String(graphMode ? Math.round(GRAPH_ZOOM_MIN * 100) : ZOOM_PCT_MIN),
@@ -5338,6 +5433,27 @@ export function KanbanGanttPage() {
             arrangement: arrange,
             sortBy: 'status'
           })
+        : whiteboardMode
+        ? jsx(WhiteboardView, {
+            tasks: derived.tasks || [],
+            i18n,
+            // `boardLabel` is a resolver (slug -> label), not a string: passing the function
+            // made React silently drop the hub's title.
+            title: boardLabel(board),
+            board,
+            selectedId: openTaskId,
+            layout: wbLayout,
+            onLayout: handleWbLayout,
+            positions: wbPos,
+            onPositions: handleWbPos,
+            onOpen: id => $openTaskId.set(id),
+            onCreate: parentId => $newTask.set({ parentId: parentId || '' }),
+            onLink: (parentId, childId) => reparentMutation.mutate({ childId, parentId, mode: 'add' }),
+            onUnlink: (parentId, childId) => unlinkMutation.mutate({ childId, parentId }),
+            onHand: handleWbHand,
+            onPass: handleWbPass,
+            onCopy: handleWbCopy
+          })
         : rows.length === 0
         ? jsxs('div', {
             className: 'py-10 flex flex-col items-center gap-3',
@@ -5488,7 +5604,9 @@ export function KanbanGanttPage() {
 
       // The legend describes BAR TONES, so it has nothing to say about a board with no
       // rows — and an empty state reads better with only its message and the creation verb.
-      derived && rows.length > 0
+      // Nor about the whiteboard: its notes are paper tones (whiteboard's), each one carrying
+      // its stage as a chip, and a legend of bar colours under them would contradict them.
+      derived && rows.length > 0 && !whiteboardMode
         ? jsx('div', {
             children: jsx(Legend, {
               disabledStatuses,
@@ -5733,6 +5851,19 @@ const plugin = {
           label: tNow('openCommand'),
           keywords: ['kanban', 'gantt', 'timeline'],
           run: () => host.navigate('/kanban-gantt')
+        }
+      },
+      // The milestone lane, made visible on the OFFICIAL board. A badge is a projection, not
+      // storage: `decorate` reads the one field that decides the role (the lane) and paints it.
+      // A prerequisite badge would need the child links, which the frozen `card` does not carry —
+      // left out rather than guessed.
+      {
+        id: 'milestone-badge',
+        area: KANBAN_CARD_AREAS.badges,
+        data: {
+          decorate: card => (card && card.assignee === MILESTONE_LANE
+            ? { ...badgeFor('milestone'), label: `◆ ${tNow('wbMilestone')}`, tooltip: tNow('wbMilestoneHint') }
+            : null)
         }
       }
     ])
