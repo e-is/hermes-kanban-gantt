@@ -92,6 +92,7 @@ export const af = {
     result: 'Resultaat',
     latestSummary: 'Jongste opsomming',
     runs: n => `Lopies · ${n}`,
+    runsFailed: n => `Mislukte lopies · ${n}`,
     show: 'Wys',
     hide: 'Versteek',
     comments: n => `Kommentaar · ${n}`,

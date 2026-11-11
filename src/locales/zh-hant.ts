@@ -92,6 +92,7 @@ export const zhHant = {
     result: '結果',
     latestSummary: '最新摘要',
     runs: n => `執行紀錄 · ${n}`,
+    runsFailed: n => `失敗的執行 · ${n}`,
     show: '顯示',
     hide: '隱藏',
     comments: n => `留言 · ${n}`,

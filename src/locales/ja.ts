@@ -86,6 +86,7 @@ export const ja = {
     result: '結果',
     latestSummary: '最新のサマリー',
     runs: n => `実行 · ${n}`,
+    runsFailed: n => `失敗した実行 · ${n}`,
     show: '表示',
     hide: '非表示',
     comments: n => `コメント · ${n}`,

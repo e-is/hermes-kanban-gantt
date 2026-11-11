@@ -92,6 +92,7 @@ export const ru = {
     result: 'Результат',
     latestSummary: 'Последняя сводка',
     runs: n => `Запуски · ${n}`,
+    runsFailed: n => `Неудачные запуски · ${n}`,
     show: 'Показать',
     hide: 'Скрыть',
     comments: n => `Комментарии · ${n}`,

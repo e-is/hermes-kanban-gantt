@@ -86,6 +86,7 @@ export const ar = {
     result: 'النتيجة',
     latestSummary: 'آخر ملخّص',
     runs: n => `التشغيلات · ${n}`,
+    runsFailed: n => `تشغيلات فاشلة · ${n}`,
     show: 'عرض',
     hide: 'إخفاء',
     comments: n => `التعليقات · ${n}`,

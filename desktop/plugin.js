@@ -199,6 +199,7 @@ var en = {
   result: "Result",
   latestSummary: "Latest summary",
   runs: (n) => `Runs · ${n}`,
+  runsFailed: (n) => `Failed runs · ${n}`,
   show: "Show",
   hide: "Hide",
   comments: (n) => `Comments · ${n}`,
@@ -484,6 +485,7 @@ var fr = {
   result: "Résultat",
   latestSummary: "Dernier résumé",
   runs: (n) => `Exécutions · ${n}`,
+  runsFailed: (n) => `Échecs · ${n}`,
   show: "Afficher",
   hide: "Masquer",
   comments: (n) => `Commentaires · ${n}`,
@@ -767,6 +769,7 @@ var zh = {
   result: "结果",
   latestSummary: "最新摘要",
   runs: (n) => `运行记录 · ${n}`,
+  runsFailed: (n) => `失败的运行 · ${n}`,
   show: "展开",
   hide: "收起",
   comments: (n) => `评论 · ${n}`,
@@ -1047,6 +1050,7 @@ var af = {
   result: "Resultaat",
   latestSummary: "Jongste opsomming",
   runs: (n) => `Lopies · ${n}`,
+  runsFailed: (n) => `Mislukte lopies · ${n}`,
   show: "Wys",
   hide: "Versteek",
   comments: (n) => `Kommentaar · ${n}`,
@@ -1332,6 +1336,7 @@ var ar = {
   result: "النتيجة",
   latestSummary: "آخر ملخّص",
   runs: (n) => `التشغيلات · ${n}`,
+  runsFailed: (n) => `تشغيلات فاشلة · ${n}`,
   show: "عرض",
   hide: "إخفاء",
   comments: (n) => `التعليقات · ${n}`,
@@ -1617,6 +1622,7 @@ var de = {
   result: "Ergebnis",
   latestSummary: "Letzte Zusammenfassung",
   runs: (n) => `Läufe · ${n}`,
+  runsFailed: (n) => `Fehlgeschlagene Läufe · ${n}`,
   show: "Anzeigen",
   hide: "Ausblenden",
   comments: (n) => `Kommentare · ${n}`,
@@ -1902,6 +1908,7 @@ var es = {
   result: "Resultado",
   latestSummary: "Último resumen",
   runs: (n) => `Ejecuciones · ${n}`,
+  runsFailed: (n) => `Ejecuciones fallidas · ${n}`,
   show: "Mostrar",
   hide: "Ocultar",
   comments: (n) => `Comentarios · ${n}`,
@@ -2187,6 +2194,7 @@ var ga = {
   result: "Toradh",
   latestSummary: "An achoimre is déanaí",
   runs: (n) => `Rithe · ${n}`,
+  runsFailed: (n) => `Rithid teipthe · ${n}`,
   show: "Taispeáin",
   hide: "Folaigh",
   comments: (n) => `Tráchtanna · ${n}`,
@@ -2472,6 +2480,7 @@ var hu = {
   result: "Eredmény",
   latestSummary: "Legutóbbi összefoglaló",
   runs: (n) => `Futtatások · ${n}`,
+  runsFailed: (n) => `Sikertelen futások · ${n}`,
   show: "Megjelenítés",
   hide: "Elrejtés",
   comments: (n) => `Hozzászólások · ${n}`,
@@ -2757,6 +2766,7 @@ var it = {
   result: "Risultato",
   latestSummary: "Ultimo riepilogo",
   runs: (n) => `Esecuzioni · ${n}`,
+  runsFailed: (n) => `Esecuzioni fallite · ${n}`,
   show: "Mostra",
   hide: "Nascondi",
   comments: (n) => `Commenti · ${n}`,
@@ -3042,6 +3052,7 @@ var ja = {
   result: "結果",
   latestSummary: "最新のサマリー",
   runs: (n) => `実行 · ${n}`,
+  runsFailed: (n) => `失敗した実行 · ${n}`,
   show: "表示",
   hide: "非表示",
   comments: (n) => `コメント · ${n}`,
@@ -3327,6 +3338,7 @@ var ko = {
   result: "결과",
   latestSummary: "최근 요약",
   runs: (n) => `실행 기록 · ${n}`,
+  runsFailed: (n) => `실패한 실행 · ${n}`,
   show: "표시",
   hide: "숨기기",
   comments: (n) => `댓글 · ${n}`,
@@ -3612,6 +3624,7 @@ var pt = {
   result: "Resultado",
   latestSummary: "Último resumo",
   runs: (n) => `Execuções · ${n}`,
+  runsFailed: (n) => `Execuções falhadas · ${n}`,
   show: "Mostrar",
   hide: "Ocultar",
   comments: (n) => `Comentários · ${n}`,
@@ -3897,6 +3910,7 @@ var ru = {
   result: "Результат",
   latestSummary: "Последняя сводка",
   runs: (n) => `Запуски · ${n}`,
+  runsFailed: (n) => `Неудачные запуски · ${n}`,
   show: "Показать",
   hide: "Скрыть",
   comments: (n) => `Комментарии · ${n}`,
@@ -4177,6 +4191,7 @@ var tr = {
   result: "Sonuç",
   latestSummary: "Son özet",
   runs: (n) => `Çalıştırmalar · ${n}`,
+  runsFailed: (n) => `Başarısız çalışmalar · ${n}`,
   show: "Göster",
   hide: "Gizle",
   comments: (n) => `Yorumlar · ${n}`,
@@ -4462,6 +4477,7 @@ var uk = {
   result: "Результат",
   latestSummary: "Останній підсумок",
   runs: (n) => `Запуски · ${n}`,
+  runsFailed: (n) => `Невдалі запуски · ${n}`,
   show: "Показати",
   hide: "Сховати",
   comments: (n) => `Коментарі · ${n}`,
@@ -4742,6 +4758,7 @@ var zhHant = {
   result: "結果",
   latestSummary: "最新摘要",
   runs: (n) => `執行紀錄 · ${n}`,
+  runsFailed: (n) => `失敗的執行 · ${n}`,
   show: "顯示",
   hide: "隱藏",
   comments: (n) => `留言 · ${n}`,
@@ -5724,6 +5741,7 @@ function lastActivity(task) {
 function relativeAge(ts, now, units = {}) {
   const u = { now: "now", m: "m", h: "h", d: "d", w: "w", mo: "mo", y: "y", ...units };
   if (ts == null) return "";
+  if (!Number.isFinite(Number(ts)) || !Number.isFinite(Number(now))) return "";
   const s = Math.max(0, now - ts);
   if (s < 60) return u.now;
   if (s < 3600) return `${Math.floor(s / 60)}${u.m}`;
@@ -7889,6 +7907,7 @@ function GraphView({
   sortBy = "status"
 }) {
   const showPrefixTags = useValue2($titlePrefixTags);
+  const nowSec = Math.floor(Date.now() / 1e3);
   const [foldedCols, setFoldedCols] = useState4(() => {
     try {
       const raw = localStorage.getItem("hermes.plugin.kanban-gantt.graphFolded");
@@ -7958,8 +7977,8 @@ function GraphView({
   const nodeW = tallCards ? NODE_W + 48 : NODE_W;
   const heightOf = (n) => {
     const longTitle = (n.title || "").length > 30;
-    const hasSummary = tallCards && Boolean(n.summary);
-    return 52 + (longTitle ? 14 : 0) + (hasSummary ? 30 : 0);
+    const hasSummary = Boolean(n.summary);
+    return 46 + (longTitle ? 16 : 0) + (hasSummary ? 28 : 0);
   };
   const layout = useMemo2(
     () => layoutGraph(shown, edges, { sortBy, nodeH, nodeW, arrangement, collapsed: [...foldedCols], heightOf, groupBy: grouping ? (n) => n.board || "" : null }),
@@ -8685,7 +8704,10 @@ function GraphView({
               const statusMode = arrangement === "status";
               const linkCount = linkCounts.get(node.id) || 0;
               const runNow = (node.runs || []).find((r) => (r.status || r.outcome) === "running");
-              const failed = (node.runs || []).some((r) => ["crashed", "failed", "spawn_failed", "gave_up"].includes(r.outcome || r.status));
+              const runAge = runNow ? relativeAge(runNow.started_at ?? runNow.startedAt, nowSec, i18n.relativeUnits) : "";
+              const failedRuns = (node.runs || []).filter((r) => ["crashed", "failed", "spawn_failed", "gave_up"].includes(r.outcome || r.status));
+              const failed = failedRuns.length > 0;
+              const lastFailure = failed ? failedRuns[failedRuns.length - 1].summary || "" : "";
               const isSelected = node.id === selectedId;
               const inLineage = lin ? lin.up.has(node.id) || lin.down.has(node.id) : false;
               const faded = Boolean(lin) && !isSelected && !inLineage;
@@ -8760,38 +8782,28 @@ function GraphView({
                 },
                 children: [
                   jsxs6("div", {
-                    className: "flex items-start gap-1 px-1.5 pt-1 min-w-0",
+                    className: "shrink-0 flex items-start gap-1 px-1.5 pt-1 min-w-0",
                     children: [
-                      // The status icon is the graph's own compass — in a column the header already
-                      // carries the state, and the icon only pushed the title right of the summary
-                      // below it. So it is drawn where it earns its place, and dropped where it
-                      // does not.
-                      statusMode ? null : jsx6("span", {
-                        className: "shrink-0 inline-flex items-center justify-center mt-[1px]",
-                        style: { color: tone },
-                        title: node.status,
-                        children: node.status === "running" ? jsxs6("span", { className: "relative inline-flex items-center justify-center", children: [
-                          jsx6("span", { className: "kg-arc", style: { "--kanban-tone": tone } }),
-                          jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
-                        ] }) : jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
-                      }),
+                      // The status icon is the graph's own compass, and it sits at the card's right
+                      // edge: on the left it pushed the title off the summary's axis, and in a
+                      // column the header already carries the state, so it is dropped there.
                       jsxs6("span", {
                         className: cn3(
-                          "min-w-0 flex-1 leading-tight text-(--ui-text-primary)",
-                          tallCards ? "text-[13px]" : "text-[12.5px] truncate"
+                          "min-w-0 flex-1 leading-snug text-(--ui-text-primary)",
+                          statusMode || tallCards ? "" : "truncate"
                         ),
-                        // ONE style object, and weights inline: this is the only text in the
-                        // card that matters, and a class the host bundle does not compile would
-                        // leave it exactly as small as it was. Two `style` keys in the same
-                        // literal would silently keep only the last — which is how the first
-                        // attempt at bold ended up at 400.
+                        // The bundled card's own type: 13px at weight 500 in the foreground, with the
+                        // summary a size smaller and tertiary. Weight 600 here read as bold next to
+                        // that summary, which is the contrast the bundled card uses to separate the
+                        // two lines — not two weights fighting each other.
                         style: {
-                          fontWeight: 600,
-                          ...tallCards ? {
+                          fontSize: "0.8125rem",
+                          fontWeight: 500,
+                          ...statusMode || tallCards ? {
                             whiteSpace: "normal",
                             overflowWrap: "anywhere",
                             display: "-webkit-box",
-                            WebkitLineClamp: "3",
+                            WebkitLineClamp: "2",
                             WebkitBoxOrient: "vertical",
                             overflow: "hidden"
                           } : {}
@@ -8805,18 +8817,38 @@ function GraphView({
                           shown2.text || node.id
                         ]
                       }),
-                      failed ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0 text-[#f87171]", title: i18n.runs((node.runs || []).length) }) : node.status === "blocked" ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0", style: { color: statusTone("blocked") }, title: node.status }) : null
+                      // Right of the title, where it belongs: the state is a property of the card, and
+                      // at the left it pushed the words the reader came for off their axis.
+                      statusMode ? null : jsx6("span", {
+                        className: "shrink-0 inline-flex items-center justify-center mt-[1px]",
+                        style: { color: tone },
+                        // The glyph alone reads as a colour; the tooltip says the state in the
+                        // reader's own language, and for a run in progress, for how long.
+                        title: `${i18n.status?.[node.status] || node.status}${runAge ? ` · ${runAge}` : ""}`,
+                        children: node.status === "running" ? jsxs6("span", { className: "relative inline-flex items-center justify-center", children: [
+                          jsx6("span", { className: "kg-arc", style: { "--kanban-tone": tone } }),
+                          jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
+                        ] }) : jsx6(Codicon5, { name: statusIcon(node.status), size: "0.8rem" })
+                      }),
+                      // The title row keeps one state glyph (the status icon, above) and, for a
+                      // blocked card, the reason it is blocked — the failed runs are counted in the
+                      // footer now.
+                      node.status === "blocked" ? jsx6(Codicon5, { name: "warning", size: "0.75rem", className: "shrink-0", style: { color: statusTone("blocked") }, title: node.blockKind || i18n.status.blocked }) : null
                     ]
                   }),
                   // The bundled card's second line, and the one change that makes a card read as a
-                  // card rather than as a label: what the worker last said. Tall cards only — at
-                  // 62px it would eat the title, which is the thing that must never be clipped.
-                  tallCards && node.summary ? jsx6("div", {
+                  // card rather than as a label: what the worker last said. It is the flexible part
+                  // of the card — two lines, and the first thing to give way when a column makes the
+                  // card shorter — because the title and the footer must never be clipped.
+                  node.summary ? jsx6("div", {
+                    className: "shrink min-h-0",
                     style: {
                       padding: "0 6px",
                       marginTop: "2px",
-                      fontSize: "10.5px",
-                      lineHeight: 1.25,
+                      // The bundled card's summary line: a size below the title, same leading, and
+                      // tertiary — the contrast between the two lines is the hierarchy.
+                      fontSize: "0.6875rem",
+                      lineHeight: 1.375,
                       color: "var(--ui-text-tertiary)",
                       display: "-webkit-box",
                       WebkitLineClamp: "2",
@@ -8827,11 +8859,11 @@ function GraphView({
                     children: node.summary
                   }) : null,
                   jsxs6("div", {
-                    className: "mt-auto flex items-center gap-1.5 px-1.5 pb-0.5 min-w-0",
+                    className: "shrink-0 mt-auto flex items-center gap-1.5 px-1.5 pb-0.5 min-w-0",
                     style: { fontSize: "9px", color: "var(--ui-text-quaternary)", fontVariantNumeric: "tabular-nums" },
                     children: [
                       // Left: the agent's own word — what it is doing right now, or why it is stuck.
-                      runNow ? jsx6("span", { className: "shrink-0", style: { color: tone }, children: relativeAge(runNow.started_at || runNow.startedAt) }) : node.status === "blocked" && node.blockKind ? jsx6("span", { className: "shrink-0 truncate", style: { color: "var(--ui-status-danger, #f87171)" }, title: node.blockKind, children: node.blockKind }) : null,
+                      runAge ? jsx6("span", { className: "shrink-0", style: { color: tone }, children: runAge }) : node.status === "blocked" && node.blockKind ? jsx6("span", { className: "shrink-0 truncate", style: { color: "var(--ui-status-danger, #f87171)" }, title: node.blockKind, children: node.blockKind }) : null,
                       // Tall cards name the agent, and the bundled card keeps the avatar BESIDE the
                       // name — the letter on one side and the name on the other reads as two
                       // different agents. Compact cards have no room for the name, so the avatar
@@ -8848,7 +8880,16 @@ function GraphView({
                       jsx6("span", { className: "flex-1" }),
                       // Right, in the bundled card's order: priority, links, comments, attachment,
                       // agent, id. Each one is a glyph plus a number, never a word.
-                      node.priority != null && node.priority > 0 ? jsx6("span", { className: "shrink-0 inline-flex items-center", children: `P${node.priority}` }) : null,
+                      // The bundled card's own priority mark: an up arrow and the number, in amber —
+                      // `P2` said the same thing in a glyph the reader has to decode first.
+                      node.priority != null && node.priority > 0 ? jsxs6("span", {
+                        className: "shrink-0 inline-flex items-center gap-0.5",
+                        style: { color: "#f59e0b" },
+                        children: [
+                          jsx6(Codicon5, { name: "arrow-up", size: "0.6rem" }),
+                          String(node.priority)
+                        ]
+                      }) : null,
                       linkCount ? jsxs6("span", { className: "shrink-0 inline-flex items-center gap-0.5", children: [
                         jsx6(Codicon5, { name: "references", size: "0.6rem" }),
                         String(linkCount)
@@ -8865,6 +8906,17 @@ function GraphView({
                         onPreview: (att, siblings) => $openAttachment.set(
                           attachmentPreviewState(node.id, node.board || board, att, siblings)
                         )
+                      }) : null,
+                      // Failed runs are a count, and counts live in the footer — the bundled card keeps
+                      // its warning here too, glyph plus number, rather than a second flag beside the
+                      // title where the state already has its own glyph.
+                      failed ? jsxs6("span", {
+                        className: "shrink-0 inline-flex items-center gap-0.5 text-[#f87171]",
+                        title: lastFailure ? `${i18n.runsFailed(failedRuns.length)} — ${lastFailure}` : i18n.runsFailed(failedRuns.length),
+                        children: [
+                          jsx6(Codicon5, { name: "warning", size: "0.6rem" }),
+                          String(failedRuns.length)
+                        ]
                       }) : null,
                       // The avatar sits beside the name in tall cards, so the right edge keeps it
                       // only when there is no name there to pair it with — otherwise the letter

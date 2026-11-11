@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.10.0 — the card tells the truth about itself
+
+Four defects in the graph card, all of them visible on a live board, and three steps toward the
+bundled card's own language.
+
+**`NaNy` in the footer.** The card printed the age of a running run, and it called `relativeAge`
+with one argument where the function takes the clock as its second: every comparison against `NaN`
+is false, so the year branch ran and the footer said `NaNy` beside the agent's initial. The call now
+passes the clock and the locale's units, and the function itself answers `''` for a non-finite
+timestamp or clock — a forgotten argument cannot print a number again.
+
+**The summary was missing.** It was drawn in tall cards only, so the second line the bundled card has
+simply vanished for anyone reading compact cards. It is drawn always now, two lines, and it is the
+flexible part of the card: the title and the footer are `shrink-0`, so a short column squeezes the
+summary and never the footer — which is what had gone missing in the status arrangement, where a
+fixed 52px card clipped it.
+
+**The title was too heavy.** It now takes the bundled card's type: 13px at weight 500 in the
+foreground, with the summary a size below in tertiary. At weight 600 next to that summary it read as
+bold, which is the wrong hierarchy — the two lines are separated by size and colour, not by two
+weights competing.
+
+**One glyph per fact.** The status icon moved from the left of the title to its right, where it no
+longer pushes the words off the summary's axis, and the column arrangement still drops it because the
+header already carries the state. The failed-run warning left the title row entirely: it is a count —
+how many runs ended in `failed`/`crashed`/`spawn_failed`/`gave_up` — so it lives in the footer as
+`⚠ n`, between the attachments and the id, exactly where the bundled card keeps its own.
+
+**And both glyphs answer a tooltip.** The status icon names the state in the reader's language, plus
+the age of a run in progress (`Running · 5m`); the warning says how many runs failed and quotes the
+last one (`Failed runs · 2 — Retry loop exhausted the vendor quota.`). Priority is the bundled card's
+up arrow and number in amber, not `P2`.
+
+Wording added to all 17 locale bundles. Tests, measured on this commit: 80 in the gantt core, 68 in
+the graph core, 96 render checks, 23 hook-order checks.
+
 ## 1.9.0 — the graph reads like a board: columns, cards, and a fold
 
 **Status columns.** The status arrangement now draws the column the bundled board draws: rounded,
