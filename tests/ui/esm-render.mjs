@@ -742,5 +742,38 @@ globalThis.__kgBoard = null
 const nav = contributions.find(c => c.area === 'sidebar.nav')
 check(nav && nav.data && nav.data.path === '/kanban-gantt', 'sidebar nav path')
 
+// 3c) the whiteboard view, rendered DIRECTLY — same reason as the graph: the page's REST stub
+// answers `{}`, while a fixture board exercises the real layouts (route, columns, map).
+if (typeof pluginModule.WhiteboardView === 'function') {
+  const wbTasks = [
+    { id: 'a', title: 'Kickoff', status: 'done', assignee: 'jalon', children: ['b'], parents: [], created_at: 1 },
+    { id: 'b', title: 'Compare suppliers', status: 'running', assignee: 'default', children: [], parents: ['a'], created_at: 2 },
+    { id: 'c', title: 'Ask about permits', status: 'todo', assignee: null, children: [], parents: [], created_at: 3 }
+  ]
+  const WB_PLAIN = new Set(['wbEmpty', 'wbRoute', 'wbColumns', 'wbMap', 'wbHint', 'wbDone', 'wbFit', 'wbMilestone', 'wbLoose', 'wbZoomIn', 'wbZoomOut'])
+  const wi18n = new Proxy({ wbStages: { queued: 'Queued', running: 'Running', review: 'Review', blocked: 'Blocked', done: 'Done' } }, {
+    get: (target, key) => key === 'wbStages' ? target.wbStages
+      : WB_PLAIN.has(String(key)) ? String(key)
+        : (...args) => `${String(key)}(${args.join(',')})`
+  })
+  const renderWb = props => pluginModule.WhiteboardView({ tasks: wbTasks, i18n: wi18n, title: 'Spring bake sale', layout: 'route', ...props })
+  const wb = JSON.stringify(renderWb({}))
+  const notes = (wb.match(/"data-wb-note"/g) || []).length
+  check(notes === 2, `the whiteboard draws one note per non-milestone card (got ${notes})`)
+  check((wb.match(/"data-wb-marker"/g) || []).length === 2, 'a route has one stop per phase (the milestone and the loose cards)')
+  check(wb.includes('wbStep(1)'), 'the milestone stop is labelled with its step')
+  check(wb.includes('wb-tape') && wb.includes('wb-card-stamp'), 'notes are taped and stops are stamped, as on whiteboard')
+  check(wb.includes('2 11'), 'the road is whiteboard\'s dashed lane')
+  check(wb.includes('Kickoff'), 'the milestone stop is named after its card')
+  check(wb.includes('wb-zoom') && wb.includes('wb-layouts'), 'the zoom bar and the layout pills are whiteboard\'s')
+  const wbCols = JSON.stringify(renderWb({ layout: 'columns' }))
+  check((wbCols.match(/"data-wb-frame"/g) || []).length === 2, 'columns draw one frame per phase')
+  const wbMap = JSON.stringify(renderWb({ layout: 'map' }))
+  check(wbMap.includes('Spring bake sale'), 'the map puts the board title at its hub')
+  const wbEmpty = JSON.stringify(pluginModule.WhiteboardView({ tasks: [], i18n: wi18n, title: 'x' }))
+  check(wbEmpty.includes('wbEmpty'), 'an empty board says so instead of drawing a bare canvas')
+}
+
+
 console.log(`checks: ${checks}, failures: ${failures}`)
 if (failures > 0) process.exit(1)

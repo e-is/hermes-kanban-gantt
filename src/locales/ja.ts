@@ -280,5 +280,21 @@ export const ja = {
       review: 'レビュー',
       done: '完了',
       archived: 'アーカイブ'
-  }
+  },
+    viewWhiteboard: 'Whiteboard',
+    wbEmpty: 'No cards on this board yet.',
+    wbRoute: 'Route',
+    wbColumns: 'Columns',
+    wbMap: 'Map',
+    wbHint: 'Drag a note to arrange it · click to open the card',
+    wbStops: n => `${n} phases`,
+    wbDone: 'done',
+    wbFit: 'Fit',
+    wbZoomIn: 'Zoom in',
+    wbZoomOut: 'Zoom out',
+    wbMilestoneHint: 'A milestone card: it gates the next phase, and the dispatcher never runs it.',
+    wbMilestone: 'Milestone',
+    wbStep: n => `Milestone ${n}`,
+    wbLoose: 'No milestone',
+    wbStages: { queued: 'Queued', running: 'Running', review: 'Review', blocked: 'Blocked', done: 'Done' },
 }

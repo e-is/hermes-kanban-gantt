@@ -52,6 +52,15 @@ await build({
 
 await build({
   ...common,
+  // The whiteboard's pure core: layouts, phases, route planning, geometry. Built
+  // standalone so tests import the shipped artifact's source and the view can use it
+  // without pulling React into the core.
+  entryPoints: [join(root, 'src', 'core', 'whiteboard-core.ts')],
+  outfile: join(root, 'desktop', 'whiteboard-core.js')
+})
+
+await build({
+  ...common,
   // Pure layout of the graph view (phase 1): built standalone so
   // tests/graph-core.test.mjs exercises the shipped code, and so the view can import
   // it without pulling React into the core.

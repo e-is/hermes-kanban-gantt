@@ -50,6 +50,7 @@ import {
   useQuery,
   useQueryClient,
   useValue,
+  KANBAN_CARD_AREAS,
   PALETTE_AREA,
   ROUTES_AREA,
   SIDEBAR_NAV_AREA,
@@ -77,6 +78,12 @@ import { NewTaskDialog } from './ui/NewTaskDialog'
 import { MoveTaskDialog } from './ui/MoveTaskDialog'
 import { TaskRelations } from './ui/TaskRelations'
 import { ReparentChoiceDialog, MoveUnderDialog, reasonLabel } from './ui/ReparentChooser'
+import { WhiteboardView } from './ui/WhiteboardView'
+import { MILESTONE_LANE, badgeFor } from './core/whiteboard-core'
+
+// The smoke harness renders the view directly with a fixture board (the page's REST stub
+// answers `{}`), the same door the graph view opened for its own anatomy checks.
+export { WhiteboardView }
 
 const ID = 'kanban-gantt'
 
@@ -1132,7 +1139,10 @@ function ViewToggle({ value, onChange }) {
       item('timeline', 'graph-line', i18n.viewTimeline),
       // Third value, same persistence and same chrome as the other two. The icon is the
       // hierarchy glyph because the view answers "what hangs off what", not "when".
-      item('graph', 'type-hierarchy', i18n.viewGraph)
+      item('graph', 'type-hierarchy', i18n.viewGraph),
+      // The fourth view: the board as a spatial plan. Same data, same drawer, a different
+      // question — where the work sits, not when it happened or what hangs off what.
+      item('whiteboard', 'layout', i18n.viewWhiteboard)
     ]
   })
 }
@@ -4161,7 +4171,7 @@ export function KanbanGanttPage() {
 
   const [viewMode, setViewMode] = useState(() => {
     const saved = readPref('viewMode')
-    return saved === 'list' || saved === 'graph' ? saved : 'timeline'
+    return saved === 'list' || saved === 'graph' || saved === 'whiteboard' ? saved : 'timeline'
   })
   const graphMode = viewMode === 'graph'
 
@@ -4239,9 +4249,34 @@ export function KanbanGanttPage() {
     return Math.abs(zoom - calibrated) / calibrated <= 0.25 ? span : null
   })
   const listMode = viewMode === 'list'
+  const whiteboardMode = viewMode === 'whiteboard'
   const handleViewMode = mode => {
     setViewMode(mode)
     writePref('viewMode', mode)
+  }
+  // The whiteboard's own two preferences: which layout, and where the reader dropped a note.
+  // Positions are keyed by item id and board-scoped by `prefKey`, so switching boards never
+  // drags another board's arrangement along.
+  const [wbLayout, setWbLayout] = useState(() => {
+    const v = readPref('wbLayout')
+    return v === 'columns' || v === 'map' ? v : 'route'
+  })
+  const handleWbLayout = mode => {
+    setWbLayout(mode)
+    writePref('wbLayout', mode)
+  }
+  const [wbPos, setWbPos] = useState(() => {
+    try {
+      const raw = readPref('wbPos', '{}')
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
+    }
+  })
+  const handleWbPos = next => {
+    setWbPos(next)
+    writePref('wbPos', JSON.stringify(next))
   }
   const [zoomPct, setZoomPct] = useState(() => {
     const s = getStorage()
@@ -5092,12 +5127,12 @@ export function KanbanGanttPage() {
               // window to tune.
               graphMode
                 ? jsx(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
-                : listMode ? null : jsx(PeriodSelector, {
+                : (listMode || whiteboardMode) ? null : jsx(PeriodSelector, {
                     value: period,
                     onChange: handlePeriod,
                     disabled: false
                   }),
-              listMode ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
+              (listMode || whiteboardMode) ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
                 jsx('input', {
                   type: 'range',
                   min: String(graphMode ? Math.round(GRAPH_ZOOM_MIN * 100) : ZOOM_PCT_MIN),
@@ -5338,6 +5373,21 @@ export function KanbanGanttPage() {
             arrangement: arrange,
             sortBy: 'status'
           })
+        : whiteboardMode
+        ? jsx(WhiteboardView, {
+            tasks: derived.tasks || [],
+            i18n,
+            // `boardLabel` is a resolver (slug -> label), not a string: passing the function
+            // made React silently drop the hub's title.
+            title: boardLabel(board),
+            board,
+            selectedId: openTaskId,
+            layout: wbLayout,
+            onLayout: handleWbLayout,
+            positions: wbPos,
+            onPositions: handleWbPos,
+            onOpen: id => $openTaskId.set(id)
+          })
         : rows.length === 0
         ? jsxs('div', {
             className: 'py-10 flex flex-col items-center gap-3',
@@ -5488,7 +5538,9 @@ export function KanbanGanttPage() {
 
       // The legend describes BAR TONES, so it has nothing to say about a board with no
       // rows — and an empty state reads better with only its message and the creation verb.
-      derived && rows.length > 0
+      // Nor about the whiteboard: its notes are paper tones (whiteboard's), each one carrying
+      // its stage as a chip, and a legend of bar colours under them would contradict them.
+      derived && rows.length > 0 && !whiteboardMode
         ? jsx('div', {
             children: jsx(Legend, {
               disabledStatuses,
@@ -5733,6 +5785,19 @@ const plugin = {
           label: tNow('openCommand'),
           keywords: ['kanban', 'gantt', 'timeline'],
           run: () => host.navigate('/kanban-gantt')
+        }
+      },
+      // The milestone lane, made visible on the OFFICIAL board. A badge is a projection, not
+      // storage: `decorate` reads the one field that decides the role (the lane) and paints it.
+      // A prerequisite badge would need the child links, which the frozen `card` does not carry —
+      // left out rather than guessed.
+      {
+        id: 'milestone-badge',
+        area: KANBAN_CARD_AREAS.badges,
+        data: {
+          decorate: card => (card && card.assignee === MILESTONE_LANE
+            ? { ...badgeFor('milestone'), label: `◆ ${tNow('wbMilestone')}`, tooltip: tNow('wbMilestoneHint') }
+            : null)
         }
       }
     ])

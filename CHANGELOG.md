@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.11.0 — the whiteboard mode
+
+A fourth view: the board as a spatial plan, in Adolanium/hermes-whiteboard's own look (MIT) — its
+stylesheet, stamps, taped notes, road, hub and `layoutSpec` geometry ported as-is, none of its
+storage or its own agent runtime.
+
+**Every note is a card.** The mode reads the same `/gantt` snapshot as the timeline, opens the same
+drawer on click, and writes nothing back except where the reader dragged a note, a stop or a frame
+(board- and layout-scoped: a frame moved on the map leaves the route alone). No new table, no new
+backend route.
+
+**A milestone is a lane, not a tag.** `assignee = jalon` — a non-profile lane the dispatcher never
+spawns, which the kanban core treats as control-plane work. The card stays a real parent: its
+children wait for it, `recompute_ready` promotes them when it passes, and the worker context of a
+downstream card already carries its result. The stop (or frame) that holds a phase, the gold road up
+to the last passed milestone and the `◆ Jalon` badge on the official board are projections of that
+one field.
+
+**The specs come first.** Ported from whiteboard's 30 unit tests (the model changed, the
+invariants did not) and extended with the specs it never had: role of a parent, phase of a card,
+badge projection, board model. `tests/whiteboard-core.test.mjs` runs against the same source the
+view imports.
+
+
 ## 1.10.0 — the card tells the truth about itself
 
 Four defects in the graph card, all of them visible on a live board, and three steps toward the

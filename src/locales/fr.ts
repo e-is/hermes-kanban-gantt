@@ -284,5 +284,21 @@ export const fr = {
       review: 'Revue',
       done: 'Terminé',
       archived: 'Archivé'
-  }
+  },
+    viewWhiteboard: 'Tableau blanc',
+    wbEmpty: 'Aucune carte sur ce tableau pour l’instant.',
+    wbRoute: 'Route',
+    wbColumns: 'Colonnes',
+    wbMap: 'Carte',
+    wbHint: 'Glissez une note pour l’arranger · cliquez pour ouvrir la carte',
+    wbStops: n => `${n} phases`,
+    wbDone: 'terminées',
+    wbFit: 'Ajuster',
+    wbZoomIn: 'Zoom avant',
+    wbZoomOut: 'Zoom arrière',
+    wbMilestoneHint: 'Carte jalon : elle gate la phase suivante, et le dispatcher ne la lance jamais.',
+    wbMilestone: 'Jalon',
+    wbStep: n => `Jalon ${n}`,
+    wbLoose: 'Sans jalon',
+    wbStages: { queued: 'En attente', running: 'En cours', review: 'Revue', blocked: 'Bloquée', done: 'Terminée' },
 }
