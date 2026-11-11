@@ -792,7 +792,6 @@ export function WhiteboardView({
       'data-wb-frame': item.kind === 'frame' ? item.phase : undefined,
       'data-wb-marker': item.kind === 'waypoint' ? item.phase : undefined,
       'data-wb-result': item.kind === 'result' ? item.taskId : undefined,
-      title: item.taskId && item.kind !== 'result' ? item.text : undefined,
       style: {
         left: item.x, top: item.y, width: item.w, height: item.h,
         transform: offset ? `translate(${offset.x}px, ${offset.y}px)` : undefined,

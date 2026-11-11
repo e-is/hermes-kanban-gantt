@@ -307,12 +307,14 @@ export function frameSlots(frame: { x: number; y: number }, count: number, cols 
   }))
 }
 
-/** Wide enough for the title in the display face, sticker included — whiteboard's `frameSize`. */
+/** Wide enough for the title in the display face, sticker included — whiteboard's `frameSize`,
+ *  with room for the title's zoomed-out growth (`--wb-k` scales it up to 1.4×; whiteboard's 10.5
+ *  px per character truncated « Ready for review » on a fitted map). */
 export function frameSize(count: number, cols = 2, title = '', cell = NOTE_W): { w: number; h: number } {
   const rows = Math.max(1, Math.ceil(count / cols))
   return {
     h: 64 + rows * (NOTE_H + GAP) + 4,
-    w: Math.max(GAP + cols * (cell + GAP), Math.round(78 + String(title).length * 10.5))
+    w: Math.max(GAP + cols * (cell + GAP), Math.round(78 + String(title).length * 13))
   }
 }
 

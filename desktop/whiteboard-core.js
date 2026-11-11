@@ -168,7 +168,7 @@ function frameSize(count, cols = 2, title = "", cell = NOTE_W) {
   const rows = Math.max(1, Math.ceil(count / cols));
   return {
     h: 64 + rows * (NOTE_H + GAP) + 4,
-    w: Math.max(GAP + cols * (cell + GAP), Math.round(78 + String(title).length * 10.5))
+    w: Math.max(GAP + cols * (cell + GAP), Math.round(78 + String(title).length * 13))
   };
 }
 function pathFractions(points) {

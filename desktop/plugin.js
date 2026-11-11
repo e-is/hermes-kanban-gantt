@@ -7155,7 +7155,7 @@ function frameSize(count, cols = 2, title = "", cell = NOTE_W) {
   const rows = Math.max(1, Math.ceil(count / cols));
   return {
     h: 64 + rows * (NOTE_H + GAP) + 4,
-    w: Math.max(GAP + cols * (cell + GAP), Math.round(78 + String(title).length * 10.5))
+    w: Math.max(GAP + cols * (cell + GAP), Math.round(78 + String(title).length * 13))
   };
 }
 function pathFractions(points) {
@@ -8150,7 +8150,6 @@ function WhiteboardView({
       "data-wb-frame": item.kind === "frame" ? item.phase : void 0,
       "data-wb-marker": item.kind === "waypoint" ? item.phase : void 0,
       "data-wb-result": item.kind === "result" ? item.taskId : void 0,
-      title: item.taskId && item.kind !== "result" ? item.text : void 0,
       style: {
         left: item.x,
         top: item.y,
