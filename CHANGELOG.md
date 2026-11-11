@@ -18,6 +18,23 @@ downstream card already carries its result. The stop (or frame) that holds a pha
 to the last passed milestone and the `◆ Jalon` badge on the official board are projections of that
 one field.
 
+**The plan runs on the kanban.** A milestone is the gate INTO its phase — its children wait for it,
+that is what a kanban parent means — so « Run the plan » hands the open phase's queued cards to a
+profile (they become ready, the dispatcher does the work) and, once that phase is done, offers to
+pass the next milestone. Passing is always a human's click, and it sends a summary: the domain
+refuses an empty completion. A card still waiting for a prerequisite is never handed over — the
+status route's `ready` is the drawer's manual override and forces the status (measured: a gated
+card went ready and the dispatcher claimed it within seconds).
+
+**Whiteboard's other verbs, on real cards.** A finished card's result sits beside it as whiteboard's
+delivered card; a passed milestone gets its postmarked brief. Dragging a card's port onto another
+makes the second wait for the first (a real `task_links` row, drawn as whiteboard's arrow; click it to
+unlink). A double-click adds a card under the phase's milestone, through the page's own dialog.
+Agent cursors on running cards; tidy, undo/redo, marquee and multi-drag; copy as Markdown or CSV.
+
+**Fixed: an empty completion is a 409, not a 500.** `EmptyCompletionError` escaped the status route
+— the drawer's Done on a card with no result hit it as much as the whiteboard did.
+
 **The specs come first.** Ported from whiteboard's 30 unit tests (the model changed, the
 invariants did not) and extended with the specs it never had: role of a parent, phase of a card,
 badge projection, board model. `tests/whiteboard-core.test.mjs` runs against the same source the

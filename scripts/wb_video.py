@@ -62,7 +62,7 @@ async def main():
     ap.add_argument("--port", type=int, default=9222)
     ap.add_argument("--display", default=os.environ.get("DISPLAY", ":99"))
     ap.add_argument("--size", default="1600x1000")
-    ap.add_argument("--out", default=str(shots.DOCS / "whiteboard-demo.mp4"))
+    ap.add_argument("--out", default=str(shots.ANIM / "whiteboard.mp4"))
     args = ap.parse_args()
 
     ui = shots.Desktop(args.port)
@@ -99,23 +99,43 @@ async def main():
         if PROOF not in str(await ui.ev("document.body.innerText") or ""):
             raise shots.Dead(f"the page does not show {BOARD} (no {PROOF!r})")
         print("  board: the English seed is on screen")
+        # The catalogue stills first, one per layout, then the walkthrough.
+        for name, label in (("screenshot-en-09-whiteboard", "Route"), ("screenshot-en-10-whiteboard-columns", "Columns"),
+                            ("screenshot-en-11-whiteboard-map", "Map")):
+            await pill(ui, label)
+            await ui.shot(name)
         await pill(ui, "Route")
 
         rec = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "x11grab", "-framerate", "25",
-                                "-video_size", args.size, "-i", args.display, "-t", "40",
+                                "-video_size", args.size, "-i", args.display, "-t", "60",
                                 "-pix_fmt", "yuv420p", "-c:v", "libx264", "-crf", "20", args.out],
                                stdin=subprocess.PIPE)
         await asyncio.sleep(2.5)
 
         # Route: zoom in on the road, then back to the whole plan.
-        zin = await center(ui, ".wb-zoom button", 1)
+        zin = await center(ui, ".wb-zoom button", 2)   # tidy, out, in, fit
         for _ in range(2):
             await ui.click_xy(zin["x"], zin["y"])
             await asyncio.sleep(1.2)
         await asyncio.sleep(1.5)
-        fit = await center(ui, ".wb-zoom button", 2)
+        fit = await center(ui, ".wb-zoom button", 3)
         await ui.click_xy(fit["x"], fit["y"])
         await asyncio.sleep(2.2)
+
+        # Hover a card: « Hand to Hermes » and the link port come up (nothing is clicked — a
+        # hand-over on a live gateway dispatches a real agent).
+        h = await center(ui, "[data-wb-note]", 2)
+        await ui.call("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": h["x"], "y": h["y"]})
+        await asyncio.sleep(2.5)
+
+        # Double-click the board: a new card under that phase's milestone (cancelled).
+        s = await center(ui, "[data-wb-marker]", 1)
+        for n in (1, 2):
+            for kind in ("mousePressed", "mouseReleased"):
+                await ui.call("Input.dispatchMouseEvent", {"type": kind, "x": s["x"] + 190, "y": s["y"] + 230, "button": "left", "clickCount": n})
+        await asyncio.sleep(3.0)
+        await shots.press_escape(ui)
+        await asyncio.sleep(1.2)
 
         await pill(ui, "Columns")
         await asyncio.sleep(1.0)
@@ -127,9 +147,14 @@ async def main():
         await real_drag(ui, f["left"], f["top"], f["left"] + 170, f["top"] + 70)
         await asyncio.sleep(2.0)
 
-        # Back to the route (the map's drag does not follow), then open a card.
+        # Tidy puts the map back; the route never moved.
+        t = await center(ui, ".wb-zoom button", 0)
+        await ui.click_xy(t["x"], t["y"])
+        await asyncio.sleep(2.0)
         await pill(ui, "Route")
         await asyncio.sleep(1.0)
+        await shots.click_exact(ui, "Copy Markdown", selector=".wb-compose button")
+        await asyncio.sleep(2.0)
         n = await center(ui, "[data-wb-note]", 1)
         await ui.click_xy(n["x"], n["y"])
         await asyncio.sleep(3.5)
