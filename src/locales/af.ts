@@ -299,6 +299,8 @@ export const af = {
     wbZoomIn: 'Zoom in',
     wbZoomOut: 'Zoom out',
     wbMilestoneHint: 'A milestone card: it gates the next phase, and the dispatcher never runs it.',
+    wbAddMilestone: "Nuwe mylpaal",
+    wbAddMilestoneHint: "Voeg 'n stop by die einde van die pad — 'n nuwe fase",
     wbMilestone: 'Milestone',
     wbStep: n => `Milestone ${n}`,
     wbLoose: 'No milestone',

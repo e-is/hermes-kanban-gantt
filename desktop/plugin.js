@@ -407,6 +407,8 @@ var en = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "New milestone",
+  wbAddMilestoneHint: "Adds a stop at the end of the road — a new phase",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -730,6 +732,8 @@ var fr = {
   wbZoomIn: "Zoom avant",
   wbZoomOut: "Zoom arrière",
   wbMilestoneHint: "Carte jalon : elle gate la phase suivante, et le dispatcher ne la lance jamais.",
+  wbAddMilestone: "Nouveau jalon",
+  wbAddMilestoneHint: "Ajoute une étape au bout de la route — une nouvelle phase",
   wbMilestone: "Jalon",
   wbStep: (n) => `Jalon ${n}`,
   wbLoose: "Sans jalon",
@@ -1050,6 +1054,8 @@ var zh = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "新建里程碑",
+  wbAddMilestoneHint: "在路线末端添加一站——一个新阶段",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -1375,6 +1381,8 @@ var af = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "Nuwe mylpaal",
+  wbAddMilestoneHint: "Voeg 'n stop by die einde van die pad — 'n nuwe fase",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -1700,6 +1708,8 @@ var ar = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "مرحلة جديدة",
+  wbAddMilestoneHint: "يضيف محطة في نهاية الطريق — مرحلة جديدة",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -2025,6 +2035,8 @@ var de = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "Neuer Meilenstein",
+  wbAddMilestoneHint: "Fügt eine Station am Ende der Straße hinzu — eine neue Phase",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -2350,6 +2362,8 @@ var es = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "Nuevo hito",
+  wbAddMilestoneHint: "Añade una parada al final de la ruta — una fase nueva",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -2675,6 +2689,8 @@ var ga = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "Cloch mhíle nua",
+  wbAddMilestoneHint: "Cuireann stad ag deireadh an bhealaigh — céim nua",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -3000,6 +3016,8 @@ var hu = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "Új mérföldkő",
+  wbAddMilestoneHint: "Új állomást tesz az út végére — egy új szakasz",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -3325,6 +3343,8 @@ var it = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "Nuova milestone",
+  wbAddMilestoneHint: "Aggiunge una tappa in fondo alla strada — una nuova fase",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -3650,6 +3670,8 @@ var ja = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "新しいマイルストーン",
+  wbAddMilestoneHint: "道の終わりに新しいフェーズの停留所を追加します",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -3975,6 +3997,8 @@ var ko = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "새 마일스톤",
+  wbAddMilestoneHint: "길 끝에 새 단계의 정류장을 추가합니다",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -4300,6 +4324,8 @@ var pt = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "Novo marco",
+  wbAddMilestoneHint: "Acrescenta uma parada no fim da estrada — uma nova fase",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -4620,6 +4646,8 @@ var ru = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "Новый этап",
+  wbAddMilestoneHint: "Добавляет остановку в конце маршрута — новую фазу",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -4945,6 +4973,8 @@ var tr = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "Yeni kilometre taşı",
+  wbAddMilestoneHint: "Yolun sonuna yeni bir aşama durağı ekler",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -5265,6 +5295,8 @@ var uk = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "Новий етап",
+  wbAddMilestoneHint: "Додає зупинку в кінці маршруту — нову фазу",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -5590,6 +5622,8 @@ var zhHant = {
   wbZoomIn: "Zoom in",
   wbZoomOut: "Zoom out",
   wbMilestoneHint: "A milestone card: it gates the next phase, and the dispatcher never runs it.",
+  wbAddMilestone: "新增里程碑",
+  wbAddMilestoneHint: "在路線末端新增一站——一個新階段",
   wbMilestone: "Milestone",
   wbStep: (n) => `Milestone ${n}`,
   wbLoose: "No milestone",
@@ -6537,6 +6571,7 @@ function NewTaskDialog({
   tasks,
   projects = [],
   defaultParentId,
+  defaultAssignee,
   busy = false,
   onSubmit,
   onClose,
@@ -6559,7 +6594,7 @@ function NewTaskDialog({
     if (!open) return;
     setTitle("");
     setBody("");
-    setAssignee("");
+    setAssignee(defaultAssignee || "");
     setPriority("0");
     setParentId(defaultParentId || "");
     setTriage(false);
@@ -6570,7 +6605,7 @@ function NewTaskDialog({
     setModelOverride("");
     setGoalMode(false);
     keyRef.current = `kg-new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  }, [open, defaultParentId]);
+  }, [open, defaultParentId, defaultAssignee]);
   const parentOptions = tasks.filter((task) => task.id === defaultParentId || task.status !== "done" && task.status !== "archived" && (!boardSlug || !task.board || task.board === boardSlug));
   const chosenParent = parentOptions.find((task) => task.id === parentId);
   const chosenProject = projects.find((project) => project.id === projectId);
@@ -7633,7 +7668,8 @@ var LINE = {
   play: "M8 5l11 7-11 7Z",
   wand: "M5 19L15 9M14 4v3M19 9h-3M17.5 5.5l-2 2M11 4.5l.8 1.6M19.5 13l-1.6-.8",
   check: "M5 12l5 5L20 7",
-  unlink: "M5 19L19 5M10 5h9v9M5 5l4 4M15 15l4 4"
+  unlink: "M5 19L19 5M10 5h9v9M5 5l4 4M15 15l4 4",
+  flag: "M6 21V4M6 4h11l-2.5 4L17 12H6"
 };
 function Line({ name }) {
   return jsx6("svg", {
@@ -7897,7 +7933,8 @@ function WhiteboardView({
   onUnlink,
   onHand,
   onPass,
-  onCopy
+  onCopy,
+  onAddMilestone
 }) {
   useEffect3(() => {
     installStyles();
@@ -8245,6 +8282,14 @@ function WhiteboardView({
                     ]
                   }, "run"),
                   jsx6("span", { className: "wb-next", children: nextLabel }, "next"),
+                  jsx6("button", {
+                    className: "wb-btn",
+                    type: "button",
+                    "data-wb-milestone": true,
+                    title: i18n.wbAddMilestoneHint,
+                    onClick: () => onAddMilestone?.(),
+                    children: [jsx6(Line, { name: "flag" }, "i"), i18n.wbAddMilestone]
+                  }, "milestone"),
                   jsx6("button", { className: "wb-btn", type: "button", onClick: () => copy("md"), title: i18n.wbCopyMd, children: i18n.wbCopyMd }, "md"),
                   jsx6("button", { className: "wb-btn", type: "button", onClick: () => copy("csv"), title: i18n.wbCopyCsv, children: i18n.wbCopyCsv }, "csv")
                 ]
@@ -12770,7 +12815,7 @@ function KanbanGanttPage() {
   const assigneeChoices = useMemo3(() => {
     const fromBoard = derived && derived.allAssignees || [];
     const fromProfiles = profilesData && profilesData.profiles || [];
-    return Array.from(/* @__PURE__ */ new Set([...fromProfiles, ...fromBoard])).sort();
+    return Array.from(/* @__PURE__ */ new Set([...fromProfiles, ...fromBoard, MILESTONE_LANE])).sort();
   }, [derived, profilesData]);
   const handleZoomPct = (val) => {
     const next = clampZoomPct(val);
@@ -13415,6 +13460,7 @@ function KanbanGanttPage() {
             onPositions: handleWbPos,
             onOpen: (id) => $openTaskId.set(id),
             onCreate: (parentId) => $newTask.set({ parentId: parentId || "" }),
+            onAddMilestone: () => $newTask.set({ parentId: "", assignee: MILESTONE_LANE }),
             onLink: (parentId, childId) => reparentMutation.mutate({ childId, parentId, mode: "add" }),
             onUnlink: (parentId, childId) => unlinkMutation.mutate({ childId, parentId }),
             onHand: handleWbHand,
@@ -13615,6 +13661,7 @@ function KanbanGanttPage() {
       // Creation dialog (toolbar button, or "create a sub-task" from a task).
       jsx7(NewTaskDialog, {
         open: Boolean(newTask),
+        defaultAssignee: newTask ? newTask.assignee : void 0,
         boardSlug: board && board !== "all" && board !== "*" ? board : void 0,
         assignees: assigneeChoices,
         tasks: data && data.tasks || [],

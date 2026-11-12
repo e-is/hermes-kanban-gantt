@@ -752,7 +752,7 @@ if (typeof pluginModule.WhiteboardView === 'function') {
   ]
   const WB_PLAIN = new Set(['wbEmpty', 'wbRoute', 'wbColumns', 'wbMap', 'wbHint', 'wbDone', 'wbFit', 'wbMilestone', 'wbLoose', 'wbZoomIn', 'wbZoomOut',
     'wbHand', 'wbHandHint', 'wbPass', 'wbPassHint', 'wbRun', 'wbRunHint', 'wbPlanDone', 'wbDelivered', 'wbBrief', 'wbCopyMd', 'wbCopyCsv',
-    'wbTidy', 'wbUnlink', 'wbLinkHint'])
+    'wbTidy', 'wbUnlink', 'wbLinkHint', 'wbAddMilestone', 'wbAddMilestoneHint'])
   const wi18n = new Proxy({ wbStages: { queued: 'Queued', running: 'Running', review: 'Review', blocked: 'Blocked', done: 'Done' } }, {
     get: (target, key) => key === 'wbStages' ? target.wbStages
       : WB_PLAIN.has(String(key)) ? String(key)
@@ -776,6 +776,7 @@ if (typeof pluginModule.WhiteboardView === 'function') {
   check(wbActive.includes('"data-wb-run"') && wbActive.includes('wbNextWaiting'), 'the bar offers to run the plan, and says what comes next')
   check(!wb.includes('"wb-hand"'), 'without a hand-over handler, no hand button is drawn')
   check(wb.includes('wbCopyMd') && wb.includes('wbTidy'), 'copy-as-Markdown and tidy are on the canvas chrome')
+  check(wb.includes('"data-wb-milestone":true') && wb.includes('wbAddMilestone'), 'the bar offers to add a milestone at the end of the road')
   check(wb.includes('"data-wb-cursor":"default"'), 'a running card carries its agent\'s cursor, labelled with the profile')
   const wbCols = JSON.stringify(renderWb({ layout: 'columns' }))
   check((wbCols.match(/"data-wb-frame"/g) || []).length === 2, 'columns draw one frame per phase')

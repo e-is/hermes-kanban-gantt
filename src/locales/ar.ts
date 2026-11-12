@@ -293,6 +293,8 @@ export const ar = {
     wbZoomIn: 'Zoom in',
     wbZoomOut: 'Zoom out',
     wbMilestoneHint: 'A milestone card: it gates the next phase, and the dispatcher never runs it.',
+    wbAddMilestone: "مرحلة جديدة",
+    wbAddMilestoneHint: "يضيف محطة في نهاية الطريق — مرحلة جديدة",
     wbMilestone: 'Milestone',
     wbStep: n => `Milestone ${n}`,
     wbLoose: 'No milestone',

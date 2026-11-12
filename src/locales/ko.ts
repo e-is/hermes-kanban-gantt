@@ -299,6 +299,8 @@ export const ko = {
     wbZoomIn: 'Zoom in',
     wbZoomOut: 'Zoom out',
     wbMilestoneHint: 'A milestone card: it gates the next phase, and the dispatcher never runs it.',
+    wbAddMilestone: "새 마일스톤",
+    wbAddMilestoneHint: "길 끝에 새 단계의 정류장을 추가합니다",
     wbMilestone: 'Milestone',
     wbStep: n => `Milestone ${n}`,
     wbLoose: 'No milestone',

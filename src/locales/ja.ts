@@ -293,6 +293,8 @@ export const ja = {
     wbZoomIn: 'Zoom in',
     wbZoomOut: 'Zoom out',
     wbMilestoneHint: 'A milestone card: it gates the next phase, and the dispatcher never runs it.',
+    wbAddMilestone: "新しいマイルストーン",
+    wbAddMilestoneHint: "道の終わりに新しいフェーズの停留所を追加します",
     wbMilestone: 'Milestone',
     wbStep: n => `Milestone ${n}`,
     wbLoose: 'No milestone',
