@@ -1097,6 +1097,58 @@ class DescriptionBody(BaseModel):
     body: Optional[str] = None
 
 
+class ModelOverrideBody(BaseModel):
+    model_override: Optional[str] = None
+    provider_override: Optional[str] = None
+    reasoning_effort: Optional[str] = None
+    # `null` in a PATCH means "not sent", so clearing has to be asked for explicitly — the same
+    # contract the official board's own drawer uses.
+    clear_model_override: bool = False
+    clear_reasoning_effort: bool = False
+
+
+@router.patch("/tasks/{task_id}/model")
+def set_task_model(task_id: str, payload: ModelOverrideBody, board: Optional[str] = Query(None)):
+    """Pin (or clear) the model and effort this task's worker runs on.
+
+    Applies on the NEXT dispatch, which is why the domain layer allows it on a running task: the
+    recovery flow for a rate-limited worker is to change the model, then reclaim. Effort is written
+    independently of the model so clearing one never resets the other.
+    """
+    from hermes_cli import kanban_db
+
+    slug = _resolve_board(board)
+    if slug in ("all", "*"):
+        found = _find_task_board(task_id)
+        if found:
+            slug = found
+        else:
+            slug = _resolve_board(None)
+            if slug in ("all", "*"):
+                slug = "default"
+    conn = _connect(slug, ro=False)
+    try:
+        if payload.clear_model_override:
+            kanban_db.set_model_override(conn, task_id, None, None)
+        elif payload.model_override is not None:
+            kanban_db.set_model_override(
+                conn, task_id,
+                (payload.model_override or "").strip() or None,
+                (payload.provider_override or "").strip() or None,
+            )
+        if payload.clear_reasoning_effort:
+            kanban_db.set_reasoning_effort(conn, task_id, None)
+        elif payload.reasoning_effort is not None:
+            kanban_db.set_reasoning_effort(conn, task_id, payload.reasoning_effort)
+        return {"ok": True, "task_id": task_id}
+    except (ValueError, RuntimeError) as exc:
+        # The domain's own refusals (a provider without a model, an archived task) are 409s the
+        # reader can act on, not a server crash.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        conn.close()
+
+
 @router.patch("/tasks/{task_id}/description")
 def update_description(task_id: str, payload: DescriptionBody, board: Optional[str] = Query(None)):
     """Replace a task's description (raw markdown) — the same write the reference

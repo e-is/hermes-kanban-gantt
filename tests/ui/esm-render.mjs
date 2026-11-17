@@ -490,6 +490,7 @@ if (pageNode) {
   const modalFlat = JSON.stringify(page.render())
   check(modalFlat.includes('detailMeta'), 'the modal renders its right-hand information column')
   check(modalFlat.includes('metaPriority'), 'the modal column carries the priority row')
+  check(modalFlat.includes('metaModel'), 'and the model row, where the official drawer keeps it')
 
   // Selection: the detail is prose — a title, a description, a summary, a log — and the panel turns
   // selection back on for itself, because the shell turns it off for the app's chrome.
@@ -528,6 +529,12 @@ if (pageNode) {
   globalThis.__kgDiagDetail = null
   check(!detailFlat.includes('"children":"diagnostics"'), 'a task without diagnostics draws no panel')
   pluginModule.$detailModal.set(false)
+  // The model override, in the docked panel: a compact trigger in the header rather than a row in
+  // the information column, which the panel does not have. The official drawer's label is what a
+  // reader sees when nothing is pinned.
+  const panelFlat = JSON.stringify(page.render())
+  check(panelFlat.includes('modelInherit'), 'the docked panel offers the model in its header')
+  check(!panelFlat.includes('detailMeta'), 'and does not pretend to have the modal\'s information column')
   pluginModule.$openTaskId.set(null)
 
   check(flat.includes('"area":"workspace.pageHeader"') || flat.includes('"area": "workspace.pageHeader"'), 'page projects its switcher into WORKSPACE_PAGE_HEADER_AREA')

@@ -244,6 +244,38 @@ def test_task_detail_carries_the_diagnostics_of_a_blocked_card(client):
     assert healthy["diagnostics"] == []
 
 
+def test_model_override_is_pinned_and_cleared(client):
+    """The drawer's model picker writes the task's own override — and can take it back.
+
+    The domain layer applies an override on the next dispatch, which is why the route must accept it
+    on any non-archived task; what it must not do is invent a value. Clearing the effort leaves the
+    model pinned, and clearing the model takes its provider with it (a provider alone means nothing).
+    """
+    http, board = client
+    tid = board["solo"]
+    url = f"/tasks/{tid}/model?board={board['slug']}"
+
+    r = http.patch(url, json={"model_override": "claude-opus-4-6", "provider_override": "anthropic",
+                              "reasoning_effort": "high"})
+    assert r.status_code == 200, r.text
+    detail = http.get(f"/tasks/{tid}?board={board['slug']}").json()["task"]
+    assert (detail["model_override"], detail["provider_override"], detail["reasoning_effort"]) == \
+        ("claude-opus-4-6", "anthropic", "high")
+
+    # Effort off, model kept: the two are independent, and a picker that cleared one when the other
+    # changed would lose the reader's choice on every keystroke.
+    assert http.patch(url, json={"clear_reasoning_effort": True}).status_code == 200
+    detail = http.get(f"/tasks/{tid}?board={board['slug']}").json()["task"]
+    assert detail["model_override"] == "claude-opus-4-6"
+    assert detail["reasoning_effort"] in (None, "")
+
+    # Back to inheriting the profile's model — and its provider goes with it.
+    assert http.patch(url, json={"clear_model_override": True}).status_code == 200
+    detail = http.get(f"/tasks/{tid}?board={board['slug']}").json()["task"]
+    assert detail["model_override"] in (None, "")
+    assert detail["provider_override"] in (None, "")
+
+
 def test_attachment_counts_group_by_task(tmp_path):
     """`_attachment_counts` answers "does this row need a paperclip", for the whole board.
 
