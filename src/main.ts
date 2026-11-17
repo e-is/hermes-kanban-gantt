@@ -43,6 +43,9 @@ import {
   profileColor,
   profileColorSoft,
   MessageTextContent,
+  ModelCatalogMenu,
+  ModelMenuCloseContext,
+  reasoningEffortLabel,
   Switch,
   Textarea,
   useMutation,
@@ -50,13 +53,19 @@ import {
   useQuery,
   useQueryClient,
   useValue,
-  KANBAN_CARD_AREAS,
   PALETTE_AREA,
   ROUTES_AREA,
   SIDEBAR_NAV_AREA,
   TITLEBAR_AREAS,
   WORKSPACE_PAGE_HEADER_AREA
 } from '@hermes/plugin-sdk'
+// The default export is the whole SDK object. Card badge areas arrived after Desktop/Gateway
+// 0.22.5, and a NAMED import of a name the host does not export breaks the module at link time —
+// that is issue #21: 1.11.0 failed to load on 0.22.5 with « does not provide an export named
+// 'KANBAN_CARD_AREAS' », while 1.10.1 (no badge) was fine. Read through the object instead, and
+// register the badge only where the area exists.
+import pluginSdk from '@hermes/plugin-sdk'
+const CARD_BADGE_AREA: string | undefined = (pluginSdk as any)?.KANBAN_CARD_AREAS?.badges
 import { useMemo, useRef, useEffect, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 import {
@@ -3129,6 +3138,118 @@ function AttachmentsSection({ taskId, board, attachments, i18n, onPreview }) {
   ] })
 }
 
+// ---------------------------------------------------------------------------
+// Per-task model override — the board's half of the composer's model picker.
+//
+// The MENU is not ours: `ModelCatalogMenu` from the SDK is the same component the chat composer
+// renders, so search, provider grouping and the thinking/effort submenu behave identically here.
+// What differs is what a selection MEANS — the controller below holds a detached value instead of
+// writing to a live session, which is exactly the seam the SDK exposes. Empty means "inherit the
+// assigned profile's own model and effort", which is what every task did before this existed.
+// ---------------------------------------------------------------------------
+
+const EMPTY_OVERRIDE = { effort: '', model: '', provider: '' }
+
+/** True when nothing is pinned and the worker profile decides everything. */
+const isInherited = value => !value.model.trim() && !value.provider.trim() && !value.effort.trim()
+
+/** The trigger's label: `provider: model · High`, or the inherit copy. */
+const overrideLabel = (value, inheritCopy) => {
+  if (isInherited(value)) return inheritCopy
+  const model = value.model.trim()
+  const base = model ? (value.provider.trim() ? `${value.provider}: ${model}` : model) : inheritCopy
+  const effort = value.effort.trim() ? reasoningEffortLabel(value.effort) : ''
+  return effort ? `${base} · ${effort}` : base
+}
+
+/** Translate an override into the REST fields the plugin API expects. The explicit clear flags
+ *  exist because `null` in a PATCH body means "field not sent", not "set to NULL". */
+const overridePatch = value => {
+  const model = value.model.trim()
+  const effort = value.effort.trim()
+  return {
+    ...(model
+      ? { model_override: model, provider_override: value.provider.trim() || undefined }
+      : { clear_model_override: true }),
+    ...(effort ? { reasoning_effort: effort } : { clear_reasoning_effort: true })
+  }
+}
+
+function ModelField({ value, onChange, inheritCopy, clearLabel, label, compact = false }) {
+  const [open, setOpen] = useState(false)
+
+  const controller = {
+    allowSpeed: false,
+    // Picking a model seeds the depth from what the user last used for it, so the board behaves
+    // like the composer. We only READ presets — a per-task choice must never rewrite what the
+    // composer opens at.
+    applyPreset: (preset, row) => onChange({
+      effort: preset.effort ?? '',
+      model: row.model,
+      provider: row.provider
+    }),
+    current: { effort: value.effort, fast: false, model: value.model, provider: value.provider },
+    presetFor: () => ({}),
+    select: (model, provider) => onChange({ ...value, model, provider }),
+    // Fast mode is a live-session request parameter, not something a worker spawn can carry (there
+    // is no --fast flag), so this catalog has no fast support and only effort edits arrive here.
+    setOptions: (patch, row) => {
+      if (patch.effort === undefined) return
+      onChange({ effort: patch.effort, model: row.model, provider: row.provider })
+    }
+  }
+
+  return jsx(DropdownMenu, {
+    open,
+    onOpenChange: setOpen,
+    children: [
+      jsx(DropdownMenuTrigger, {
+        asChild: true,
+        children: jsxs(Button, {
+          type: 'button',
+          variant: 'outline',
+          title: label,
+          className: cn(
+            compact
+              ? 'h-6 max-w-[10.5rem] justify-between gap-1 px-1.5 text-[11px] font-normal'
+              : 'h-8 w-full justify-between gap-2 px-2.5 text-[0.75rem] font-normal',
+            isInherited(value) && 'text-(--ui-text-tertiary)'
+          ),
+          children: [
+            jsx(Codicon, { name: 'chip', size: '0.7rem', className: 'shrink-0 opacity-70' }),
+            jsx('span', { className: 'min-w-0 truncate', children: overrideLabel(value, inheritCopy) }),
+            jsxs('span', { className: 'flex shrink-0 items-center gap-1', children: [
+              isInherited(value)
+                ? null
+                : jsx('span', {
+                    role: 'button',
+                    'aria-label': clearLabel,
+                    className: 'grid size-4 place-items-center rounded text-(--ui-text-tertiary) hover:text-foreground',
+                    onClick: event => {
+                      // Clear without opening the menu.
+                      event.preventDefault()
+                      event.stopPropagation()
+                      onChange(EMPTY_OVERRIDE)
+                    },
+                    children: jsx(Codicon, { name: 'close', size: '0.65rem' })
+                  }),
+              jsx(Codicon, { name: 'chevron-down', size: '0.7rem', className: 'opacity-50' })
+            ] })
+          ]
+        })
+      }),
+      jsx(DropdownMenuContent, {
+        align: 'start',
+        className: 'w-72 p-0',
+        children: jsx(ModelMenuCloseContext.Provider, {
+          value: () => setOpen(false),
+          children: jsx(ModelCatalogMenu, { controller })
+        })
+      })
+    ]
+  })
+}
+
 function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked = false, onToggleDock, boards = [] }) {
   const drawerW = useValue($drawerW)
   const detailModal = useValue($detailModal)
@@ -3213,6 +3334,18 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     mutationFn: payload => apiFetch(
       `/tasks/${encodeURIComponent(shownId)}/status${board ? `?board=${encodeURIComponent(board)}` : ''}`,
       { method: 'PATCH', body: payload }),
+    onSuccess: () => {
+      void refetch()
+      void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
+    },
+    onError: error => toast('error', String(error?.message || error))
+  })
+  // The per-task model override. It writes to the task, not to a session: the domain layer applies
+  // it on the next dispatch, so a running card can be moved to another model before it is reclaimed.
+  const modelMutation = useMutation({
+    mutationFn: patch => apiFetch(
+      `/tasks/${encodeURIComponent(shownId)}/model${board ? `?board=${encodeURIComponent(board)}` : ''}`,
+      { method: 'PATCH', body: patch }),
     onSuccess: () => {
       void refetch()
       void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
@@ -3443,6 +3576,24 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                     ]
                   })
                 ] }),
+                // The model, discreetly: in the panel the header already carries the title, the
+                // status and the actions, so this is a compact trigger with the model's own name
+                // when one is pinned. In the modal it moves to the information column, where the
+                // official drawer keeps it — one control, one place, never both at once.
+                detailModal
+                  ? null
+                  : jsx(ModelField, {
+                      compact: true,
+                      label: i18n.metaModel,
+                      inheritCopy: i18n.modelInherit,
+                      clearLabel: i18n.modelClear,
+                      value: {
+                        effort: data?.task?.reasoning_effort ?? '',
+                        model: data?.task?.model_override ?? '',
+                        provider: data?.task?.provider_override ?? ''
+                      },
+                      onChange: next => modelMutation.mutate(overridePatch(next))
+                    }),
                 // Same detail, two presentations: the panel beside the gantt or a
                 // centred modal. The switch sits next to the close button — where a
                 // window-level control belongs — and its icon shows which way it goes.
@@ -3530,6 +3681,58 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 onOpen: id => $openTaskId.set(id),
                 openLabel: i18n.openTask
               }),
+              // Diagnostics — the backend runs the same rule engine as the official board and
+              // `hermes kanban diagnostics`, so a blocked card explains itself here in the words the
+              // CLI would use: what failed, how many times in a row, the last error verbatim, and
+              // the dispatcher's own threshold. Every action it offers is one this drawer can
+              // already perform, and none of it is stored: it clears when the failure mode does.
+              data?.task?.diagnostics && data.task.diagnostics.length
+                ? jsxs('div', { className: 'flex flex-col gap-1', children: [
+                    jsx('div', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: i18n.diagnostics(data.task.diagnostics.length) }),
+                    jsx('div', { className: 'flex flex-col gap-2', children: data.task.diagnostics.map(diag => {
+                      const tone = diag.severity === 'warning' ? '#fbbf24' : 'var(--destructive, #f87171)'
+                      const actions = (diag.actions || []).filter(a => a.kind === 'reclaim' || a.kind === 'unblock' || a.kind === 'cli_hint')
+                      return jsxs('div', {
+                        key: `${diag.kind}-${diag.last_seen_at}`,
+                        className: 'rounded-md flex flex-col gap-1.5',
+                        style: {
+                          border: '1px solid var(--ui-stroke-secondary)',
+                          borderLeft: `3px solid ${tone}`,
+                          backgroundColor: 'var(--ui-bg-secondary)',
+                          padding: '8px 10px'
+                        },
+                        children: [
+                          jsxs('div', {
+                            className: 'flex items-start gap-1.5 text-[11px] font-medium',
+                            style: { color: tone },
+                            children: [
+                              jsx(Codicon, { name: 'warning', size: '0.75rem', className: 'shrink-0 mt-[1px]' }),
+                              jsx('span', { className: 'min-w-0 kg-selectable', children: `${diag.title}${diag.count > 1 ? ` ×${diag.count}` : ''}` })
+                            ]
+                          }),
+                          jsx('div', { className: 'whitespace-pre-wrap text-[11px] leading-relaxed text-(--ui-text-secondary) kg-selectable', children: diag.detail }),
+                          actions.length
+                            ? jsx('div', { className: 'flex flex-wrap gap-1.5 pt-0.5', children: actions.map(a => jsx(Button, {
+                                size: 'xs',
+                                variant: a.suggested ? 'secondary' : 'outline',
+                                disabled: statusMutation.isPending,
+                                title: a.kind === 'cli_hint' ? String(a.payload?.command || '') : undefined,
+                                onClick: () => {
+                                  if (a.kind === 'cli_hint') {
+                                    void navigator.clipboard.writeText(String(a.payload?.command || a.label))
+                                    toast('info', i18n.copied)
+                                  } else {
+                                    statusMutation.mutate({ action: a.kind })
+                                  }
+                                },
+                                children: a.label
+                              })) })
+                            : null
+                        ]
+                      })
+                    }) })
+                  ] })
+                : null,
               // 1. Description (no max-h clamp). Always rendered, so a task that has
               // no description yet can be given one; the pencil at the right of the
               // label mirrors the reference kanban drawer's DescriptionSection, and
@@ -3944,6 +4147,26 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
             metaRow(i18n.metaAssignee, task?.assignee || '—'),
             metaRow(i18n.metaPriority, priorityDisplay(task?.priority)),
             task?.workspace_path ? metaRow(i18n.metaWorkspace, task.workspace_path) : null,
+            // The model sits exactly where the official drawer keeps it: in the information column,
+            // under the workspace. It is the task's own override — empty means the assigned profile
+            // decides, and the picker is the composer's own, effort submenu included.
+            jsxs('div', { className: 'flex flex-col gap-0.5', children: [
+              jsx('div', {
+                className: 'text-[10px] uppercase font-semibold text-(--ui-text-quaternary)',
+                children: i18n.metaModel
+              }),
+              jsx(ModelField, {
+                label: i18n.metaModel,
+                inheritCopy: i18n.modelInherit,
+                clearLabel: i18n.modelClear,
+                value: {
+                  effort: task?.reasoning_effort ?? '',
+                  model: task?.model_override ?? '',
+                  provider: task?.provider_override ?? ''
+                },
+                onChange: next => modelMutation.mutate(overridePatch(next))
+              })
+            ] }),
             metaRow(i18n.metaCreated, when(task?.created_at)),
             metaRow(i18n.metaLastActivity,
               when(task?.completed_at || task?.started_at || task?.created_at)),
@@ -5860,16 +6083,19 @@ const plugin = {
       // The milestone lane, made visible on the OFFICIAL board. A badge is a projection, not
       // storage: `decorate` reads the one field that decides the role (the lane) and paints it.
       // A prerequisite badge would need the child links, which the frozen `card` does not carry —
-      // left out rather than guessed.
-      {
-        id: 'milestone-badge',
-        area: KANBAN_CARD_AREAS.badges,
-        data: {
-          decorate: card => (card && card.assignee === MILESTONE_LANE
-            ? { ...badgeFor('milestone'), label: `◆ ${tNow('wbMilestone')}`, tooltip: tNow('wbMilestoneHint') }
-            : null)
-        }
-      }
+      // left out rather than guessed. Only where the host has the area (see CARD_BADGE_AREA): on an
+      // older desktop the badge is the one thing that disappears, never the page.
+      ...(CARD_BADGE_AREA
+        ? [{
+            id: 'milestone-badge',
+            area: CARD_BADGE_AREA,
+            data: {
+              decorate: card => (card && card.assignee === MILESTONE_LANE
+                ? { ...badgeFor('milestone'), label: `◆ ${tNow('wbMilestone')}`, tooltip: tNow('wbMilestoneHint') }
+                : null)
+            }
+          }]
+        : [])
     ])
   }
 }

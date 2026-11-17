@@ -101,6 +101,28 @@ const detailWithLog = {
   }
 }
 
+// A blocked task whose backend diagnostics say why — the panel the official board draws and this
+// drawer must draw too: the streak, the last error verbatim, and the recovery actions as buttons.
+const detailWithDiagnostics = {
+  task: {
+    id: 't_1', title: 'Epic — first task', status: 'blocked',
+    consecutive_failures: 2,
+    comments: [], events: [], runs: [],
+    diagnostics: [{
+      kind: 'consecutive_failures', severity: 'error',
+      title: 'Agent spawn x2: workspace: git worktree add failed',
+      detail: 'This task has failed 2 times in a row (most recent: spawn). Full last error:\n\n'
+        + 'fatal: already used by worktree\n\nThe dispatcher circuit breaker is configured for 2 '
+        + 'consecutive non-success attempts.',
+      count: 2, last_seen_at: 1_800_000_000,
+      actions: [
+        { kind: 'cli_hint', label: 'Verify profile: hermes -p senior-coder doctor', payload: { command: 'hermes -p senior-coder doctor' }, suggested: true },
+        { kind: 'unblock', label: 'Unblock task', payload: {}, suggested: false }
+      ]
+    }]
+  }
+}
+
 // A board of prefixed titles, and only for the prefix chip: the preference turns the leading
 // [olio] into a chip, in the row and in the drawer. Both sites once read a variable that was never
 // declared, and the crash only fires when the preference is on — so nothing here could see it.
@@ -127,6 +149,7 @@ const stubQueryData = {
   'kanban-gantt|lineage': lineageBoard,
   'kanban-gantt|task': detailWithLog,
   'kanban-gantt|prefixedTask': prefixedDetail,
+  'kanban-gantt|diagTask': detailWithDiagnostics,
   'kanban-gantt|prefixedBoard': prefixedBoard
 }
 
@@ -140,9 +163,11 @@ export const useQuery = options => {
     : globalThis.__kgBoard === 'prefixed'
       ? stubQueryData['kanban-gantt|prefixedBoard']
       : stubQueryData['kanban-gantt|gantt']
-  else if (key.includes('|task')) data = globalThis.__kgLogDetail
-    ? stubQueryData['kanban-gantt|task']
-    : globalThis.__kgPrefixedDetail ? stubQueryData['kanban-gantt|prefixedTask'] : undefined
+  else if (key.includes('|task')) data = globalThis.__kgDiagDetail
+    ? stubQueryData['kanban-gantt|diagTask']
+    : globalThis.__kgLogDetail
+      ? stubQueryData['kanban-gantt|task']
+      : globalThis.__kgPrefixedDetail ? stubQueryData['kanban-gantt|prefixedTask'] : undefined
   return { data, isLoading: false, isError: false, error: null, refetch: async () => {} }
 }`
 
@@ -426,7 +451,12 @@ if (pageNode) {
   // is the path that hid a "cannot access before initialization" crash while every check stayed
   // green, because the harness had never opened a task at all.
   pluginModule.$openTaskId.set('t_1')
-  const detailFlat = JSON.stringify(page.render())
+  const detailFlat = JSON.stringify(page.render(), (_k, v) =>
+    v instanceof Error ? { renderError: v.message, stack: String(v.stack || '').split('\n').slice(0, 4) } : v)
+  if (detailFlat.includes('renderError')) {
+    const at = detailFlat.indexOf('renderError')
+    console.log('DETAIL RENDER ERROR:', detailFlat.slice(at, at + 500))
+  }
   check(detailFlat.includes('noDescription'),
     'the detail draws its sections (the fixture task has no description, so that state shows)')
   check(!detailFlat.includes('detailMeta'),
@@ -460,6 +490,7 @@ if (pageNode) {
   const modalFlat = JSON.stringify(page.render())
   check(modalFlat.includes('detailMeta'), 'the modal renders its right-hand information column')
   check(modalFlat.includes('metaPriority'), 'the modal column carries the priority row')
+  check(modalFlat.includes('metaModel'), 'and the model row, where the official drawer keeps it')
 
   // Selection: the detail is prose — a title, a description, a summary, a log — and the panel turns
   // selection back on for itself, because the shell turns it off for the app's chrome.
@@ -485,7 +516,25 @@ if (pageNode) {
   globalThis.__kgLogDetail = null
   check((detailFlat.match(/"role":"tab"/g) || []).length === 1,
     'a task that never logged anything is offered Comments alone')
+  // The diagnostics panel: what the official board draws on a blocked card, and what this drawer
+  // draws too. The point of the panel is the three things the card cannot say — the streak, the
+  // breaker's threshold and the last error verbatim — plus the actions that recover from it.
+  globalThis.__kgDiagDetail = true
+  const withDiag = JSON.stringify(page.render())
+  check(withDiag.includes('"children":"diagnostics"'), 'a blocked card opens with its diagnostics, counted')
+  check(withDiag.includes('failed 2 times in a row'), 'and the detail says the streak in words')
+  check(withDiag.includes('already used by worktree'), 'the last error is quoted verbatim')
+  check(withDiag.includes('Verify profile: hermes -p senior-coder doctor'), 'a cli_hint becomes a button')
+  check(withDiag.includes('Unblock task'), 'and the recovery action is offered beside it')
+  globalThis.__kgDiagDetail = null
+  check(!detailFlat.includes('"children":"diagnostics"'), 'a task without diagnostics draws no panel')
   pluginModule.$detailModal.set(false)
+  // The model override, in the docked panel: a compact trigger in the header rather than a row in
+  // the information column, which the panel does not have. The official drawer's label is what a
+  // reader sees when nothing is pinned.
+  const panelFlat = JSON.stringify(page.render())
+  check(panelFlat.includes('modelInherit'), 'the docked panel offers the model in its header')
+  check(!panelFlat.includes('detailMeta'), 'and does not pretend to have the modal\'s information column')
   pluginModule.$openTaskId.set(null)
 
   check(flat.includes('"area":"workspace.pageHeader"') || flat.includes('"area": "workspace.pageHeader"'), 'page projects its switcher into WORKSPACE_PAGE_HEADER_AREA')

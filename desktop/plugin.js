@@ -28,17 +28,20 @@ import {
   profileColor,
   profileColorSoft,
   MessageTextContent,
+  ModelCatalogMenu,
+  ModelMenuCloseContext,
+  reasoningEffortLabel,
   Textarea,
   useMutation,
   useQuery as useQuery2,
   useQueryClient as useQueryClient2,
   useValue as useValue2,
-  KANBAN_CARD_AREAS,
   PALETTE_AREA,
   ROUTES_AREA,
   SIDEBAR_NAV_AREA,
   WORKSPACE_PAGE_HEADER_AREA
 } from "@hermes/plugin-sdk";
+import pluginSdk from "@hermes/plugin-sdk";
 import { useMemo as useMemo3, useRef as useRef3, useEffect as useEffect4, useState as useState5 } from "react";
 import { jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
 
@@ -131,6 +134,9 @@ var en = {
   metaPriority: "Priority",
   metaAssignee: "Assignee",
   metaWorkspace: "Workspace",
+  metaModel: "Model",
+  modelInherit: "Inherit from profile",
+  modelClear: "Clear model override",
   metaCreated: "Created",
   metaLastActivity: "Last activity",
   attachments: (n) => `Attachments (${n})`,
@@ -198,6 +204,7 @@ var en = {
   keepEditing: "Keep editing",
   discardChanges: "Discard changes",
   result: "Result",
+  diagnostics: (n) => `Diagnostics · ${n}`,
   latestSummary: "Latest summary",
   runs: (n) => `Runs · ${n}`,
   runsFailed: (n) => `Failed runs · ${n}`,
@@ -458,6 +465,9 @@ var fr = {
   metaPriority: "Priorité",
   metaAssignee: "Assigné à",
   metaWorkspace: "Espace de travail",
+  metaModel: "Modèle",
+  modelInherit: "Hérité du profil",
+  modelClear: "Retirer le modèle",
   metaCreated: "Créée",
   metaLastActivity: "Dernière activité",
   attachments: (n) => `Pièces jointes (${n})`,
@@ -525,6 +535,7 @@ var fr = {
   keepEditing: "Continuer l'édition",
   discardChanges: "Abandonner les modifications",
   result: "Résultat",
+  diagnostics: (n) => `Diagnostics · ${n}`,
   latestSummary: "Dernier résumé",
   runs: (n) => `Exécutions · ${n}`,
   runsFailed: (n) => `Échecs · ${n}`,
@@ -794,6 +805,9 @@ var zh = {
   metaPriority: "优先级：",
   metaAssignee: "负责人",
   metaWorkspace: "工作区",
+  metaModel: "模型",
+  modelInherit: "继承自配置文件",
+  modelClear: "清除模型覆盖",
   metaCreated: "创建时间",
   metaLastActivity: "最近活动",
   attachments: (n) => `附件（${n}）`,
@@ -850,6 +864,7 @@ var zh = {
   keepEditing: "继续编辑",
   discardChanges: "放弃修改",
   result: "结果",
+  diagnostics: (n) => `诊断 · ${n}`,
   latestSummary: "最新摘要",
   runs: (n) => `运行记录 · ${n}`,
   runsFailed: (n) => `失败的运行 · ${n}`,
@@ -1105,6 +1120,9 @@ var af = {
   metaPriority: "Prioriteit",
   metaAssignee: "Toegewysde",
   metaWorkspace: "Werkruimte",
+  metaModel: "Model",
+  modelInherit: "Erf van profiel",
+  modelClear: "Model-oorbrugging verwyder",
   metaCreated: "Geskep",
   metaLastActivity: "Laaste aktiwiteit",
   attachments: (n) => `Aanhegsels (${n})`,
@@ -1172,6 +1190,7 @@ var af = {
   keepEditing: "Hou aan wysig",
   discardChanges: "Gooi wysigings weg",
   result: "Resultaat",
+  diagnostics: (n) => `Diagnostiek · ${n}`,
   latestSummary: "Jongste opsomming",
   runs: (n) => `Lopies · ${n}`,
   runsFailed: (n) => `Mislukte lopies · ${n}`,
@@ -1432,6 +1451,9 @@ var ar = {
   metaPriority: "الأولوية",
   metaAssignee: "المكلّف",
   metaWorkspace: "مساحة العمل",
+  metaModel: "النموذج",
+  modelInherit: "يرث من الملف الشخصي",
+  modelClear: "إزالة تجاوز النموذج",
   metaCreated: "تاريخ الإنشاء",
   metaLastActivity: "آخر نشاط",
   attachments: (n) => `المرفقات (${n})`,
@@ -1499,6 +1521,7 @@ var ar = {
   keepEditing: "متابعة التعديل",
   discardChanges: "تجاهل التغييرات",
   result: "النتيجة",
+  diagnostics: (n) => `التشخيصات · ${n}`,
   latestSummary: "آخر ملخّص",
   runs: (n) => `التشغيلات · ${n}`,
   runsFailed: (n) => `تشغيلات فاشلة · ${n}`,
@@ -1759,6 +1782,9 @@ var de = {
   metaPriority: "Priorität",
   metaAssignee: "Zugewiesen an",
   metaWorkspace: "Arbeitsbereich",
+  metaModel: "Modell",
+  modelInherit: "Vom Profil erben",
+  modelClear: "Modell-Override entfernen",
   metaCreated: "Erstellt",
   metaLastActivity: "Letzte Aktivität",
   attachments: (n) => `Anhänge (${n})`,
@@ -1826,6 +1852,7 @@ var de = {
   keepEditing: "Weiter bearbeiten",
   discardChanges: "Änderungen verwerfen",
   result: "Ergebnis",
+  diagnostics: (n) => `Diagnose · ${n}`,
   latestSummary: "Letzte Zusammenfassung",
   runs: (n) => `Läufe · ${n}`,
   runsFailed: (n) => `Fehlgeschlagene Läufe · ${n}`,
@@ -2086,6 +2113,9 @@ var es = {
   metaPriority: "Prioridad",
   metaAssignee: "Asignada a",
   metaWorkspace: "Espacio de trabajo",
+  metaModel: "Modelo",
+  modelInherit: "Heredar del perfil",
+  modelClear: "Quitar el modelo",
   metaCreated: "Creada",
   metaLastActivity: "Última actividad",
   attachments: (n) => `Adjuntos (${n})`,
@@ -2153,6 +2183,7 @@ var es = {
   keepEditing: "Seguir editando",
   discardChanges: "Descartar los cambios",
   result: "Resultado",
+  diagnostics: (n) => `Diagnósticos · ${n}`,
   latestSummary: "Último resumen",
   runs: (n) => `Ejecuciones · ${n}`,
   runsFailed: (n) => `Ejecuciones fallidas · ${n}`,
@@ -2413,6 +2444,9 @@ var ga = {
   metaPriority: "Tosaíocht",
   metaAssignee: "Sanntóir",
   metaWorkspace: "Spás oibre",
+  metaModel: "Samhail",
+  modelInherit: "Faighte ón phróifíl",
+  modelClear: "Bain an sainmhíniú samhla",
   metaCreated: "Cruthaithe",
   metaLastActivity: "Gníomhaíocht dheireanach",
   attachments: (n) => `Ceangaltáin (${n})`,
@@ -2480,6 +2514,7 @@ var ga = {
   keepEditing: "Lean ort ag eagrú",
   discardChanges: "Caith na hathruithe",
   result: "Toradh",
+  diagnostics: (n) => `Diagnóisic · ${n}`,
   latestSummary: "An achoimre is déanaí",
   runs: (n) => `Rithe · ${n}`,
   runsFailed: (n) => `Rithid teipthe · ${n}`,
@@ -2740,6 +2775,9 @@ var hu = {
   metaPriority: "Prioritás",
   metaAssignee: "Felelős",
   metaWorkspace: "Munkaterület",
+  metaModel: "Modell",
+  modelInherit: "Profilből örökölve",
+  modelClear: "Modell-felülírás törlése",
   metaCreated: "Létrehozva",
   metaLastActivity: "Utolsó tevékenység",
   attachments: (n) => `Mellékletek (${n})`,
@@ -2807,6 +2845,7 @@ var hu = {
   keepEditing: "Szerkesztés folytatása",
   discardChanges: "Módosítások elvetése",
   result: "Eredmény",
+  diagnostics: (n) => `Diagnosztika · ${n}`,
   latestSummary: "Legutóbbi összefoglaló",
   runs: (n) => `Futtatások · ${n}`,
   runsFailed: (n) => `Sikertelen futások · ${n}`,
@@ -3067,6 +3106,9 @@ var it = {
   metaPriority: "Priorità",
   metaAssignee: "Assegnatario",
   metaWorkspace: "Area di lavoro",
+  metaModel: "Modello",
+  modelInherit: "Eredita dal profilo",
+  modelClear: "Rimuovi il modello",
   metaCreated: "Creata",
   metaLastActivity: "Ultima attività",
   attachments: (n) => `Allegati (${n})`,
@@ -3134,6 +3176,7 @@ var it = {
   keepEditing: "Continua a modificare",
   discardChanges: "Scarta le modifiche",
   result: "Risultato",
+  diagnostics: (n) => `Diagnostica · ${n}`,
   latestSummary: "Ultimo riepilogo",
   runs: (n) => `Esecuzioni · ${n}`,
   runsFailed: (n) => `Esecuzioni fallite · ${n}`,
@@ -3394,6 +3437,9 @@ var ja = {
   metaPriority: "優先度",
   metaAssignee: "担当者",
   metaWorkspace: "ワークスペース",
+  metaModel: "モデル",
+  modelInherit: "プロファイルから継承",
+  modelClear: "モデルの上書きを解除",
   metaCreated: "作成日時",
   metaLastActivity: "最終アクティビティ",
   attachments: (n) => `添付ファイル (${n})`,
@@ -3461,6 +3507,7 @@ var ja = {
   keepEditing: "編集を続ける",
   discardChanges: "変更を破棄",
   result: "結果",
+  diagnostics: (n) => `診断 · ${n}`,
   latestSummary: "最新のサマリー",
   runs: (n) => `実行 · ${n}`,
   runsFailed: (n) => `失敗した実行 · ${n}`,
@@ -3721,6 +3768,9 @@ var ko = {
   metaPriority: "우선순위",
   metaAssignee: "담당자",
   metaWorkspace: "워크스페이스",
+  metaModel: "모델",
+  modelInherit: "프로필에서 상속",
+  modelClear: "모델 재정의 지우기",
   metaCreated: "생성일",
   metaLastActivity: "최근 활동",
   attachments: (n) => `첨부 파일 (${n})`,
@@ -3788,6 +3838,7 @@ var ko = {
   keepEditing: "계속 편집",
   discardChanges: "변경 사항 버리기",
   result: "결과",
+  diagnostics: (n) => `진단 · ${n}`,
   latestSummary: "최근 요약",
   runs: (n) => `실행 기록 · ${n}`,
   runsFailed: (n) => `실패한 실행 · ${n}`,
@@ -4048,6 +4099,9 @@ var pt = {
   metaPriority: "Prioridade",
   metaAssignee: "Atribuída a",
   metaWorkspace: "Espaço de trabalho",
+  metaModel: "Modelo",
+  modelInherit: "Herdar do perfil",
+  modelClear: "Remover o modelo",
   metaCreated: "Criada",
   metaLastActivity: "Última atividade",
   attachments: (n) => `Anexos (${n})`,
@@ -4115,6 +4169,7 @@ var pt = {
   keepEditing: "Continuar a editar",
   discardChanges: "Descartar as alterações",
   result: "Resultado",
+  diagnostics: (n) => `Diagnósticos · ${n}`,
   latestSummary: "Último resumo",
   runs: (n) => `Execuções · ${n}`,
   runsFailed: (n) => `Execuções falhadas · ${n}`,
@@ -4375,6 +4430,9 @@ var ru = {
   metaPriority: "Приоритет",
   metaAssignee: "Исполнитель",
   metaWorkspace: "Рабочая область",
+  metaModel: "Модель",
+  modelInherit: "Наследовать от профиля",
+  modelClear: "Сбросить переопределение модели",
   metaCreated: "Создана",
   metaLastActivity: "Последняя активность",
   attachments: (n) => `Вложения (${n})`,
@@ -4442,6 +4500,7 @@ var ru = {
   keepEditing: "Продолжить правку",
   discardChanges: "Отменить изменения",
   result: "Результат",
+  diagnostics: (n) => `Диагностика · ${n}`,
   latestSummary: "Последняя сводка",
   runs: (n) => `Запуски · ${n}`,
   runsFailed: (n) => `Неудачные запуски · ${n}`,
@@ -4697,6 +4756,9 @@ var tr = {
   metaPriority: "Öncelik",
   metaAssignee: "Atanan",
   metaWorkspace: "Çalışma alanı",
+  metaModel: "Model",
+  modelInherit: "Profilden devral",
+  modelClear: "Model geçersiz kılmayı temizle",
   metaCreated: "Oluşturuldu",
   metaLastActivity: "Son etkinlik",
   attachments: (n) => `Ekler (${n})`,
@@ -4764,6 +4826,7 @@ var tr = {
   keepEditing: "Düzenlemeye devam et",
   discardChanges: "Değişiklikleri at",
   result: "Sonuç",
+  diagnostics: (n) => `Tanılamalar · ${n}`,
   latestSummary: "Son özet",
   runs: (n) => `Çalıştırmalar · ${n}`,
   runsFailed: (n) => `Başarısız çalışmalar · ${n}`,
@@ -5024,6 +5087,9 @@ var uk = {
   metaPriority: "Пріоритет",
   metaAssignee: "Виконавець",
   metaWorkspace: "Робоча область",
+  metaModel: "Модель",
+  modelInherit: "Успадкувати від профілю",
+  modelClear: "Скинути перевизначення моделі",
   metaCreated: "Створено",
   metaLastActivity: "Остання активність",
   attachments: (n) => `Вкладення (${n})`,
@@ -5091,6 +5157,7 @@ var uk = {
   keepEditing: "Продовжити редагування",
   discardChanges: "Відхилити зміни",
   result: "Результат",
+  diagnostics: (n) => `Діагностика · ${n}`,
   latestSummary: "Останній підсумок",
   runs: (n) => `Запуски · ${n}`,
   runsFailed: (n) => `Невдалі запуски · ${n}`,
@@ -5346,6 +5413,9 @@ var zhHant = {
   metaPriority: "優先順序",
   metaAssignee: "負責人",
   metaWorkspace: "工作區",
+  metaModel: "模型",
+  modelInherit: "繼承自設定檔",
+  modelClear: "清除模型覆寫",
   metaCreated: "建立時間",
   metaLastActivity: "最近活動",
   attachments: (n) => `附件（${n}）`,
@@ -5413,6 +5483,7 @@ var zhHant = {
   keepEditing: "繼續編輯",
   discardChanges: "捨棄變更",
   result: "結果",
+  diagnostics: (n) => `診斷 · ${n}`,
   latestSummary: "最新摘要",
   runs: (n) => `執行紀錄 · ${n}`,
   runsFailed: (n) => `失敗的執行 · ${n}`,
@@ -9004,6 +9075,7 @@ function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
 }
 
 // src/main.ts
+var CARD_BADGE_AREA = pluginSdk?.KANBAN_CARD_AREAS?.badges;
 var ID2 = "kanban-gantt";
 var ROW_H = 28;
 var BAR_H = 14;
@@ -11581,6 +11653,90 @@ function AttachmentsSection({ taskId, board, attachments, i18n, onPreview }) {
     ) }, "attachments")
   ] });
 }
+var EMPTY_OVERRIDE = { effort: "", model: "", provider: "" };
+var isInherited = (value) => !value.model.trim() && !value.provider.trim() && !value.effort.trim();
+var overrideLabel = (value, inheritCopy) => {
+  if (isInherited(value)) return inheritCopy;
+  const model = value.model.trim();
+  const base = model ? value.provider.trim() ? `${value.provider}: ${model}` : model : inheritCopy;
+  const effort = value.effort.trim() ? reasoningEffortLabel(value.effort) : "";
+  return effort ? `${base} · ${effort}` : base;
+};
+var overridePatch = (value) => {
+  const model = value.model.trim();
+  const effort = value.effort.trim();
+  return {
+    ...model ? { model_override: model, provider_override: value.provider.trim() || void 0 } : { clear_model_override: true },
+    ...effort ? { reasoning_effort: effort } : { clear_reasoning_effort: true }
+  };
+};
+function ModelField({ value, onChange, inheritCopy, clearLabel, label, compact = false }) {
+  const [open, setOpen] = useState5(false);
+  const controller = {
+    allowSpeed: false,
+    // Picking a model seeds the depth from what the user last used for it, so the board behaves
+    // like the composer. We only READ presets — a per-task choice must never rewrite what the
+    // composer opens at.
+    applyPreset: (preset, row) => onChange({
+      effort: preset.effort ?? "",
+      model: row.model,
+      provider: row.provider
+    }),
+    current: { effort: value.effort, fast: false, model: value.model, provider: value.provider },
+    presetFor: () => ({}),
+    select: (model, provider) => onChange({ ...value, model, provider }),
+    // Fast mode is a live-session request parameter, not something a worker spawn can carry (there
+    // is no --fast flag), so this catalog has no fast support and only effort edits arrive here.
+    setOptions: (patch, row) => {
+      if (patch.effort === void 0) return;
+      onChange({ effort: patch.effort, model: row.model, provider: row.provider });
+    }
+  };
+  return jsx7(DropdownMenu3, {
+    open,
+    onOpenChange: setOpen,
+    children: [
+      jsx7(DropdownMenuTrigger3, {
+        asChild: true,
+        children: jsxs7(Button5, {
+          type: "button",
+          variant: "outline",
+          title: label,
+          className: cn3(
+            compact ? "h-6 max-w-[10.5rem] justify-between gap-1 px-1.5 text-[11px] font-normal" : "h-8 w-full justify-between gap-2 px-2.5 text-[0.75rem] font-normal",
+            isInherited(value) && "text-(--ui-text-tertiary)"
+          ),
+          children: [
+            jsx7(Codicon6, { name: "chip", size: "0.7rem", className: "shrink-0 opacity-70" }),
+            jsx7("span", { className: "min-w-0 truncate", children: overrideLabel(value, inheritCopy) }),
+            jsxs7("span", { className: "flex shrink-0 items-center gap-1", children: [
+              isInherited(value) ? null : jsx7("span", {
+                role: "button",
+                "aria-label": clearLabel,
+                className: "grid size-4 place-items-center rounded text-(--ui-text-tertiary) hover:text-foreground",
+                onClick: (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onChange(EMPTY_OVERRIDE);
+                },
+                children: jsx7(Codicon6, { name: "close", size: "0.65rem" })
+              }),
+              jsx7(Codicon6, { name: "chevron-down", size: "0.7rem", className: "opacity-50" })
+            ] })
+          ]
+        })
+      }),
+      jsx7(DropdownMenuContent3, {
+        align: "start",
+        className: "w-72 p-0",
+        children: jsx7(ModelMenuCloseContext.Provider, {
+          value: () => setOpen(false),
+          children: jsx7(ModelCatalogMenu, { controller })
+        })
+      })
+    ]
+  });
+}
 function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked = false, onToggleDock, boards = [] }) {
   const drawerW = useValue2($drawerW);
   const detailModal = useValue2($detailModal);
@@ -11635,6 +11791,17 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     mutationFn: (payload) => apiFetch(
       `/tasks/${encodeURIComponent(shownId)}/status${board ? `?board=${encodeURIComponent(board)}` : ""}`,
       { method: "PATCH", body: payload }
+    ),
+    onSuccess: () => {
+      void refetch();
+      void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
+    },
+    onError: (error) => toast("error", String(error?.message || error))
+  });
+  const modelMutation = useMutation({
+    mutationFn: (patch) => apiFetch(
+      `/tasks/${encodeURIComponent(shownId)}/model${board ? `?board=${encodeURIComponent(board)}` : ""}`,
+      { method: "PATCH", body: patch }
     ),
     onSuccess: () => {
       void refetch();
@@ -11833,6 +12000,22 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                   ]
                 })
               ] }),
+              // The model, discreetly: in the panel the header already carries the title, the
+              // status and the actions, so this is a compact trigger with the model's own name
+              // when one is pinned. In the modal it moves to the information column, where the
+              // official drawer keeps it — one control, one place, never both at once.
+              detailModal ? null : jsx7(ModelField, {
+                compact: true,
+                label: i18n.metaModel,
+                inheritCopy: i18n.modelInherit,
+                clearLabel: i18n.modelClear,
+                value: {
+                  effort: data?.task?.reasoning_effort ?? "",
+                  model: data?.task?.model_override ?? "",
+                  provider: data?.task?.provider_override ?? ""
+                },
+                onChange: (next) => modelMutation.mutate(overridePatch(next))
+              }),
               // Same detail, two presentations: the panel beside the gantt or a
               // centred modal. The switch sits next to the close button — where a
               // window-level control belongs — and its icon shows which way it goes.
@@ -11911,6 +12094,54 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
         onOpen: (id) => $openTaskId.set(id),
         openLabel: i18n.openTask
       }),
+      // Diagnostics — the backend runs the same rule engine as the official board and
+      // `hermes kanban diagnostics`, so a blocked card explains itself here in the words the
+      // CLI would use: what failed, how many times in a row, the last error verbatim, and
+      // the dispatcher's own threshold. Every action it offers is one this drawer can
+      // already perform, and none of it is stored: it clears when the failure mode does.
+      data?.task?.diagnostics && data.task.diagnostics.length ? jsxs7("div", { className: "flex flex-col gap-1", children: [
+        jsx7("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.diagnostics(data.task.diagnostics.length) }),
+        jsx7("div", { className: "flex flex-col gap-2", children: data.task.diagnostics.map((diag) => {
+          const tone = diag.severity === "warning" ? "#fbbf24" : "var(--destructive, #f87171)";
+          const actions = (diag.actions || []).filter((a) => a.kind === "reclaim" || a.kind === "unblock" || a.kind === "cli_hint");
+          return jsxs7("div", {
+            key: `${diag.kind}-${diag.last_seen_at}`,
+            className: "rounded-md flex flex-col gap-1.5",
+            style: {
+              border: "1px solid var(--ui-stroke-secondary)",
+              borderLeft: `3px solid ${tone}`,
+              backgroundColor: "var(--ui-bg-secondary)",
+              padding: "8px 10px"
+            },
+            children: [
+              jsxs7("div", {
+                className: "flex items-start gap-1.5 text-[11px] font-medium",
+                style: { color: tone },
+                children: [
+                  jsx7(Codicon6, { name: "warning", size: "0.75rem", className: "shrink-0 mt-[1px]" }),
+                  jsx7("span", { className: "min-w-0 kg-selectable", children: `${diag.title}${diag.count > 1 ? ` ×${diag.count}` : ""}` })
+                ]
+              }),
+              jsx7("div", { className: "whitespace-pre-wrap text-[11px] leading-relaxed text-(--ui-text-secondary) kg-selectable", children: diag.detail }),
+              actions.length ? jsx7("div", { className: "flex flex-wrap gap-1.5 pt-0.5", children: actions.map((a) => jsx7(Button5, {
+                size: "xs",
+                variant: a.suggested ? "secondary" : "outline",
+                disabled: statusMutation.isPending,
+                title: a.kind === "cli_hint" ? String(a.payload?.command || "") : void 0,
+                onClick: () => {
+                  if (a.kind === "cli_hint") {
+                    void navigator.clipboard.writeText(String(a.payload?.command || a.label));
+                    toast("info", i18n.copied);
+                  } else {
+                    statusMutation.mutate({ action: a.kind });
+                  }
+                },
+                children: a.label
+              })) }) : null
+            ]
+          });
+        }) })
+      ] }) : null,
       // 1. Description (no max-h clamp). Always rendered, so a task that has
       // no description yet can be given one; the pencil at the right of the
       // label mirrors the reference kanban drawer's DescriptionSection, and
@@ -12266,6 +12497,26 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
             metaRow(i18n.metaAssignee, task?.assignee || "—"),
             metaRow(i18n.metaPriority, priorityDisplay(task?.priority)),
             task?.workspace_path ? metaRow(i18n.metaWorkspace, task.workspace_path) : null,
+            // The model sits exactly where the official drawer keeps it: in the information column,
+            // under the workspace. It is the task's own override — empty means the assigned profile
+            // decides, and the picker is the composer's own, effort submenu included.
+            jsxs7("div", { className: "flex flex-col gap-0.5", children: [
+              jsx7("div", {
+                className: "text-[10px] uppercase font-semibold text-(--ui-text-quaternary)",
+                children: i18n.metaModel
+              }),
+              jsx7(ModelField, {
+                label: i18n.metaModel,
+                inheritCopy: i18n.modelInherit,
+                clearLabel: i18n.modelClear,
+                value: {
+                  effort: task?.reasoning_effort ?? "",
+                  model: task?.model_override ?? "",
+                  provider: task?.provider_override ?? ""
+                },
+                onChange: (next) => modelMutation.mutate(overridePatch(next))
+              })
+            ] }),
             metaRow(i18n.metaCreated, when(task?.created_at)),
             metaRow(
               i18n.metaLastActivity,
@@ -13831,14 +14082,15 @@ var plugin = {
       // The milestone lane, made visible on the OFFICIAL board. A badge is a projection, not
       // storage: `decorate` reads the one field that decides the role (the lane) and paints it.
       // A prerequisite badge would need the child links, which the frozen `card` does not carry —
-      // left out rather than guessed.
-      {
+      // left out rather than guessed. Only where the host has the area (see CARD_BADGE_AREA): on an
+      // older desktop the badge is the one thing that disappears, never the page.
+      ...CARD_BADGE_AREA ? [{
         id: "milestone-badge",
-        area: KANBAN_CARD_AREAS.badges,
+        area: CARD_BADGE_AREA,
         data: {
           decorate: (card) => card && card.assignee === MILESTONE_LANE ? { ...badgeFor("milestone"), label: `◆ ${tNow("wbMilestone")}`, tooltip: tNow("wbMilestoneHint") } : null
         }
-      }
+      }] : []
     ]);
   }
 };
