@@ -360,6 +360,63 @@ def list_boards():
     return {"boards": boards, "current": current}
 
 
+class NewBoardBody(BaseModel):
+    slug: str
+    name: Optional[str] = None
+    project_id: Optional[str] = None
+
+
+@router.post("/boards")
+def create_board(payload: NewBoardBody):
+    """Create a board through the domain layer (`kanban_db.create_board`).
+
+    The slug IS the board's directory name, so it is normalised and validated by
+    the core resolver rather than trusted from the client. A slug that is
+    already taken is a collision, not a rename: the caller picked a name that
+    maps onto someone's existing board, and saying so is better than silently
+    returning that board as if it had just been created.
+    """
+    from hermes_cli import kanban_db
+
+    raw = (payload.slug or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="slug is required")
+    try:
+        slug = kanban_db._normalize_board_slug(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not slug:
+        raise HTTPException(status_code=400, detail="slug is required")
+    if slug in {b["slug"] for b in list_boards()["boards"]}:
+        raise HTTPException(status_code=409, detail=f"board {slug!r} already exists")
+
+    # A chosen project's primary repo becomes the board's default workdir, so the
+    # tasks created here inherit a deterministic directory — the same rule the
+    # bundled kanban applies. The project is optional and a projects.db failure
+    # must not make the board uncreatable.
+    project_id = (payload.project_id or "").strip() or None
+    default_workdir = None
+    if project_id:
+        try:
+            from hermes_cli import projects_db
+
+            with projects_db.connect_closing() as conn:
+                for project in projects_db.list_projects(conn):
+                    if project.id == project_id:
+                        default_workdir = getattr(project, "primary_path", None)
+                        break
+        except Exception:
+            default_workdir = None
+
+    name = (payload.name or "").strip() or None
+    try:
+        meta = kanban_db.create_board(
+            slug, name=name, project_id=project_id, default_workdir=default_workdir)
+    except ValueError as exc:  # invalid slug, or a stale tombstone the core refuses
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"board": {"slug": meta["slug"], "label": meta.get("name") or meta["slug"]}}
+
+
 def _activity_series(conn, window_sec: int = 24 * 3600, buckets: int = 24) -> dict:
     """Per-task activity volume over the last `window_sec`, bucketed server-side.
 
@@ -695,6 +752,27 @@ def get_task(task_id: str, board: Optional[str] = Query(None)):
                 (task_id,),
             ).fetchall()
         ]
+        # Diagnostics: the same rule engine the official board and `hermes kanban diagnostics` run,
+        # computed on demand from this task's own events and runs. A blocked card therefore explains
+        # itself here in the words the CLI would use — including the last error, the failure streak
+        # and the dispatcher's threshold — and clears the moment the failure mode does. Never stored,
+        # never cached; a diagnostics bug must not cost the reader their drawer, so it fails open.
+        try:
+            from hermes_cli import kanban_diagnostics as _kd
+            from hermes_cli.config import load_config as _load_config
+
+            row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+            detail["diagnostics"] = [
+                d.to_dict() for d in _kd.compute_task_diagnostics(
+                    row,
+                    kanban_db.list_events(conn, task_id),
+                    kanban_db.list_runs(conn, task_id),
+                    graph=kanban_db.task_graph_context(conn, task_id),
+                    config=_kd.config_from_runtime_config(_load_config()),
+                )
+            ] if row is not None else []
+        except Exception:
+            detail["diagnostics"] = []
         return {"task": detail}
     finally:
         conn.close()
@@ -850,7 +928,7 @@ class StatusBody(BaseModel):
 # GANTT-6 action matrix — every transition routes through the domain layer.
 _ACTIONS = (
     "done", "blocked", "unblock", "review", "reopen", "archive",
-    "ready", "todo", "triage", "delete", "restore",
+    "ready", "todo", "triage", "delete", "restore", "reclaim",
 )
 
 
@@ -863,6 +941,11 @@ def _apply_action(conn, kanban_db, action: str, task_id: str, payload: StatusBod
         return kanban_db.block_task(conn, task_id, reason=payload.reason)
     if action == "unblock":
         return kanban_db.unblock_task(conn, task_id)
+    if action == "reclaim":
+        # The diagnostics' own recovery primitive: release the claim and reset the failure streak.
+        # It refuses (False) a task that is not running, which is the honest answer for a blocked
+        # card whose worker is already gone — the reader then unblocks it instead.
+        return bool(kanban_db.reclaim_task(conn, task_id, reason="reclaimed from the gantt drawer"))
     if action == "review":
         return kanban_db.request_review(conn, task_id,
                                         summary=payload.summary or payload.reason,

@@ -90,6 +90,7 @@ export const en = {
     keepEditing: 'Keep editing',
     discardChanges: 'Discard changes',
     result: 'Result',
+    diagnostics: n => `Diagnostics · ${n}`,
     latestSummary: 'Latest summary',
     runs: n => `Runs · ${n}`,
     runsFailed: n => `Failed runs · ${n}`,

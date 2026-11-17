@@ -90,6 +90,7 @@ export const ga = {
     keepEditing: 'Lean ort ag eagrú',
     discardChanges: 'Caith na hathruithe',
     result: 'Toradh',
+    diagnostics: n => `Diagnóisic · ${n}`,
     latestSummary: 'An achoimre is déanaí',
     runs: n => `Rithe · ${n}`,
     runsFailed: n => `Rithid teipthe · ${n}`,

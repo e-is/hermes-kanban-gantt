@@ -90,6 +90,7 @@ export const pt = {
     keepEditing: 'Continuar a editar',
     discardChanges: 'Descartar as alterações',
     result: 'Resultado',
+    diagnostics: n => `Diagnósticos · ${n}`,
     latestSummary: 'Último resumo',
     runs: n => `Execuções · ${n}`,
     runsFailed: n => `Execuções falhadas · ${n}`,

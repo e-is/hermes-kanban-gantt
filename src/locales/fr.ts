@@ -90,6 +90,7 @@ export const fr = {
     keepEditing: "Continuer l'édition",
     discardChanges: 'Abandonner les modifications',
     result: 'Résultat',
+    diagnostics: n => `Diagnostics · ${n}`,
     latestSummary: 'Dernier résumé',
     runs: n => `Exécutions · ${n}`,
     runsFailed: n => `Échecs · ${n}`,

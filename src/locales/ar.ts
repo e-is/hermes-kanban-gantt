@@ -84,6 +84,7 @@ export const ar = {
     keepEditing: 'متابعة التعديل',
     discardChanges: 'تجاهل التغييرات',
     result: 'النتيجة',
+    diagnostics: n => `التشخيصات · ${n}`,
     latestSummary: 'آخر ملخّص',
     runs: n => `التشغيلات · ${n}`,
     runsFailed: n => `تشغيلات فاشلة · ${n}`,

@@ -190,6 +190,60 @@ def test_card_meta_takes_the_newest_summary_and_counts_comments(tmp_path):
     assert comments == {"t_a": 2, "t_b": 1}
 
 
+def test_task_detail_carries_the_diagnostics_of_a_blocked_card(client):
+    """A blocked card explains itself in the drawer, in the words the CLI would use.
+
+    The drawer used to show the block reason and the runs, and nothing that connected them: the
+    reader had to count the failed runs and find the breaker's threshold in their own config. The
+    detail now carries the diagnostics the official board renders — computed from this task's own
+    events and runs, never stored — and each one names its recovery actions.
+    """
+    http, board = client
+    tid = board["child"]
+    conn = open_board(board["slug"])
+    # The streak and the last error are task columns the dispatcher writes; a spawn failure on a
+    # named profile is the case that also carries CLI hints, which is what the reader needs.
+    conn.execute(
+        "UPDATE tasks SET status = 'blocked', assignee = 'senior-coder', consecutive_failures = 3, "
+        "last_failure_error = ? WHERE id = ?",
+        ("workspace: git worktree add failed for /tmp/wt on branch feature/x: fatal: 'feature/x' is "
+         "already used by worktree at '/tmp/wt2'", tid),
+    )
+    conn.execute(
+        "INSERT INTO task_runs (task_id, profile, status, outcome, started_at, ended_at, error) "
+        "VALUES (?, 'senior-coder', 'done', 'spawn_failed', 100, 200, 'first spawn died'), (?, "
+        "'senior-coder', 'done', 'spawn_failed', 300, 400, 'second spawn died')",
+        (tid, tid),
+    )
+    conn.commit()
+    conn.close()
+
+    r = http.get(f"/tasks/{tid}?board={board['slug']}")
+    assert r.status_code == 200
+    diags = r.json()["task"]["diagnostics"]
+    assert diags, "a blocked card with a failure streak must carry a diagnostic"
+
+    diag = diags[0]
+    assert diag["kind"] == "repeated_failures"
+    assert diag["severity"] in ("error", "critical")
+    # The streak, the breaker's threshold and the error verbatim: the three things the reader
+    # cannot get from the card itself.
+    assert "failed 3 times in a row" in diag["detail"]
+    assert "consecutive non-success attempts" in diag["detail"]
+    assert "already used by worktree" in diag["detail"]
+
+    kinds = [a["kind"] for a in diag["actions"]]
+    assert "cli_hint" in kinds, "a spawn failure on a named profile must offer the profile hints"
+    # Every diagnostic carries a recovery primitive; `reassign` is the one the drawer answers with
+    # its own assignee control rather than a button, exactly as the official panel does.
+    assert any(a["kind"] in ("reclaim", "unblock", "reassign") for a in diag["actions"]), \
+        "every diagnostic must carry a recovery action"
+
+    # A healthy task carries none — the panel is absent, not empty.
+    healthy = http.get(f"/tasks/{board['parent']}?board={board['slug']}").json()["task"]
+    assert healthy["diagnostics"] == []
+
+
 def test_attachment_counts_group_by_task(tmp_path):
     """`_attachment_counts` answers "does this row need a paperclip", for the whole board.
 

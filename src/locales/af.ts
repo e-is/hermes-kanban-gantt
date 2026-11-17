@@ -90,6 +90,7 @@ export const af = {
     keepEditing: 'Hou aan wysig',
     discardChanges: 'Gooi wysigings weg',
     result: 'Resultaat',
+    diagnostics: n => `Diagnostiek · ${n}`,
     latestSummary: 'Jongste opsomming',
     runs: n => `Lopies · ${n}`,
     runsFailed: n => `Mislukte lopies · ${n}`,

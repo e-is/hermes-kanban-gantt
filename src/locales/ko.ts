@@ -90,6 +90,7 @@ export const ko = {
     keepEditing: '계속 편집',
     discardChanges: '변경 사항 버리기',
     result: '결과',
+    diagnostics: n => `진단 · ${n}`,
     latestSummary: '최근 요약',
     runs: n => `실행 기록 · ${n}`,
     runsFailed: n => `실패한 실행 · ${n}`,

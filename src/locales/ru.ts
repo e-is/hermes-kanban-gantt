@@ -90,6 +90,7 @@ export const ru = {
     keepEditing: 'Продолжить правку',
     discardChanges: 'Отменить изменения',
     result: 'Результат',
+    diagnostics: n => `Диагностика · ${n}`,
     latestSummary: 'Последняя сводка',
     runs: n => `Запуски · ${n}`,
     runsFailed: n => `Неудачные запуски · ${n}`,

@@ -3530,6 +3530,58 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 onOpen: id => $openTaskId.set(id),
                 openLabel: i18n.openTask
               }),
+              // Diagnostics — the backend runs the same rule engine as the official board and
+              // `hermes kanban diagnostics`, so a blocked card explains itself here in the words the
+              // CLI would use: what failed, how many times in a row, the last error verbatim, and
+              // the dispatcher's own threshold. Every action it offers is one this drawer can
+              // already perform, and none of it is stored: it clears when the failure mode does.
+              data?.task?.diagnostics && data.task.diagnostics.length
+                ? jsxs('div', { className: 'flex flex-col gap-1', children: [
+                    jsx('div', { className: 'text-[10px] uppercase font-semibold text-(--ui-text-tertiary)', children: i18n.diagnostics(data.task.diagnostics.length) }),
+                    jsx('div', { className: 'flex flex-col gap-2', children: data.task.diagnostics.map(diag => {
+                      const tone = diag.severity === 'warning' ? '#fbbf24' : 'var(--destructive, #f87171)'
+                      const actions = (diag.actions || []).filter(a => a.kind === 'reclaim' || a.kind === 'unblock' || a.kind === 'cli_hint')
+                      return jsxs('div', {
+                        key: `${diag.kind}-${diag.last_seen_at}`,
+                        className: 'rounded-md flex flex-col gap-1.5',
+                        style: {
+                          border: '1px solid var(--ui-stroke-secondary)',
+                          borderLeft: `3px solid ${tone}`,
+                          backgroundColor: 'var(--ui-bg-secondary)',
+                          padding: '8px 10px'
+                        },
+                        children: [
+                          jsxs('div', {
+                            className: 'flex items-start gap-1.5 text-[11px] font-medium',
+                            style: { color: tone },
+                            children: [
+                              jsx(Codicon, { name: 'warning', size: '0.75rem', className: 'shrink-0 mt-[1px]' }),
+                              jsx('span', { className: 'min-w-0 kg-selectable', children: `${diag.title}${diag.count > 1 ? ` ×${diag.count}` : ''}` })
+                            ]
+                          }),
+                          jsx('div', { className: 'whitespace-pre-wrap text-[11px] leading-relaxed text-(--ui-text-secondary) kg-selectable', children: diag.detail }),
+                          actions.length
+                            ? jsx('div', { className: 'flex flex-wrap gap-1.5 pt-0.5', children: actions.map(a => jsx(Button, {
+                                size: 'xs',
+                                variant: a.suggested ? 'secondary' : 'outline',
+                                disabled: statusMutation.isPending,
+                                title: a.kind === 'cli_hint' ? String(a.payload?.command || '') : undefined,
+                                onClick: () => {
+                                  if (a.kind === 'cli_hint') {
+                                    void navigator.clipboard.writeText(String(a.payload?.command || a.label))
+                                    toast('info', i18n.copied)
+                                  } else {
+                                    statusMutation.mutate({ action: a.kind })
+                                  }
+                                },
+                                children: a.label
+                              })) })
+                            : null
+                        ]
+                      })
+                    }) })
+                  ] })
+                : null,
               // 1. Description (no max-h clamp). Always rendered, so a task that has
               // no description yet can be given one; the pencil at the right of the
               // label mirrors the reference kanban drawer's DescriptionSection, and

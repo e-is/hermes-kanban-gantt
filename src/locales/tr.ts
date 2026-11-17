@@ -90,6 +90,7 @@ export const tr = {
     keepEditing: 'Düzenlemeye devam et',
     discardChanges: 'Değişiklikleri at',
     result: 'Sonuç',
+    diagnostics: n => `Tanılamalar · ${n}`,
     latestSummary: 'Son özet',
     runs: n => `Çalıştırmalar · ${n}`,
     runsFailed: n => `Başarısız çalışmalar · ${n}`,

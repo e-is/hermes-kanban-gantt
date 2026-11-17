@@ -90,6 +90,7 @@ export const hu = {
     keepEditing: 'Szerkesztés folytatása',
     discardChanges: 'Módosítások elvetése',
     result: 'Eredmény',
+    diagnostics: n => `Diagnosztika · ${n}`,
     latestSummary: 'Legutóbbi összefoglaló',
     runs: n => `Futtatások · ${n}`,
     runsFailed: n => `Sikertelen futások · ${n}`,

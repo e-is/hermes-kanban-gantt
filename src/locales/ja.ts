@@ -84,6 +84,7 @@ export const ja = {
     keepEditing: '編集を続ける',
     discardChanges: '変更を破棄',
     result: '結果',
+    diagnostics: n => `診断 · ${n}`,
     latestSummary: '最新のサマリー',
     runs: n => `実行 · ${n}`,
     runsFailed: n => `失敗した実行 · ${n}`,

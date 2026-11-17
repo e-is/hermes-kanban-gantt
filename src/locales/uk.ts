@@ -90,6 +90,7 @@ export const uk = {
     keepEditing: 'Продовжити редагування',
     discardChanges: 'Відхилити зміни',
     result: 'Результат',
+    diagnostics: n => `Діагностика · ${n}`,
     latestSummary: 'Останній підсумок',
     runs: n => `Запуски · ${n}`,
     runsFailed: n => `Невдалі запуски · ${n}`,

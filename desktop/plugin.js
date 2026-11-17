@@ -198,6 +198,7 @@ var en = {
   keepEditing: "Keep editing",
   discardChanges: "Discard changes",
   result: "Result",
+  diagnostics: (n) => `Diagnostics · ${n}`,
   latestSummary: "Latest summary",
   runs: (n) => `Runs · ${n}`,
   runsFailed: (n) => `Failed runs · ${n}`,
@@ -525,6 +526,7 @@ var fr = {
   keepEditing: "Continuer l'édition",
   discardChanges: "Abandonner les modifications",
   result: "Résultat",
+  diagnostics: (n) => `Diagnostics · ${n}`,
   latestSummary: "Dernier résumé",
   runs: (n) => `Exécutions · ${n}`,
   runsFailed: (n) => `Échecs · ${n}`,
@@ -850,6 +852,7 @@ var zh = {
   keepEditing: "继续编辑",
   discardChanges: "放弃修改",
   result: "结果",
+  diagnostics: (n) => `诊断 · ${n}`,
   latestSummary: "最新摘要",
   runs: (n) => `运行记录 · ${n}`,
   runsFailed: (n) => `失败的运行 · ${n}`,
@@ -1172,6 +1175,7 @@ var af = {
   keepEditing: "Hou aan wysig",
   discardChanges: "Gooi wysigings weg",
   result: "Resultaat",
+  diagnostics: (n) => `Diagnostiek · ${n}`,
   latestSummary: "Jongste opsomming",
   runs: (n) => `Lopies · ${n}`,
   runsFailed: (n) => `Mislukte lopies · ${n}`,
@@ -1499,6 +1503,7 @@ var ar = {
   keepEditing: "متابعة التعديل",
   discardChanges: "تجاهل التغييرات",
   result: "النتيجة",
+  diagnostics: (n) => `التشخيصات · ${n}`,
   latestSummary: "آخر ملخّص",
   runs: (n) => `التشغيلات · ${n}`,
   runsFailed: (n) => `تشغيلات فاشلة · ${n}`,
@@ -1826,6 +1831,7 @@ var de = {
   keepEditing: "Weiter bearbeiten",
   discardChanges: "Änderungen verwerfen",
   result: "Ergebnis",
+  diagnostics: (n) => `Diagnose · ${n}`,
   latestSummary: "Letzte Zusammenfassung",
   runs: (n) => `Läufe · ${n}`,
   runsFailed: (n) => `Fehlgeschlagene Läufe · ${n}`,
@@ -2153,6 +2159,7 @@ var es = {
   keepEditing: "Seguir editando",
   discardChanges: "Descartar los cambios",
   result: "Resultado",
+  diagnostics: (n) => `Diagnósticos · ${n}`,
   latestSummary: "Último resumen",
   runs: (n) => `Ejecuciones · ${n}`,
   runsFailed: (n) => `Ejecuciones fallidas · ${n}`,
@@ -2480,6 +2487,7 @@ var ga = {
   keepEditing: "Lean ort ag eagrú",
   discardChanges: "Caith na hathruithe",
   result: "Toradh",
+  diagnostics: (n) => `Diagnóisic · ${n}`,
   latestSummary: "An achoimre is déanaí",
   runs: (n) => `Rithe · ${n}`,
   runsFailed: (n) => `Rithid teipthe · ${n}`,
@@ -2807,6 +2815,7 @@ var hu = {
   keepEditing: "Szerkesztés folytatása",
   discardChanges: "Módosítások elvetése",
   result: "Eredmény",
+  diagnostics: (n) => `Diagnosztika · ${n}`,
   latestSummary: "Legutóbbi összefoglaló",
   runs: (n) => `Futtatások · ${n}`,
   runsFailed: (n) => `Sikertelen futások · ${n}`,
@@ -3134,6 +3143,7 @@ var it = {
   keepEditing: "Continua a modificare",
   discardChanges: "Scarta le modifiche",
   result: "Risultato",
+  diagnostics: (n) => `Diagnostica · ${n}`,
   latestSummary: "Ultimo riepilogo",
   runs: (n) => `Esecuzioni · ${n}`,
   runsFailed: (n) => `Esecuzioni fallite · ${n}`,
@@ -3461,6 +3471,7 @@ var ja = {
   keepEditing: "編集を続ける",
   discardChanges: "変更を破棄",
   result: "結果",
+  diagnostics: (n) => `診断 · ${n}`,
   latestSummary: "最新のサマリー",
   runs: (n) => `実行 · ${n}`,
   runsFailed: (n) => `失敗した実行 · ${n}`,
@@ -3788,6 +3799,7 @@ var ko = {
   keepEditing: "계속 편집",
   discardChanges: "변경 사항 버리기",
   result: "결과",
+  diagnostics: (n) => `진단 · ${n}`,
   latestSummary: "최근 요약",
   runs: (n) => `실행 기록 · ${n}`,
   runsFailed: (n) => `실패한 실행 · ${n}`,
@@ -4115,6 +4127,7 @@ var pt = {
   keepEditing: "Continuar a editar",
   discardChanges: "Descartar as alterações",
   result: "Resultado",
+  diagnostics: (n) => `Diagnósticos · ${n}`,
   latestSummary: "Último resumo",
   runs: (n) => `Execuções · ${n}`,
   runsFailed: (n) => `Execuções falhadas · ${n}`,
@@ -4442,6 +4455,7 @@ var ru = {
   keepEditing: "Продолжить правку",
   discardChanges: "Отменить изменения",
   result: "Результат",
+  diagnostics: (n) => `Диагностика · ${n}`,
   latestSummary: "Последняя сводка",
   runs: (n) => `Запуски · ${n}`,
   runsFailed: (n) => `Неудачные запуски · ${n}`,
@@ -4764,6 +4778,7 @@ var tr = {
   keepEditing: "Düzenlemeye devam et",
   discardChanges: "Değişiklikleri at",
   result: "Sonuç",
+  diagnostics: (n) => `Tanılamalar · ${n}`,
   latestSummary: "Son özet",
   runs: (n) => `Çalıştırmalar · ${n}`,
   runsFailed: (n) => `Başarısız çalışmalar · ${n}`,
@@ -5091,6 +5106,7 @@ var uk = {
   keepEditing: "Продовжити редагування",
   discardChanges: "Відхилити зміни",
   result: "Результат",
+  diagnostics: (n) => `Діагностика · ${n}`,
   latestSummary: "Останній підсумок",
   runs: (n) => `Запуски · ${n}`,
   runsFailed: (n) => `Невдалі запуски · ${n}`,
@@ -5413,6 +5429,7 @@ var zhHant = {
   keepEditing: "繼續編輯",
   discardChanges: "捨棄變更",
   result: "結果",
+  diagnostics: (n) => `診斷 · ${n}`,
   latestSummary: "最新摘要",
   runs: (n) => `執行紀錄 · ${n}`,
   runsFailed: (n) => `失敗的執行 · ${n}`,
@@ -11911,6 +11928,54 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
         onOpen: (id) => $openTaskId.set(id),
         openLabel: i18n.openTask
       }),
+      // Diagnostics — the backend runs the same rule engine as the official board and
+      // `hermes kanban diagnostics`, so a blocked card explains itself here in the words the
+      // CLI would use: what failed, how many times in a row, the last error verbatim, and
+      // the dispatcher's own threshold. Every action it offers is one this drawer can
+      // already perform, and none of it is stored: it clears when the failure mode does.
+      data?.task?.diagnostics && data.task.diagnostics.length ? jsxs7("div", { className: "flex flex-col gap-1", children: [
+        jsx7("div", { className: "text-[10px] uppercase font-semibold text-(--ui-text-tertiary)", children: i18n.diagnostics(data.task.diagnostics.length) }),
+        jsx7("div", { className: "flex flex-col gap-2", children: data.task.diagnostics.map((diag) => {
+          const tone = diag.severity === "warning" ? "#fbbf24" : "var(--destructive, #f87171)";
+          const actions = (diag.actions || []).filter((a) => a.kind === "reclaim" || a.kind === "unblock" || a.kind === "cli_hint");
+          return jsxs7("div", {
+            key: `${diag.kind}-${diag.last_seen_at}`,
+            className: "rounded-md flex flex-col gap-1.5",
+            style: {
+              border: "1px solid var(--ui-stroke-secondary)",
+              borderLeft: `3px solid ${tone}`,
+              backgroundColor: "var(--ui-bg-secondary)",
+              padding: "8px 10px"
+            },
+            children: [
+              jsxs7("div", {
+                className: "flex items-start gap-1.5 text-[11px] font-medium",
+                style: { color: tone },
+                children: [
+                  jsx7(Codicon6, { name: "warning", size: "0.75rem", className: "shrink-0 mt-[1px]" }),
+                  jsx7("span", { className: "min-w-0 kg-selectable", children: `${diag.title}${diag.count > 1 ? ` ×${diag.count}` : ""}` })
+                ]
+              }),
+              jsx7("div", { className: "whitespace-pre-wrap text-[11px] leading-relaxed text-(--ui-text-secondary) kg-selectable", children: diag.detail }),
+              actions.length ? jsx7("div", { className: "flex flex-wrap gap-1.5 pt-0.5", children: actions.map((a) => jsx7(Button5, {
+                size: "xs",
+                variant: a.suggested ? "secondary" : "outline",
+                disabled: statusMutation.isPending,
+                title: a.kind === "cli_hint" ? String(a.payload?.command || "") : void 0,
+                onClick: () => {
+                  if (a.kind === "cli_hint") {
+                    void navigator.clipboard.writeText(String(a.payload?.command || a.label));
+                    toast("info", i18n.copied);
+                  } else {
+                    statusMutation.mutate({ action: a.kind });
+                  }
+                },
+                children: a.label
+              })) }) : null
+            ]
+          });
+        }) })
+      ] }) : null,
       // 1. Description (no max-h clamp). Always rendered, so a task that has
       // no description yet can be given one; the pencil at the right of the
       // label mirrors the reference kanban drawer's DescriptionSection, and

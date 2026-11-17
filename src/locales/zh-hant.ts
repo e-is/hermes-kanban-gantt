@@ -90,6 +90,7 @@ export const zhHant = {
     keepEditing: '繼續編輯',
     discardChanges: '捨棄變更',
     result: '結果',
+    diagnostics: n => `診斷 · ${n}`,
     latestSummary: '最新摘要',
     runs: n => `執行紀錄 · ${n}`,
     runsFailed: n => `失敗的執行 · ${n}`,

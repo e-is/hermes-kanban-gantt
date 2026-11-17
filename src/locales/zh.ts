@@ -90,6 +90,7 @@ export const zh = {
     keepEditing: '继续编辑',
     discardChanges: '放弃修改',
     result: '结果',
+    diagnostics: n => `诊断 · ${n}`,
     latestSummary: '最新摘要',
     runs: n => `运行记录 · ${n}`,
     runsFailed: n => `失败的运行 · ${n}`,
