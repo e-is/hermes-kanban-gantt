@@ -82,7 +82,7 @@ import { getStorage, getSocket } from './state'
 import { GANTT_LOCALES, useGanttI18n } from './i18n'
 import { subscribeGantt } from './ws'
 import { WS_STATE, canPush } from './core/ws-core'
-import { TitlebarBoardSwitcher } from './ui/TitlebarBoardSwitcher'
+import { TitlebarBoardSwitcher, useBandSwitcherPresent } from './ui/TitlebarBoardSwitcher'
 import { NewTaskDialog } from './ui/NewTaskDialog'
 import { MoveTaskDialog } from './ui/MoveTaskDialog'
 import { TaskRelations } from './ui/TaskRelations'
@@ -4392,6 +4392,8 @@ export function KanbanGanttPage() {
     if (s) s.set(prefKey(k), v)
   }
 
+  // Is the desktop band really showing the board switcher? Split tiles say no.
+  const bandSwitcher = useBandSwitcherPresent()
   const [viewMode, setViewMode] = useState(() => {
     const saved = readPref('viewMode')
     return saved === 'list' || saved === 'graph' || saved === 'whiteboard' ? saved : 'timeline'
@@ -5332,6 +5334,10 @@ export function KanbanGanttPage() {
             className: 'inline-flex items-center gap-2 text-sm font-medium',
             children: [
               jsx('span', { className: 'font-semibold', children: i18n.title }),
+              // The band above the page (WORKSPACE_PAGE_HEADER_AREA) is painted by the MAIN pane
+              // only: in a split tile there is none, and the board could not be chosen at all
+              // (issue #20). Draw it here whenever the band is not actually showing it.
+              bandSwitcher ? null : jsx(TitlebarBoardSwitcher, { inline: true }),
               // The total-count badge used to sit here. It went: the count is already on the "All"
               // scope, one word away, so a second copy of the same number only pushed the real
               // controls further from the title.
