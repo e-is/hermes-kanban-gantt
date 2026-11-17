@@ -1,15 +1,46 @@
 import { Button, cn, Codicon, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, useQuery, useQueryClient, useValue } from '@hermes/plugin-sdk'
+import { useEffect, useState } from 'react'
 
 import { $boardSlug, apiBase, apiFetch, getStorage } from '../state'
 import { useGanttI18n } from '../i18n'
 
+/** The band copy carries this marker, so the page can tell whether the host is showing it. */
+export const BAND_SWITCHER_ATTR = 'data-kg-band-switcher'
+
 /**
- * Board switcher projected into the desktop titlebar band (titleBar.center)
- * while the gantt page is mounted — mirrors the official kanban plugin's
- * placement so both switchers live in the same spot. Content differs: this
- * one offers the plugin's own "all boards" aggregate mode.
+ * Whether the page header band is REALLY rendering our switcher.
+ *
+ * The switcher is projected into the workspace page header (`WORKSPACE_PAGE_HEADER_AREA`), which
+ * only the main pane paints: a page opened in a split tile gets no band, hence issue #20 — the board
+ * could not be chosen there, and a board with nothing on `default` looked empty. The presence of the
+ * band copy is a DOM fact, so the page watches for it and falls back to drawing the switcher itself.
  */
-export function TitlebarBoardSwitcher() {
+export function useBandSwitcherPresent(): boolean {
+  const [present, setPresent] = useState(false)
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const check = () => setPresent(Boolean(document.querySelector(`[${BAND_SWITCHER_ATTR}]`)))
+    check()
+    if (typeof MutationObserver === 'undefined') {
+      const timer = setTimeout(check, 400)
+      return () => clearTimeout(timer)
+    }
+    const observer = new MutationObserver(check)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [])
+  return present
+}
+
+/**
+ * The board switcher: the plugin's own board picker, offering the "all boards" aggregate mode the
+ * official one does not have.
+ *
+ * Two placements, one component. `inline` draws it in the page's own header (split tiles, and the
+ * first paint before the band mounts); the default projection into the desktop band mirrors the
+ * official kanban plugin, so both switchers live in the same spot.
+ */
+export function TitlebarBoardSwitcher({ inline = false }: { inline?: boolean } = {}) {
   const board = useValue($boardSlug)
   const i18n = useGanttI18n()
   const queryClient = useQueryClient()
@@ -29,11 +60,16 @@ export function TitlebarBoardSwitcher() {
     void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
   }
 
-  return (
+  const switcher = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          className="h-full min-w-0 max-w-full gap-1.5 px-2 [-webkit-app-region:no-drag]"
+          className={cn(
+            'min-w-0 max-w-full gap-1.5 px-2 [-webkit-app-region:no-drag]',
+            inline
+              ? 'h-7 rounded-md border border-(--ui-stroke-tertiary) bg-(--ui-bg-secondary) text-[0.75rem]'
+              : 'h-full'
+          )}
           size="sm"
           variant="ghost"
         >
@@ -59,7 +95,7 @@ export function TitlebarBoardSwitcher() {
           </span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center">
+      <DropdownMenuContent align={inline ? 'start' : 'center'}>
         {/* Plugin-specific aggregate mode, kept on top like the official's own
             special entries; the rest mirrors the official switcher's item style. */}
         <DropdownMenuItem onSelect={() => setBoard('all')}>
@@ -84,4 +120,9 @@ export function TitlebarBoardSwitcher() {
       </DropdownMenuContent>
     </DropdownMenu>
   )
+
+  // `contents` keeps the band copy's box out of the layout; the inline copy is a real chip.
+  return inline
+    ? <span className="inline-flex min-w-0" data-kg-inline-switcher="">{switcher}</span>
+    : <span className="contents" {...{ [BAND_SWITCHER_ATTR]: '' }}>{switcher}</span>
 }

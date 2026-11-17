@@ -42,7 +42,7 @@ import {
   WORKSPACE_PAGE_HEADER_AREA
 } from "@hermes/plugin-sdk";
 import pluginSdk from "@hermes/plugin-sdk";
-import { useMemo as useMemo3, useRef as useRef3, useEffect as useEffect4, useState as useState5 } from "react";
+import { useMemo as useMemo3, useRef as useRef3, useEffect as useEffect5, useState as useState6 } from "react";
 import { jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
 
 // src/state.ts
@@ -5924,8 +5924,26 @@ function subscribeGantt(socketDoor, opts) {
 
 // src/ui/TitlebarBoardSwitcher.tsx
 import { Button, cn, Codicon, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, useQuery, useQueryClient, useValue } from "@hermes/plugin-sdk";
+import { useEffect, useState } from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
-function TitlebarBoardSwitcher() {
+var BAND_SWITCHER_ATTR = "data-kg-band-switcher";
+function useBandSwitcherPresent() {
+  const [present, setPresent] = useState(false);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const check = () => setPresent(Boolean(document.querySelector(`[${BAND_SWITCHER_ATTR}]`)));
+    check();
+    if (typeof MutationObserver === "undefined") {
+      const timer = setTimeout(check, 400);
+      return () => clearTimeout(timer);
+    }
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+  return present;
+}
+function TitlebarBoardSwitcher({ inline = false } = {}) {
   const board = useValue($boardSlug);
   const i18n = useGanttI18n();
   const queryClient = useQueryClient();
@@ -5942,11 +5960,14 @@ function TitlebarBoardSwitcher() {
     if (getStorage()) getStorage().set("board", slug);
     void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
   };
-  return /* @__PURE__ */ jsxs(DropdownMenu, { children: [
+  const switcher = /* @__PURE__ */ jsxs(DropdownMenu, { children: [
     /* @__PURE__ */ jsx(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx(
       Button,
       {
-        className: "h-full min-w-0 max-w-full gap-1.5 px-2 [-webkit-app-region:no-drag]",
+        className: cn(
+          "min-w-0 max-w-full gap-1.5 px-2 [-webkit-app-region:no-drag]",
+          inline ? "h-7 rounded-md border border-(--ui-stroke-tertiary) bg-(--ui-bg-secondary) text-[0.75rem]" : "h-full"
+        ),
         size: "sm",
         variant: "ghost",
         children: /* @__PURE__ */ jsxs("span", { className: "flex min-w-0 items-center gap-1.5", children: [
@@ -5958,7 +5979,7 @@ function TitlebarBoardSwitcher() {
         ] })
       }
     ) }),
-    /* @__PURE__ */ jsxs(DropdownMenuContent, { align: "center", children: [
+    /* @__PURE__ */ jsxs(DropdownMenuContent, { align: inline ? "start" : "center", children: [
       /* @__PURE__ */ jsxs(DropdownMenuItem, { onSelect: () => setBoard("all"), children: [
         /* @__PURE__ */ jsx("span", { className: cn("min-w-0 flex-1 truncate", isAllBoards && "font-semibold text-(--ui-accent)"), children: i18n.allBoards }),
         isAllBoards && /* @__PURE__ */ jsx(Codicon, { className: "ml-auto shrink-0", name: "check", size: "0.8rem" })
@@ -5974,10 +5995,11 @@ function TitlebarBoardSwitcher() {
       })
     ] })
   ] });
+  return inline ? /* @__PURE__ */ jsx("span", { className: "inline-flex min-w-0", "data-kg-inline-switcher": "", children: switcher }) : /* @__PURE__ */ jsx("span", { className: "contents", ...{ [BAND_SWITCHER_ATTR]: "" }, children: switcher });
 }
 
 // src/ui/NewTaskDialog.tsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect as useEffect2, useRef, useState as useState2 } from "react";
 import {
   Button as Button2,
   Codicon as Codicon2,
@@ -6580,8 +6602,8 @@ function SearchPicker({
   emptyLabel,
   className
 }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState2(false);
+  const [query, setQuery] = useState2("");
   const needle = query.trim().toLowerCase();
   const visible = needle ? options.filter((o) => o.label.toLowerCase().includes(needle) || (o.hint || "").toLowerCase().includes(needle)) : options;
   return /* @__PURE__ */ jsxs2(Popover, { open, onOpenChange: (next) => {
@@ -6648,20 +6670,20 @@ function NewTaskDialog({
   onClose,
   i18n
 }) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [assignee, setAssignee] = useState("");
-  const [priority, setPriority] = useState("0");
-  const [parentId, setParentId] = useState("");
-  const [triage, setTriage] = useState(false);
-  const [projectId, setProjectId] = useState("");
-  const [workspaceKind, setWorkspaceKind] = useState("scratch");
-  const [workspacePath, setWorkspacePath] = useState("");
-  const [skills, setSkills] = useState("");
-  const [modelOverride, setModelOverride] = useState("");
-  const [goalMode, setGoalMode] = useState(false);
+  const [title, setTitle] = useState2("");
+  const [body, setBody] = useState2("");
+  const [assignee, setAssignee] = useState2("");
+  const [priority, setPriority] = useState2("0");
+  const [parentId, setParentId] = useState2("");
+  const [triage, setTriage] = useState2(false);
+  const [projectId, setProjectId] = useState2("");
+  const [workspaceKind, setWorkspaceKind] = useState2("scratch");
+  const [workspacePath, setWorkspacePath] = useState2("");
+  const [skills, setSkills] = useState2("");
+  const [modelOverride, setModelOverride] = useState2("");
+  const [goalMode, setGoalMode] = useState2(false);
   const keyRef = useRef("");
-  useEffect(() => {
+  useEffect2(() => {
     if (!open) return;
     setTitle("");
     setBody("");
@@ -6845,7 +6867,7 @@ function NewTaskDialog({
 }
 
 // src/ui/MoveTaskDialog.tsx
-import { useEffect as useEffect2, useState as useState2 } from "react";
+import { useEffect as useEffect3, useState as useState3 } from "react";
 import {
   Button as Button3,
   Codicon as Codicon3,
@@ -6862,10 +6884,10 @@ import {
 } from "@hermes/plugin-sdk";
 import { Fragment, jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
 function MoveTaskDialog({ open, task, boards, currentBoard, i18n, onClose, onMove }) {
-  const [target, setTarget] = useState2("");
-  const [error, setError] = useState2(null);
-  const [busy, setBusy] = useState2(false);
-  useEffect2(() => {
+  const [target, setTarget] = useState3("");
+  const [error, setError] = useState3(null);
+  const [busy, setBusy] = useState3(false);
+  useEffect3(() => {
     if (open) {
       setTarget("");
       setError(null);
@@ -6989,7 +7011,7 @@ function TaskRelations({
 }
 
 // src/ui/ReparentChooser.tsx
-import { useState as useState3 } from "react";
+import { useState as useState4 } from "react";
 import {
   Button as Button4,
   Dialog as Dialog3,
@@ -7059,7 +7081,7 @@ function MoveUnderDialog({
   i18n,
   busy = false
 }) {
-  const [query, setQuery] = useState3("");
+  const [query, setQuery] = useState4("");
   if (!open) return null;
   const visible = candidates.filter((c) => matchesSearch(c.task, query));
   const disabledIds = new Set(visible.filter((c) => !c.allowed).map((c) => c.task.id));
@@ -7099,7 +7121,7 @@ function MoveUnderDialog({
 
 // src/ui/WhiteboardView.tsx
 import { Codicon as Codicon5, icons, Streamdown } from "@hermes/plugin-sdk";
-import { useEffect as useEffect3, useMemo as useMemo2, useRef as useRef2, useState as useState4 } from "react";
+import { useEffect as useEffect4, useMemo as useMemo2, useRef as useRef2, useState as useState5 } from "react";
 import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
 
 // src/core/whiteboard-core.ts
@@ -8007,21 +8029,21 @@ function WhiteboardView({
   onCopy,
   onAddMilestone
 }) {
-  useEffect3(() => {
+  useEffect4(() => {
     installStyles();
   }, []);
   const ref = useRef2(null);
   const gesture = useRef2(null);
   const undoStack = useRef2([]);
   const redoStack = useRef2([]);
-  const [view, setView] = useState4({ x: 0, y: 0, zoom: 1 });
-  const [glide, setGlide] = useState4(false);
-  const [drag, setDrag] = useState4(null);
-  const [panning, setPanning] = useState4(false);
-  const [selection, setSelection] = useState4([]);
-  const [marquee, setMarquee] = useState4(null);
-  const [wire, setWire] = useState4(null);
-  const [picked, setPicked] = useState4(null);
+  const [view, setView] = useState5({ x: 0, y: 0, zoom: 1 });
+  const [glide, setGlide] = useState5(false);
+  const [drag, setDrag] = useState5(null);
+  const [panning, setPanning] = useState5(false);
+  const [selection, setSelection] = useState5([]);
+  const [marquee, setMarquee] = useState5(null);
+  const [wire, setWire] = useState5(null);
+  const [picked, setPicked] = useState5(null);
   const model = useMemo2(
     () => boardFromTasks(tasks || [], { title: title || "Board", layout, id: board || "board", looseLabel: i18n.wbLoose }),
     [tasks, title, layout, board, i18n]
@@ -8068,10 +8090,10 @@ function WhiteboardView({
     setTimeout(() => setGlide(false), 700);
     setView((v) => zoomAt(v, point, factor));
   };
-  useEffect3(() => {
+  useEffect4(() => {
     fit(false);
   }, [layout, board, scene.items.length]);
-  useEffect3(() => {
+  useEffect4(() => {
     const node = ref.current;
     if (!node) return void 0;
     const onWheel = (event) => {
@@ -8204,7 +8226,7 @@ function WhiteboardView({
   };
   const handlers = useRef2({});
   handlers.current = { move: onPointerMove, up: onPointerUp, undo, redo, picked, arrows, selection };
-  useEffect3(() => {
+  useEffect4(() => {
     const move = (event) => handlers.current.move(event);
     const up = (event) => handlers.current.up(event);
     const key = (event) => {
@@ -9999,7 +10021,7 @@ function GraphView({
 }) {
   const showPrefixTags = useValue2($titlePrefixTags);
   const nowSec = Math.floor(Date.now() / 1e3);
-  const [foldedCols, setFoldedCols] = useState5(() => {
+  const [foldedCols, setFoldedCols] = useState6(() => {
     try {
       const raw = localStorage.getItem("hermes.plugin.kanban-gantt.graphFolded");
       return new Set(raw ? JSON.parse(raw) : []);
@@ -10019,17 +10041,17 @@ function GraphView({
       return next;
     });
   };
-  const [pan, setPan] = useState5({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState5(null);
+  const [pan, setPan] = useState6({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState6(null);
   const NEAR_PX = 64;
-  const [nearTarget, setNearTarget] = useState5(null);
+  const [nearTarget, setNearTarget] = useState6(null);
   const dragRects = useRef3(/* @__PURE__ */ new Map());
   const SLOT_HALO = 34;
-  const [slotFor, setSlotFor] = useState5(null);
-  const [slotNear, setSlotNear] = useState5(false);
-  const [link, setLink] = useState5(null);
-  const [hotEdge, setHotEdge] = useState5(null);
-  const [edgeMenu, setEdgeMenu] = useState5(null);
+  const [slotFor, setSlotFor] = useState6(null);
+  const [slotNear, setSlotNear] = useState6(false);
+  const [link, setLink] = useState6(null);
+  const [hotEdge, setHotEdge] = useState6(null);
+  const [edgeMenu, setEdgeMenu] = useState6(null);
   const hotTimer = useRef3(null);
   const armHotEdge = (key) => {
     if (hotTimer.current) clearTimeout(hotTimer.current);
@@ -10104,7 +10126,7 @@ function GraphView({
   }, [shown, selectedId]);
   const zoomRef = useRef3(zoom);
   zoomRef.current = zoom;
-  const [autoFit, setAutoFit] = useState5(true);
+  const [autoFit, setAutoFit] = useState6(true);
   const autoFitRef = useRef3(true);
   autoFitRef.current = autoFit;
   const fitPctRef = useRef3(null);
@@ -10132,18 +10154,18 @@ function GraphView({
       y: Math.max(GRAPH_MARGIN / 2, (rect.height - h) / 2)
     });
   };
-  useEffect4(() => {
+  useEffect5(() => {
     if (fitPctRef.current == null) return;
     if (Math.abs(zoom - fitPctRef.current) > 5e-3) setAutoFit(false);
   }, [zoom]);
-  useEffect4(() => {
+  useEffect5(() => {
     if (!layout.width || !layout.height) return;
     const size = `${Math.round(layout.width / 24)}x${Math.round(layout.height / 24)}`;
     if (fittedSize.current === size) return;
     fittedSize.current = size;
     fitView();
   }, [layout.width, layout.height, onZoom]);
-  useEffect4(() => {
+  useEffect5(() => {
     const el = canvasRef.current;
     if (!el || typeof ResizeObserver === "undefined") return void 0;
     const ro = new ResizeObserver(() => {
@@ -10245,7 +10267,7 @@ function GraphView({
   const allowedRef = useRef3(null);
   allowedRef.current = allowedFor;
   const linkFrom = link ? link.from : null;
-  useEffect4(() => {
+  useEffect5(() => {
     if (!linkFrom) return void 0;
     const move = (event) => {
       const pt2 = toLayout(event);
@@ -10288,7 +10310,7 @@ function GraphView({
       window.removeEventListener("keydown", key);
     };
   }, [linkFrom, zoom, onLinkChild, onUnlink]);
-  useEffect4(() => {
+  useEffect5(() => {
     const el = canvasRef.current;
     if (!el) return void 0;
     const onWheel = (event) => {
@@ -10321,7 +10343,7 @@ function GraphView({
     const start = { x: event.clientX - pan.x, y: event.clientY - pan.y };
     setDragging(start);
   };
-  useEffect4(() => {
+  useEffect5(() => {
     if (!dragging) return void 0;
     const onMove = (event) => setPan({ x: event.clientX - dragging.x, y: event.clientY - dragging.y });
     const onUp = (event) => {
@@ -11162,8 +11184,8 @@ function SelectionBar({
   busy = false
 }) {
   const i18n = useGanttI18n();
-  const [menu, setMenu] = useState5(null);
-  const [customAssignee, setCustomAssignee] = useState5("");
+  const [menu, setMenu] = useState6(null);
+  const [customAssignee, setCustomAssignee] = useState6("");
   if (selected.size === 0) return null;
   return jsx7("div", {
     className: "pointer-events-none absolute inset-x-0 bottom-12 z-40 flex justify-center px-4 animate-in fade-in slide-in-from-bottom-2 duration-150",
@@ -11345,7 +11367,7 @@ function AttachmentBody({ att, data, i18n }) {
       type: attachmentMime(att.filename, data.content_type || att.content_type)
     }));
   }, [data, att.filename, att.content_type, kind]);
-  useEffect4(() => () => {
+  useEffect5(() => () => {
     if (url) URL.revokeObjectURL(url);
   }, [url]);
   if (kind === "markdown") return jsx7(MessageTextContent, { media: false, text: data?.text || "" });
@@ -11477,7 +11499,7 @@ function AttachmentLine({ taskId, board, att, i18n, onPreview, iconSize, hoverab
   }, att.id);
 }
 function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
-  const [wanted, setWanted] = useState5(false);
+  const [wanted, setWanted] = useState6(false);
   const query = useQuery2({
     queryKey: ["kanban-gantt", "attachments", taskId, board],
     queryFn: () => fetchAttachments(taskId, board),
@@ -11546,7 +11568,7 @@ function AttachmentPreview({ taskId, board, att, siblings, i18n, onClose, onNavi
   });
   const list = siblings && siblings.length ? siblings : [att];
   const index2 = Math.max(0, list.findIndex((item) => item.id === att.id));
-  useEffect4(() => {
+  useEffect5(() => {
     if (list.length < 2) return void 0;
     const onKey = (event) => {
       if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
@@ -11671,7 +11693,7 @@ var overridePatch = (value) => {
   };
 };
 function ModelField({ value, onChange, inheritCopy, clearLabel, label, compact = false }) {
-  const [open, setOpen] = useState5(false);
+  const [open, setOpen] = useState6(false);
   const controller = {
     allowSpeed: false,
     // Picking a model seeds the depth from what the user last used for it, so the board behaves
@@ -11744,8 +11766,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const queryClient = useQueryClient2();
   const scrollContainerRef = useRef3(null);
   const prevTaskIdRef = useRef3(null);
-  const [moveBoardOpen, setMoveBoardOpen] = useState5(false);
-  const [previewAtt, setPreviewAtt] = useState5(null);
+  const [moveBoardOpen, setMoveBoardOpen] = useState6(false);
+  const [previewAtt, setPreviewAtt] = useState6(null);
   const shownBoard = board;
   const moveMutation = useMutation({
     mutationFn: (toBoard) => apiFetch(`/tasks/${encodeURIComponent(shownId)}/move?board=${encodeURIComponent(board || "")}`, {
@@ -11759,8 +11781,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       onClose();
     }
   });
-  const [descOwner, setDescOwner] = useState5(null);
-  const [descDraft, setDescDraft] = useState5("");
+  const [descOwner, setDescOwner] = useState6(null);
+  const [descDraft, setDescDraft] = useState6("");
   const shownId = descOwner || taskId;
   const switchResolvedRef = useRef3(false);
   const { data, isLoading, isError, refetch } = useQuery2({
@@ -11768,7 +11790,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     queryFn: () => fetchTask(shownId, board),
     enabled: Boolean(shownId)
   });
-  useEffect4(() => {
+  useEffect5(() => {
     if (shownId && prevTaskIdRef.current !== shownId) {
       prevTaskIdRef.current = shownId;
       if (scrollContainerRef.current) {
@@ -11776,16 +11798,16 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       }
     }
   }, [shownId]);
-  const [comment, setComment] = useState5("");
-  const [showAllComments, setShowAllComments] = useState5(false);
-  const [feedTab, setFeedTab] = useState5("comments");
+  const [comment, setComment] = useState6("");
+  const [showAllComments, setShowAllComments] = useState6(false);
+  const [feedTab, setFeedTab] = useState6("comments");
   const logQuery = useQuery2({
     queryKey: ["kanban-gantt", "log", apiBase(), board, shownId],
     queryFn: () => fetchWorkerLog(shownId, board),
     enabled: Boolean(shownId) && feedTab === "log" && Boolean(data?.task?.log_exists)
   });
-  const [cliCopied, setCliCopied] = useState5(false);
-  const [pendingUnlink, setPendingUnlink] = useState5(null);
+  const [cliCopied, setCliCopied] = useState6(false);
+  const [pendingUnlink, setPendingUnlink] = useState6(null);
   const relations = useMemo3(() => relationsOf(tasks, shownId), [tasks, shownId]);
   const statusMutation = useMutation({
     mutationFn: (payload) => apiFetch(
@@ -11850,7 +11872,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   });
   const descDirty = Boolean(descOwner) && descDraft !== (data?.task?.body || "");
   const descSwitchPending = Boolean(descOwner) && descOwner !== taskId && descDirty;
-  useEffect4(() => {
+  useEffect5(() => {
     if (!descOwner || descOwner === taskId || descDirty) return;
     setDescOwner(null);
     setDescDraft("");
@@ -12595,7 +12617,7 @@ function KanbanGanttPage() {
     staleTime: 6e4
   });
   const wsEnabled = useValue2($wsEnabled);
-  const [wsState, setWsState] = useState5(WS_STATE.off);
+  const [wsState, setWsState] = useState6(WS_STATE.off);
   const socketDoor = getSocket();
   const wsBoard = wsEnabled && !base && canPush(board) ? board : null;
   const { data, isLoading, isError, error } = useQuery2({
@@ -12604,8 +12626,8 @@ function KanbanGanttPage() {
     refetchInterval: wsState === WS_STATE.live ? 3e5 : 6e4
   });
   const foldKey = `fold.${board || "current"}`;
-  const [fold, setFold] = useState5(() => /* @__PURE__ */ new Map());
-  useEffect4(() => {
+  const [fold, setFold] = useState6(() => /* @__PURE__ */ new Map());
+  useEffect5(() => {
     let next = /* @__PURE__ */ new Map();
     try {
       const raw = getStorage() ? getStorage().get(foldKey, null) : null;
@@ -12629,7 +12651,7 @@ function KanbanGanttPage() {
     setWsState(state);
     if (getStorage()) getStorage().set("wsState", state);
   };
-  useEffect4(() => {
+  useEffect5(() => {
     if (!wsBoard) {
       const why = !wsEnabled ? "disabled" : base ? "custom-base" : board && !canPush(board) ? "all-boards" : !socketDoor ? "no-door" : "no-board";
       if (getStorage()) {
@@ -12651,24 +12673,24 @@ function KanbanGanttPage() {
       }
     });
   }, [wsBoard, socketDoor, queryClient, scope]);
-  const [nowTick, setNowTick] = useState5(0);
-  useEffect4(() => {
+  const [nowTick, setNowTick] = useState6(0);
+  useEffect5(() => {
     if (wsState !== WS_STATE.live) return void 0;
     const id = setInterval(() => setNowTick((t) => t + 1), 3e4);
     return () => clearInterval(id);
   }, [wsState]);
-  const [showArchived, setShowArchived] = useState5(false);
-  const [dragId, setDragId] = useState5(null);
-  const [pendingReparent, setPendingReparent] = useState5(null);
+  const [showArchived, setShowArchived] = useState6(false);
+  const [dragId, setDragId] = useState6(null);
+  const [pendingReparent, setPendingReparent] = useState6(null);
   const allTasks = data?.tasks || [];
-  const [selectedAssignees, setSelectedAssignees] = useState5(() => /* @__PURE__ */ new Set());
-  const [disabledStatuses, setDisabledStatuses] = useState5(() => {
+  const [selectedAssignees, setSelectedAssignees] = useState6(() => /* @__PURE__ */ new Set());
+  const [disabledStatuses, setDisabledStatuses] = useState6(() => {
     const saved = getStorage() ? getStorage().get("disabledStatuses", null) : null;
     return Array.isArray(saved) ? new Set(saved) : /* @__PURE__ */ new Set();
   });
-  const [search, setSearch] = useState5("");
-  const [selectedIds, setSelectedIds] = useState5(() => /* @__PURE__ */ new Set());
-  const [bulkAssignee, setBulkAssignee] = useState5("");
+  const [search, setSearch] = useState6("");
+  const [selectedIds, setSelectedIds] = useState6(() => /* @__PURE__ */ new Set());
+  const [bulkAssignee, setBulkAssignee] = useState6("");
   const lastCheckedIdRef = useRef3(null);
   const prefKey = (k) => board ? `${k}@${board}` : k;
   const readPref = (k, fallback = null) => {
@@ -12681,12 +12703,13 @@ function KanbanGanttPage() {
     const s = getStorage();
     if (s) s.set(prefKey(k), v);
   };
-  const [viewMode, setViewMode] = useState5(() => {
+  const bandSwitcher = useBandSwitcherPresent();
+  const [viewMode, setViewMode] = useState6(() => {
     const saved = readPref("viewMode");
     return saved === "list" || saved === "graph" || saved === "whiteboard" ? saved : "timeline";
   });
   const graphMode = viewMode === "graph";
-  const [graphZoomPct, setGraphZoomPct] = useState5(() => {
+  const [graphZoomPct, setGraphZoomPct] = useState6(() => {
     const s = getStorage();
     const saved = Number(readPref("graphZoomPct"));
     const lo = Math.round(GRAPH_ZOOM_MIN * 100);
@@ -12700,12 +12723,12 @@ function KanbanGanttPage() {
     setGraphZoomPct(clamped);
     writePref("graphZoomPct", String(clamped));
   };
-  const [cardsTall, setCardsTall] = useState5(() => readPref("cardsTall") !== "0");
+  const [cardsTall, setCardsTall] = useState6(() => readPref("cardsTall") !== "0");
   const handleCardsTall = (next) => {
     setCardsTall(next);
     writePref("cardsTall", next ? "1" : "0");
   };
-  const [arrange, setArrange] = useState5(() => {
+  const [arrange, setArrange] = useState6(() => {
     const v = readPref("arrange");
     return ["down", "flow", "status", "compact"].includes(v) ? v : "down";
   });
@@ -12713,12 +12736,12 @@ function KanbanGanttPage() {
     setArrange(next);
     writePref("arrange", next);
   };
-  const [graphScope, setGraphScope] = useState5(() => {
+  const [graphScope, setGraphScope] = useState6(() => {
     const s = readPref("graphScope");
     if (s === "running-lineage") return "running";
     return SCOPES.includes(s) ? s : "all";
   });
-  const [graphLineage, setGraphLineage] = useState5(
+  const [graphLineage, setGraphLineage] = useState6(
     () => readPref("graphScope") === "running-lineage" || readPref("graphLineage") === "1"
   );
   const handleGraphScope = (next) => {
@@ -12729,7 +12752,7 @@ function KanbanGanttPage() {
     setGraphLineage(next);
     writePref("graphLineage", next ? "1" : "0");
   };
-  const [period, setPeriod] = useState5(() => {
+  const [period, setPeriod] = useState6(() => {
     const span = Number(readPref("period"));
     if (!(span > 0)) return null;
     const zoom = Number(readPref("zoomPct"));
@@ -12743,7 +12766,7 @@ function KanbanGanttPage() {
     setViewMode(mode);
     writePref("viewMode", mode);
   };
-  const [wbLayout, setWbLayout] = useState5(() => {
+  const [wbLayout, setWbLayout] = useState6(() => {
     const v = readPref("wbLayout");
     return v === "columns" || v === "map" ? v : "route";
   });
@@ -12751,7 +12774,7 @@ function KanbanGanttPage() {
     setWbLayout(mode);
     writePref("wbLayout", mode);
   };
-  const [wbPos, setWbPos] = useState5(() => {
+  const [wbPos, setWbPos] = useState6(() => {
     try {
       const raw = readPref("wbPos", "{}");
       const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -12764,7 +12787,7 @@ function KanbanGanttPage() {
     setWbPos(next);
     writePref("wbPos", JSON.stringify(next));
   };
-  const [zoomPct, setZoomPct] = useState5(() => {
+  const [zoomPct, setZoomPct] = useState6(() => {
     const s = getStorage();
     if (!s) return ZOOM_PCT_MIN;
     const pct = readPref("zoomPct");
@@ -12775,7 +12798,7 @@ function KanbanGanttPage() {
   });
   const containerRef = useRef3(null);
   const scrollerRef = useRef3(null);
-  const [trackW, setTrackW] = useState5(0);
+  const [trackW, setTrackW] = useState6(0);
   const handleToggleAssignee = (name) => {
     setSelectedAssignees((prev) => {
       const next = new Set(prev);
@@ -12798,7 +12821,7 @@ function KanbanGanttPage() {
       return next;
     });
   };
-  const [onlyAttachments, setOnlyAttachments] = useState5(() => {
+  const [onlyAttachments, setOnlyAttachments] = useState6(() => {
     const saved = getStorage() ? getStorage().get("onlyAttachments", null) : null;
     return saved === "1" || saved === true;
   });
@@ -13032,7 +13055,7 @@ function KanbanGanttPage() {
     });
     lastCheckedIdRef.current = id;
   };
-  useEffect4(() => {
+  useEffect5(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
         if (selectedIds.size > 0) {
@@ -13079,7 +13102,7 @@ function KanbanGanttPage() {
     $titlePrefixTags.set(next);
     if (getStorage()) getStorage().set("titlePrefixTags", next);
   };
-  useEffect4(() => {
+  useEffect5(() => {
     const s = getStorage();
     if (!s) return;
     const saved = s.get("titlePrefixTags", null);
@@ -13103,7 +13126,7 @@ function KanbanGanttPage() {
     persistTabs(next);
     if (slug === board) setBoard(next[next.length - 1]);
   };
-  useEffect4(() => {
+  useEffect5(() => {
     const s = getStorage();
     let list = [];
     if (s) {
@@ -13125,7 +13148,7 @@ function KanbanGanttPage() {
     void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
     if (slug) openBoardInTabs(slug);
   };
-  useEffect4(() => {
+  useEffect5(() => {
     const list = boardsData?.boards;
     if (!list || !list.length) return;
     const known = list.map((b) => typeof b === "string" ? b : b && b.slug).filter(Boolean);
@@ -13137,12 +13160,12 @@ function KanbanGanttPage() {
     }
     if (resolved.suggested) setBoard(resolved.suggested);
   }, [boardsData, board]);
-  useEffect4(() => {
+  useEffect5(() => {
     if (!isError || !board || !isMissingBoardError(error)) return;
     toast("warning", `${i18n.boardGoneTitle(board)} — ${i18n.boardGoneDesc(boardsData?.current || "")}`);
     setBoard(boardsData?.current || "");
   }, [isError, error, board, boardsData]);
-  useEffect4(() => {
+  useEffect5(() => {
     const el = containerRef.current;
     if (!el) return;
     const observe = () => setTrackW(el.getBoundingClientRect().width);
@@ -13167,7 +13190,7 @@ function KanbanGanttPage() {
     return boards.find((b) => b.slug === slug)?.label || slug || "—";
   };
   const hasAutoScrolledBoardRef = useRef3(null);
-  useEffect4(() => {
+  useEffect5(() => {
     const el = scrollerRef.current;
     if (el && board && hasAutoScrolledBoardRef.current !== board) {
       hasAutoScrolledBoardRef.current = board;
@@ -13187,7 +13210,7 @@ function KanbanGanttPage() {
   const pxPerSec = basePerSec * zoomUsed;
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec));
   const zoomAnchor = useRef3(null);
-  useEffect4(() => {
+  useEffect5(() => {
     const host2 = containerRef.current;
     if (!host2) return void 0;
     const onWheel = (event) => {
@@ -13215,7 +13238,7 @@ function KanbanGanttPage() {
     host2.addEventListener("wheel", onWheel, { passive: false });
     return () => host2.removeEventListener("wheel", onWheel);
   }, [domain.min, pxPerSec, labelW, zoomPct, zoomUsed, zoomMax, handleZoomPct]);
-  useEffect4(() => {
+  useEffect5(() => {
     if (!openTaskId || !drawerDocked) return void 0;
     const onArrow = (event) => {
       if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -13240,7 +13263,7 @@ function KanbanGanttPage() {
     handleZoomPct(ZOOM_PCT_MIN);
     if (scrollerRef.current) scrollerRef.current.scrollLeft = 0;
   };
-  useEffect4(() => {
+  useEffect5(() => {
     const el = scrollerRef.current;
     const anchor = zoomAnchor.current;
     if (!el || !anchor) return;
@@ -13267,7 +13290,7 @@ function KanbanGanttPage() {
   const calibrating = useRef3(false);
   const placingUntil = useRef3(0);
   const restoreDone = useRef3(false);
-  useEffect4(() => {
+  useEffect5(() => {
     if (period == null) return;
     const el = scrollerRef.current;
     if (!el) return;
@@ -13300,7 +13323,7 @@ function KanbanGanttPage() {
     if (matched !== periodRef.current) setPeriod(matched);
   };
   zoomWatch.current = evaluateZoom;
-  useEffect4(() => {
+  useEffect5(() => {
     if (period == null) return;
     const el = scrollerRef.current;
     if (!el) return;
@@ -13317,7 +13340,7 @@ function KanbanGanttPage() {
     if (el.scrollLeft !== target) el.scrollLeft = target;
   }, [period, pxPerSec, labelW, trackW, nowTick, domain.min]);
   const scrollRestored = useRef3(false);
-  useEffect4(() => {
+  useEffect5(() => {
     if (scrollRestored.current || period != null) return;
     const el = scrollerRef.current;
     if (!el || el.clientWidth <= 0) return;
@@ -13397,6 +13420,10 @@ function KanbanGanttPage() {
                 className: "inline-flex items-center gap-2 text-sm font-medium",
                 children: [
                   jsx7("span", { className: "font-semibold", children: i18n.title }),
+                  // The band above the page (WORKSPACE_PAGE_HEADER_AREA) is painted by the MAIN pane
+                  // only: in a split tile there is none, and the board could not be chosen at all
+                  // (issue #20). Draw it here whenever the band is not actually showing it.
+                  bandSwitcher ? null : jsx7(TitlebarBoardSwitcher, { inline: true }),
                   // The total-count badge used to sit here. It went: the count is already on the "All"
                   // scope, one word away, so a second copy of the same number only pushed the real
                   // controls further from the title.

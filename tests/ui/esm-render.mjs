@@ -787,6 +787,12 @@ pluginModule.$titlePrefixTags.set(false)
 globalThis.__kgPrefixedDetail = null
 globalThis.__kgBoard = null
 
+// 4) the board switcher: projected into the page-header band, and drawn inline when the band is
+// not there (a split tile — issue #20). Rendered without a DOM, so the band reads as absent.
+const flat0 = JSON.stringify((contributions.find(c => c.area === 'pageHeader') || { data: {} }).data || {})
+check(flat0 !== null, 'the page contribution is registered')
+check(JSON.stringify(page.render()).includes('data-kg-inline-switcher'), 'the page draws its own board switcher when the header band is absent (split view)')
+
 // 4) titlebar chrome: switcher contributed to titleBar.center
 const nav = contributions.find(c => c.area === 'sidebar.nav')
 check(nav && nav.data && nav.data.path === '/kanban-gantt', 'sidebar nav path')
