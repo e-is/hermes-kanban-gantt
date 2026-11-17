@@ -36,12 +36,12 @@ import {
   useQuery as useQuery2,
   useQueryClient as useQueryClient2,
   useValue as useValue2,
-  KANBAN_CARD_AREAS,
   PALETTE_AREA,
   ROUTES_AREA,
   SIDEBAR_NAV_AREA,
   WORKSPACE_PAGE_HEADER_AREA
 } from "@hermes/plugin-sdk";
+import pluginSdk from "@hermes/plugin-sdk";
 import { useMemo as useMemo3, useRef as useRef3, useEffect as useEffect4, useState as useState5 } from "react";
 import { jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
 
@@ -9075,6 +9075,7 @@ function scopeIds(nodes, edges, scope, { lineage: withLineage = false } = {}) {
 }
 
 // src/main.ts
+var CARD_BADGE_AREA = pluginSdk?.KANBAN_CARD_AREAS?.badges;
 var ID2 = "kanban-gantt";
 var ROW_H = 28;
 var BAR_H = 14;
@@ -14081,14 +14082,15 @@ var plugin = {
       // The milestone lane, made visible on the OFFICIAL board. A badge is a projection, not
       // storage: `decorate` reads the one field that decides the role (the lane) and paints it.
       // A prerequisite badge would need the child links, which the frozen `card` does not carry —
-      // left out rather than guessed.
-      {
+      // left out rather than guessed. Only where the host has the area (see CARD_BADGE_AREA): on an
+      // older desktop the badge is the one thing that disappears, never the page.
+      ...CARD_BADGE_AREA ? [{
         id: "milestone-badge",
-        area: KANBAN_CARD_AREAS.badges,
+        area: CARD_BADGE_AREA,
         data: {
           decorate: (card) => card && card.assignee === MILESTONE_LANE ? { ...badgeFor("milestone"), label: `◆ ${tNow("wbMilestone")}`, tooltip: tNow("wbMilestoneHint") } : null
         }
-      }
+      }] : []
     ]);
   }
 };

@@ -53,13 +53,19 @@ import {
   useQuery,
   useQueryClient,
   useValue,
-  KANBAN_CARD_AREAS,
   PALETTE_AREA,
   ROUTES_AREA,
   SIDEBAR_NAV_AREA,
   TITLEBAR_AREAS,
   WORKSPACE_PAGE_HEADER_AREA
 } from '@hermes/plugin-sdk'
+// The default export is the whole SDK object. Card badge areas arrived after Desktop/Gateway
+// 0.22.5, and a NAMED import of a name the host does not export breaks the module at link time —
+// that is issue #21: 1.11.0 failed to load on 0.22.5 with « does not provide an export named
+// 'KANBAN_CARD_AREAS' », while 1.10.1 (no badge) was fine. Read through the object instead, and
+// register the badge only where the area exists.
+import pluginSdk from '@hermes/plugin-sdk'
+const CARD_BADGE_AREA: string | undefined = (pluginSdk as any)?.KANBAN_CARD_AREAS?.badges
 import { useMemo, useRef, useEffect, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 import {
@@ -6077,16 +6083,19 @@ const plugin = {
       // The milestone lane, made visible on the OFFICIAL board. A badge is a projection, not
       // storage: `decorate` reads the one field that decides the role (the lane) and paints it.
       // A prerequisite badge would need the child links, which the frozen `card` does not carry —
-      // left out rather than guessed.
-      {
-        id: 'milestone-badge',
-        area: KANBAN_CARD_AREAS.badges,
-        data: {
-          decorate: card => (card && card.assignee === MILESTONE_LANE
-            ? { ...badgeFor('milestone'), label: `◆ ${tNow('wbMilestone')}`, tooltip: tNow('wbMilestoneHint') }
-            : null)
-        }
-      }
+      // left out rather than guessed. Only where the host has the area (see CARD_BADGE_AREA): on an
+      // older desktop the badge is the one thing that disappears, never the page.
+      ...(CARD_BADGE_AREA
+        ? [{
+            id: 'milestone-badge',
+            area: CARD_BADGE_AREA,
+            data: {
+              decorate: card => (card && card.assignee === MILESTONE_LANE
+                ? { ...badgeFor('milestone'), label: `◆ ${tNow('wbMilestone')}`, tooltip: tNow('wbMilestoneHint') }
+                : null)
+            }
+          }]
+        : [])
     ])
   }
 }
