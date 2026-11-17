@@ -1,6 +1,43 @@
 # Changelog
 
-## 1.11.1 — you can add a milestone
+## 1.12.0 — the drawer catches up, and the whiteboard can be extended
+
+Two features the drawer was missing against the official board, two fixes reported by SebastienM4j,
+and the milestone action the whiteboard needed to be usable end to end.
+
+**A task's model, from the drawer.** The official drawer pins a model per task, and repointing a
+rate-limited worker is exactly that. The drawer now uses the SDK's own `ModelCatalogMenu` — the one
+the chat composer renders — so search, provider grouping and the thinking/effort submenu behave
+identically. In the modal it sits in the information column under the workspace; the docked panel has
+no such column, so it gets a compact header trigger that names the model only when one is pinned.
+Writes go through the domain (`set_model_override`, `set_reasoning_effort`) and apply on the NEXT
+dispatch, so a running card can be repointed before it is reclaimed. Clearing the effort leaves the
+model pinned; clearing the model takes its provider with it.
+
+**Diagnostics on a blocked card.** The drawer showed a block reason and a list of runs and left the
+reader to connect them. It now draws the official board's Diagnostics panel — the same rule engine
+(`kanban_diagnostics.compute_task_diagnostics`), computed on demand, nothing stored or cached, so a
+panel clears the moment the failure mode does. Each signal has its severity, its count, the error
+verbatim and selectable, and its recovery actions: copy the CLI hint, reclaim, unblock. The whole
+block fails open: a diagnostics bug never costs the reader their drawer.
+
+**`+ New milestone`** (was 1.11.1, unreleased): a milestone is a card on the `jalon` lane and nothing
+offered that lane, so the whiteboard could be read but not extended. The button opens the ordinary
+creation form with **Assign: `jalon`**, and the stop lands last (milestones are ordered by creation
+time). The lane is also offered with the profiles, so any card becomes a gate by being assigned to it.
+`docs/whiteboard.md` is the new usage guide, linked from the README.
+
+**Fixed: 1.11.0 could not load on Desktop/Gateway 0.22.5 (#21).** The milestone badge named-imported
+`KANBAN_CARD_AREAS`, a name that host does not export — and a missing named export fails the whole
+module at link time, so the plugin disappeared from Capabilities. The area is read off the SDK object
+now, and the badge registers only where it exists: on an older desktop the badge is what disappears,
+never the page. `tests/ui/sdk-imports.test.mjs` guards the artifact against the pattern coming back.
+
+**Fixed: no board selection in a split tile (#20).** The switcher is projected into the workspace page
+header, which only the main pane paints. The band copy now carries a marker and the page draws the same
+switcher inline whenever the band is not showing it — one component, two placements.
+
+## 1.11.0 — the whiteboard mode
 
 The whiteboard could read a plan but not extend one: a milestone is a card on the `jalon` lane, and
 nothing offered that lane. Now:
