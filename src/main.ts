@@ -1171,6 +1171,43 @@ const GRAPH_MARGIN = 28
  * NO atoms: the page owns selection, zoom, scope and the drag state, and passes them in,
  * which is also what makes the whole view renderable in the test harness.
  */
+/**
+ * The floating zoom bar, the whiteboard's own — same bar, same values, so a reader who learned to
+ * zoom in one view finds the gesture in the others: `−`, the percentage, `+`, and `fit`, which is
+ * the one action a slider cannot express.
+ *
+ * Absolute inside a `relative` container, so each view pins it to ITS canvas rather than the page.
+ */
+export function ZoomBar({ percent, onIn, onOut, onFit, i18n, leading = null }) {
+  const icon = (key, title, name, onClick) => jsx('button', {
+    type: 'button',
+    title,
+    'aria-label': title,
+    onClick,
+    className: 'grid h-7 w-7 place-items-center rounded-md border-0 bg-transparent text-(--ui-text-secondary) cursor-pointer hover:bg-(--ui-bg-tertiary) hover:text-foreground',
+    children: jsx(Codicon, { name, size: '0.8rem' })
+  }, key)
+  return jsxs('div', {
+    role: 'group',
+    'aria-label': i18n.wbZoomIn,
+    // Positioned INLINE: the host's Tailwind build does not compile every utility our markup uses
+    // (the graph learned the same lesson with `origin-top-left`), and a missing `bottom-*` leaves the
+    // bar at its static position — pinned to the top of the canvas instead of its corner.
+    style: { position: 'absolute', right: '12px', bottom: '20px', zIndex: 10 },
+    className: 'flex items-center gap-0.5 rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-surface-background) p-1 shadow-sm',
+    children: [
+      leading,
+      icon('out', i18n.wbZoomOut, 'zoom-out', onOut),
+      jsx('span', {
+        className: 'min-w-[42px] text-center text-[11px] font-medium tabular-nums text-(--ui-text-secondary)',
+        children: `${Math.round(percent)}%`
+      }, 'pct'),
+      icon('in', i18n.wbZoomIn, 'zoom-in', onIn),
+      icon('fit', i18n.wbFit, 'screen-full', onFit)
+    ]
+  })
+}
+
 export function GraphView({
   tasks = [],
   i18n,
@@ -1710,9 +1747,35 @@ export function GraphView({
     return 'var(--ui-stroke-secondary)'
   }
 
+  // Fit: the scale and the offset where the whole graph sits inside the canvas, centred — computed
+  // from the surface the layout produced and the canvas's own size, then handed to the page (which
+  // owns the zoom) and to `pan` (which the view owns).
+  const fitGraph = () => {
+    const el = canvasRef.current
+    if (!el) return
+    const surfaceW = layout.width + GRAPH_MARGIN * 2
+    const surfaceH = layout.height + GRAPH_MARGIN * 2
+    const viewW = el.clientWidth
+    const viewH = el.clientHeight
+    if (!(surfaceW > 0 && surfaceH > 0 && viewW > 0 && viewH > 0)) return
+    // The page rounds the percentage, so centre on the scale that will actually be applied.
+    const raw = Math.min(viewW / surfaceW, viewH / surfaceH) * 0.97
+    const factor = Math.max(GRAPH_ZOOM_MIN, Math.min(GRAPH_ZOOM_MAX, Math.round(raw * 100) / 100))
+    onZoom?.(factor)
+    setPan({ x: Math.round((viewW - surfaceW * factor) / 2), y: Math.round((viewH - surfaceH * factor) / 2) })
+  }
+
   return jsxs('div', {
     className: 'mt-2 border border-(--ui-stroke-tertiary) rounded-md flex-1 min-h-0 relative overflow-hidden',
     children: [
+      // The zoom, on the canvas it scales — the whiteboard's bar, same design, same gesture.
+      jsx(ZoomBar, {
+        i18n,
+        percent: zoom * 100,
+        onIn: () => onZoom?.((zoom || 1) * 1.25),
+        onOut: () => onZoom?.((zoom || 1) / 1.25),
+        onFit: fitGraph
+      }),
       jsx('div', {
         ref: canvasRef,
         className: cn('absolute inset-0 overflow-hidden', dragging ? 'cursor-grabbing' : 'cursor-grab'),
@@ -5095,6 +5158,20 @@ export function KanbanGanttPage() {
   // pane's width, because the ceiling is what the top of the scale maps to.
   const zoomUsed = zoomFactorFromPct(zoomPct, ZOOM_MIN_FACTOR, zoomMax)
   const pxPerSec = basePerSec * zoomUsed
+  // The floating bar's two gestures, in FACTOR steps like the wheel's — a percentage step would
+  // crawl at the bottom of the scale and jump at the top.
+  const zoomByStep = factor => handleZoomPct(clampZoomPct(zoomPctFromFactor(zoomUsed * factor, ZOOM_MIN_FACTOR, zoomMax)))
+  // Fit: choose the scale where the whole domain fills the pane, then start at its left edge. It is
+  // the one thing a slider cannot say — "everything, at once".
+  const fitTimeline = () => {
+    const span = domain.max - domain.min
+    if (!(span > 0) || !(basePerSec > 0) || !(visibleWidth > 0)) return
+    handleZoomPct(clampZoomPct(zoomPctFromFactor(visibleWidth / span / basePerSec, ZOOM_MIN_FACTOR, zoomMax)))
+    requestAnimationFrame(() => {
+      const el = scrollerRef.current
+      if (el) el.scrollLeft = 0
+    })
+  }
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec))
 
   // Ctrl/⌘+wheel is Chromium's PAGE zoom, and Electron inherits it — which is why the whole
@@ -5456,20 +5533,9 @@ export function KanbanGanttPage() {
               graphMode
                 ? jsx(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
                 : null,
-              (listMode || whiteboardMode) ? null : jsxs('span', { className: 'inline-flex shrink-0 items-center gap-1.5', children: [
-                jsx('input', {
-                  type: 'range',
-                  min: String(graphMode ? Math.round(GRAPH_ZOOM_MIN * 100) : ZOOM_PCT_MIN),
-                  max: String(graphMode ? Math.round(GRAPH_ZOOM_MAX * 100) : ZOOM_PCT_MAX),
-                  step: '1',
-                  value: String(graphMode ? graphZoomPct : zoomPct),
-                  onInput: event => (graphMode ? handleGraphZoomPct : handleZoomPct)(Number(event.target.value)),
-                  className: 'w-24',
-                  title: i18n.zoomWheelHint(modifierKeyLabel()),
-                  'aria-label': graphMode ? i18n.graphZoom : i18n.zoomTimeline
-                }),
-                jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${graphMode ? graphZoomPct : zoomPct}%` })
-              ] })
+              // The zoom slider left this bar: the zoom now lives ON the canvas it scales, as the
+              // floating bar every view shares. A slider here and the same percentage there were two
+              // controls for one number.
             ]
           }),
 
@@ -5769,6 +5835,15 @@ export function KanbanGanttPage() {
                 },
                 assignees: assigneeChoices,
                 busy: bulkMutation.isPending
+              }),
+              // The zoom, on the canvas it scales — the whiteboard's bar, so the gesture is the same
+              // in the three views that have a canvas.
+              jsx(ZoomBar, {
+                i18n,
+                percent: zoomPct,
+                onIn: () => zoomByStep(1.25),
+                onOut: () => zoomByStep(1 / 1.25),
+                onFit: fitTimeline
               }),
               jsxs('div', {
                 ref: scrollerRef,

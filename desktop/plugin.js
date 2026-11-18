@@ -9989,6 +9989,35 @@ function ViewToggle({ value, onChange }) {
 var GRAPH_ZOOM_MIN = 0.35;
 var GRAPH_ZOOM_MAX = 2.5;
 var GRAPH_MARGIN = 28;
+function ZoomBar({ percent, onIn, onOut, onFit, i18n, leading = null }) {
+  const icon = (key, title, name, onClick) => jsx7("button", {
+    type: "button",
+    title,
+    "aria-label": title,
+    onClick,
+    className: "grid h-7 w-7 place-items-center rounded-md border-0 bg-transparent text-(--ui-text-secondary) cursor-pointer hover:bg-(--ui-bg-tertiary) hover:text-foreground",
+    children: jsx7(Codicon6, { name, size: "0.8rem" })
+  }, key);
+  return jsxs7("div", {
+    role: "group",
+    "aria-label": i18n.wbZoomIn,
+    // Positioned INLINE: the host's Tailwind build does not compile every utility our markup uses
+    // (the graph learned the same lesson with `origin-top-left`), and a missing `bottom-*` leaves the
+    // bar at its static position — pinned to the top of the canvas instead of its corner.
+    style: { position: "absolute", right: "12px", bottom: "20px", zIndex: 10 },
+    className: "flex items-center gap-0.5 rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-surface-background) p-1 shadow-sm",
+    children: [
+      leading,
+      icon("out", i18n.wbZoomOut, "zoom-out", onOut),
+      jsx7("span", {
+        className: "min-w-[42px] text-center text-[11px] font-medium tabular-nums text-(--ui-text-secondary)",
+        children: `${Math.round(percent)}%`
+      }, "pct"),
+      icon("in", i18n.wbZoomIn, "zoom-in", onIn),
+      icon("fit", i18n.wbFit, "screen-full", onFit)
+    ]
+  });
+}
 function GraphView({
   tasks = [],
   i18n,
@@ -10422,9 +10451,30 @@ function GraphView({
     if (lin.up.has(to) && (lin.up.has(from) || from === selectedId)) return statusTone("scheduled");
     return "var(--ui-stroke-secondary)";
   };
+  const fitGraph = () => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const surfaceW = layout.width + GRAPH_MARGIN * 2;
+    const surfaceH = layout.height + GRAPH_MARGIN * 2;
+    const viewW = el.clientWidth;
+    const viewH = el.clientHeight;
+    if (!(surfaceW > 0 && surfaceH > 0 && viewW > 0 && viewH > 0)) return;
+    const raw = Math.min(viewW / surfaceW, viewH / surfaceH) * 0.97;
+    const factor = Math.max(GRAPH_ZOOM_MIN, Math.min(GRAPH_ZOOM_MAX, Math.round(raw * 100) / 100));
+    onZoom?.(factor);
+    setPan({ x: Math.round((viewW - surfaceW * factor) / 2), y: Math.round((viewH - surfaceH * factor) / 2) });
+  };
   return jsxs7("div", {
     className: "mt-2 border border-(--ui-stroke-tertiary) rounded-md flex-1 min-h-0 relative overflow-hidden",
     children: [
+      // The zoom, on the canvas it scales — the whiteboard's bar, same design, same gesture.
+      jsx7(ZoomBar, {
+        i18n,
+        percent: zoom * 100,
+        onIn: () => onZoom?.((zoom || 1) * 1.25),
+        onOut: () => onZoom?.((zoom || 1) / 1.25),
+        onFit: fitGraph
+      }),
       jsx7("div", {
         ref: canvasRef,
         className: cn3("absolute inset-0 overflow-hidden", dragging ? "cursor-grabbing" : "cursor-grab"),
@@ -13248,6 +13298,16 @@ function KanbanGanttPage() {
   const zoomMax = maxZoom(basePerSec, zoomCeiling);
   const zoomUsed = zoomFactorFromPct(zoomPct, ZOOM_MIN_FACTOR, zoomMax);
   const pxPerSec = basePerSec * zoomUsed;
+  const zoomByStep = (factor) => handleZoomPct(clampZoomPct(zoomPctFromFactor(zoomUsed * factor, ZOOM_MIN_FACTOR, zoomMax)));
+  const fitTimeline = () => {
+    const span = domain.max - domain.min;
+    if (!(span > 0) || !(basePerSec > 0) || !(visibleWidth > 0)) return;
+    handleZoomPct(clampZoomPct(zoomPctFromFactor(visibleWidth / span / basePerSec, ZOOM_MIN_FACTOR, zoomMax)));
+    requestAnimationFrame(() => {
+      const el = scrollerRef.current;
+      if (el) el.scrollLeft = 0;
+    });
+  };
   const timelineW = Math.max(1, Math.ceil((domain.max - domain.min) * pxPerSec));
   const zoomAnchor = useRef3(null);
   useEffect5(() => {
@@ -13551,21 +13611,10 @@ function KanbanGanttPage() {
                   // The controls that steer the CANVAS follow the view they steer: the arrangement menu
                   // (which exists only for the graph) and the zoom. They used to sit with the actions on
                   // the right, which put a slider between the reader and the one button that writes.
-                  graphMode ? jsx7(GraphArrangeSelect, { value: arrange, onChange: handleArrange }) : null,
-                  listMode || whiteboardMode ? null : jsxs7("span", { className: "inline-flex shrink-0 items-center gap-1.5", children: [
-                    jsx7("input", {
-                      type: "range",
-                      min: String(graphMode ? Math.round(GRAPH_ZOOM_MIN * 100) : ZOOM_PCT_MIN),
-                      max: String(graphMode ? Math.round(GRAPH_ZOOM_MAX * 100) : ZOOM_PCT_MAX),
-                      step: "1",
-                      value: String(graphMode ? graphZoomPct : zoomPct),
-                      onInput: (event) => (graphMode ? handleGraphZoomPct : handleZoomPct)(Number(event.target.value)),
-                      className: "w-24",
-                      title: i18n.zoomWheelHint(modifierKeyLabel()),
-                      "aria-label": graphMode ? i18n.graphZoom : i18n.zoomTimeline
-                    }),
-                    jsx7("span", { className: "text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0", children: `${graphMode ? graphZoomPct : zoomPct}%` })
-                  ] })
+                  graphMode ? jsx7(GraphArrangeSelect, { value: arrange, onChange: handleArrange }) : null
+                  // The zoom slider left this bar: the zoom now lives ON the canvas it scales, as the
+                  // floating bar every view shares. A slider here and the same percentage there were two
+                  // controls for one number.
                 ]
               }),
               // Board switcher moved to the desktop titlebar band (titleBar.center)
@@ -13839,6 +13888,15 @@ function KanbanGanttPage() {
                 },
                 assignees: assigneeChoices,
                 busy: bulkMutation.isPending
+              }),
+              // The zoom, on the canvas it scales — the whiteboard's bar, so the gesture is the same
+              // in the three views that have a canvas.
+              jsx7(ZoomBar, {
+                i18n,
+                percent: zoomPct,
+                onIn: () => zoomByStep(1.25),
+                onOut: () => zoomByStep(1 / 1.25),
+                onFit: fitTimeline
               }),
               jsxs7("div", {
                 ref: scrollerRef,
@@ -14193,6 +14251,7 @@ export {
   KanbanGanttPage,
   KanbanGanttRoute,
   WhiteboardView,
+  ZoomBar,
   main_default as default,
   modifierKeyLabel
 };
