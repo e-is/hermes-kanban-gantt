@@ -88,6 +88,7 @@ import { MoveTaskDialog } from './ui/MoveTaskDialog'
 import { TaskRelations } from './ui/TaskRelations'
 import { ReparentChoiceDialog, MoveUnderDialog, reasonLabel } from './ui/ReparentChooser'
 import { WhiteboardView } from './ui/WhiteboardView'
+import { ZoomBar } from './ui/ZoomBar'
 import { MILESTONE_LANE, badgeFor } from './core/whiteboard-core'
 
 // The smoke harness renders the view directly with a fixture board (the page's REST stub
@@ -1171,43 +1172,6 @@ const GRAPH_MARGIN = 28
  * NO atoms: the page owns selection, zoom, scope and the drag state, and passes them in,
  * which is also what makes the whole view renderable in the test harness.
  */
-/**
- * The floating zoom bar, the whiteboard's own — same bar, same values, so a reader who learned to
- * zoom in one view finds the gesture in the others: `−`, the percentage, `+`, and `fit`, which is
- * the one action a slider cannot express.
- *
- * Absolute inside a `relative` container, so each view pins it to ITS canvas rather than the page.
- */
-export function ZoomBar({ percent, onIn, onOut, onFit, i18n, leading = null }) {
-  const icon = (key, title, name, onClick) => jsx('button', {
-    type: 'button',
-    title,
-    'aria-label': title,
-    onClick,
-    className: 'grid h-7 w-7 place-items-center rounded-md border-0 bg-transparent text-(--ui-text-secondary) cursor-pointer hover:bg-(--ui-bg-tertiary) hover:text-foreground',
-    children: jsx(Codicon, { name, size: '0.8rem' })
-  }, key)
-  return jsxs('div', {
-    role: 'group',
-    'aria-label': i18n.wbZoomIn,
-    // Positioned INLINE: the host's Tailwind build does not compile every utility our markup uses
-    // (the graph learned the same lesson with `origin-top-left`), and a missing `bottom-*` leaves the
-    // bar at its static position — pinned to the top of the canvas instead of its corner.
-    style: { position: 'absolute', right: '12px', bottom: '20px', zIndex: 10 },
-    className: 'flex items-center gap-0.5 rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-surface-background) p-1 shadow-sm',
-    children: [
-      leading,
-      icon('out', i18n.wbZoomOut, 'zoom-out', onOut),
-      jsx('span', {
-        className: 'min-w-[42px] text-center text-[11px] font-medium tabular-nums text-(--ui-text-secondary)',
-        children: `${Math.round(percent)}%`
-      }, 'pct'),
-      icon('in', i18n.wbZoomIn, 'zoom-in', onIn),
-      icon('fit', i18n.wbFit, 'screen-full', onFit)
-    ]
-  })
-}
-
 export function GraphView({
   tasks = [],
   i18n,
@@ -1747,24 +1711,6 @@ export function GraphView({
     return 'var(--ui-stroke-secondary)'
   }
 
-  // Fit: the scale and the offset where the whole graph sits inside the canvas, centred — computed
-  // from the surface the layout produced and the canvas's own size, then handed to the page (which
-  // owns the zoom) and to `pan` (which the view owns).
-  const fitGraph = () => {
-    const el = canvasRef.current
-    if (!el) return
-    const surfaceW = layout.width + GRAPH_MARGIN * 2
-    const surfaceH = layout.height + GRAPH_MARGIN * 2
-    const viewW = el.clientWidth
-    const viewH = el.clientHeight
-    if (!(surfaceW > 0 && surfaceH > 0 && viewW > 0 && viewH > 0)) return
-    // The page rounds the percentage, so centre on the scale that will actually be applied.
-    const raw = Math.min(viewW / surfaceW, viewH / surfaceH) * 0.97
-    const factor = Math.max(GRAPH_ZOOM_MIN, Math.min(GRAPH_ZOOM_MAX, Math.round(raw * 100) / 100))
-    onZoom?.(factor)
-    setPan({ x: Math.round((viewW - surfaceW * factor) / 2), y: Math.round((viewH - surfaceH * factor) / 2) })
-  }
-
   return jsxs('div', {
     className: 'mt-2 border border-(--ui-stroke-tertiary) rounded-md flex-1 min-h-0 relative overflow-hidden',
     children: [
@@ -1772,9 +1718,12 @@ export function GraphView({
       jsx(ZoomBar, {
         i18n,
         percent: zoom * 100,
+        // Auto-fit IS the lit state: the camera follows the pane and the layout until the reader
+        // takes it. `fitView()` re-arms it, any other camera gesture disarms it (see `autoFit`).
+        fitted: autoFit,
         onIn: () => onZoom?.((zoom || 1) * 1.25),
         onOut: () => onZoom?.((zoom || 1) / 1.25),
-        onFit: fitGraph
+        onFit: () => fitView()
       }),
       jsx('div', {
         ref: canvasRef,
@@ -2481,23 +2430,9 @@ export function GraphView({
           layout.cyclic.length ? jsx('span', { className: 'text-[#f87171]', children: i18n.graphCyclic(layout.cyclic.length) }) : null,
           layout.dangling ? jsx('span', { children: i18n.graphDangling(layout.dangling) }) : null,
           hiddenByScope ? jsx('span', { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
-          jsx('span', { className: 'ml-auto tabular-nums', children: `${shown.length}/${nodes.length}` }),
-          // The camera, where the counts are: Fit is the one camera action a clipped first
-          // view makes necessary, and it is kanban-graph's `0`.
-          jsx('button', {
-            type: 'button',
-            onClick: event => { event.stopPropagation(); fitView() },
-            title: autoFit ? i18n.graphFitOn : i18n.graphFit,
-            'aria-label': i18n.graphFit,
-            'aria-pressed': autoFit ? 'true' : 'false',
-            className: cn(
-              'pointer-events-auto inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9.5px] cursor-pointer border-0',
-              autoFit
-                ? 'bg-(--ui-accent)/15 text-(--ui-accent) ring-1 ring-(--ui-accent)/40'
-                : 'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) bg-transparent'
-            ),
-            children: [jsx(Codicon, { key: 'i', name: 'screen-full', size: '0.7rem' }), jsx('span', { key: 'l', children: i18n.graphFit })]
-          })
+          jsx('span', { className: 'ml-auto tabular-nums', children: `${shown.length}/${nodes.length}` })
+          // The Fit button that used to close this row is gone: it was a camera control sitting
+          // among the counts, and the camera now has its own bar with the state lit on it.
         ]
       })
     ]
@@ -5162,11 +5097,17 @@ export function KanbanGanttPage() {
   // crawl at the bottom of the scale and jump at the top.
   const zoomByStep = factor => handleZoomPct(clampZoomPct(zoomPctFromFactor(zoomUsed * factor, ZOOM_MIN_FACTOR, zoomMax)))
   // Fit: choose the scale where the whole domain fills the pane, then start at its left edge. It is
-  // the one thing a slider cannot say — "everything, at once".
-  const fitTimeline = () => {
+  // the one thing a slider cannot say — "everything, at once". The same scale is what lights the
+  // bar's Fit button, so the state and the action cannot disagree.
+  const fitPct = (() => {
     const span = domain.max - domain.min
-    if (!(span > 0) || !(basePerSec > 0) || !(visibleWidth > 0)) return
-    handleZoomPct(clampZoomPct(zoomPctFromFactor(visibleWidth / span / basePerSec, ZOOM_MIN_FACTOR, zoomMax)))
+    if (!(span > 0) || !(basePerSec > 0) || !(visibleWidth > 0)) return null
+    return clampZoomPct(zoomPctFromFactor(visibleWidth / span / basePerSec, ZOOM_MIN_FACTOR, zoomMax))
+  })()
+  const timelineFitted = fitPct != null && Math.abs(zoomPct - fitPct) <= 1.5
+  const fitTimeline = () => {
+    if (fitPct == null) return
+    handleZoomPct(fitPct)
     requestAnimationFrame(() => {
       const el = scrollerRef.current
       if (el) el.scrollLeft = 0
@@ -5841,6 +5782,7 @@ export function KanbanGanttPage() {
               jsx(ZoomBar, {
                 i18n,
                 percent: zoomPct,
+                fitted: timelineFitted,
                 onIn: () => zoomByStep(1.25),
                 onOut: () => zoomByStep(1 / 1.25),
                 onFit: fitTimeline

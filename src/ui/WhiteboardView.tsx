@@ -2,6 +2,8 @@ import { Codicon, icons, Streamdown } from '@hermes/plugin-sdk'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
+import { ZoomBar } from './ZoomBar'
+
 import {
   applyPositions, arrowsOf, boardFromTasks, boardMarkdown, boardTable, boundsOf, layoutBoard, overlaps,
   handable, pathFractions, planNext, positionsFor, toDelimited, withoutLayout, withPosition
@@ -589,19 +591,30 @@ export function WhiteboardView({
     onPositions?.(again)
   }
 
-  // Whiteboard's `fitView`: the whole plan, centred above the bar at the bottom.
-  const fit = (animate: boolean) => {
+  // Whiteboard's `fitView`: the whole plan, centred above the bar at the bottom. Split in two so the
+  // bar can light up when the view IS where fit would put it — the state and the action then read
+  // the same numbers.
+  const fitTarget = () => {
     const node = ref.current
     const w = node?.clientWidth || 1100
     const h = node?.clientHeight || 720
     const pad = 120
     const zoom = clamp(Math.min((w - pad) / Math.max(bounds.w, 1), (h - pad - 130) / Math.max(bounds.h, 1)), 0.2, 1.1)
+    return { x: Math.round(w / 2 - (bounds.x + bounds.w / 2) * zoom), y: Math.round((h - 130) / 2 - (bounds.y + bounds.h / 2) * zoom), zoom }
+  }
+  const fit = (animate: boolean) => {
     if (animate) {
       setGlide(true)
       setTimeout(() => setGlide(false), 700)
     }
-    setView({ x: Math.round(w / 2 - (bounds.x + bounds.w / 2) * zoom), y: Math.round((h - 130) / 2 - (bounds.y + bounds.h / 2) * zoom), zoom })
+    setView(fitTarget())
   }
+  // The bar lights up when the view sits where fit would put it — a fit in flight already reads as
+  // fitted, since the glide animates towards exactly this state.
+  const fitHere = fitTarget()
+  const fitted = Math.abs(view.zoom - fitHere.zoom) < 0.005
+    && Math.abs(view.x - fitHere.x) <= 2
+    && Math.abs(view.y - fitHere.y) <= 2
   const zoomBy = (factor: number) => {
     const node = ref.current
     const point = { x: (node?.clientWidth || 1100) / 2, y: (node?.clientHeight || 720) / 2 }
@@ -954,15 +967,23 @@ export function WhiteboardView({
               }, 'layouts')
             ]
           }, 'compose'),
-          jsxs('div', {
-            className: 'wb-zoom',
-            children: [
-              jsx('button', { className: 'wb-btn wb-icon', type: 'button', title: i18n.wbTidy, onClick: () => commit(withoutLayout(positions, layout)), children: jsx(Line, { name: 'wand' }) }, 'tidy'),
-              jsx('button', { className: 'wb-btn wb-icon', type: 'button', title: i18n.wbZoomOut, onClick: () => zoomBy(1 / 1.25), children: Icon('ZoomOut', 'zoom-out') }, 'out'),
-              jsx('span', { children: `${Math.round(view.zoom * 100)}%` }, 'pct'),
-              jsx('button', { className: 'wb-btn wb-icon', type: 'button', title: i18n.wbZoomIn, onClick: () => zoomBy(1.25), children: Icon('ZoomIn', 'zoom-in') }, 'in'),
-              jsx('button', { className: 'wb-btn wb-icon', type: 'button', title: i18n.wbFit, onClick: () => fit(true), children: Icon('Maximize', 'screen-full') }, 'fit')
-            ]
+          jsx(ZoomBar, {
+            i18n,
+            percent: view.zoom * 100,
+            fitted,
+            onIn: () => zoomBy(1.25),
+            onOut: () => zoomBy(1 / 1.25),
+            onFit: () => fit(true),
+            // The tidy wand keeps its place at the head of the bar: it is the board's own action, not
+            // a camera one.
+            leading: jsx('button', {
+              type: 'button',
+              title: i18n.wbTidy,
+              'aria-label': i18n.wbTidy,
+              onClick: () => commit(withoutLayout(positions, layout)),
+              className: 'grid h-7 w-7 place-items-center rounded-md border-0 bg-transparent text-(--ui-text-secondary) cursor-pointer hover:bg-(--ui-bg-tertiary) hover:text-foreground',
+              children: jsx(Line, { name: 'wand' })
+            }, 'tidy')
           }, 'zoom')
         ]
       })

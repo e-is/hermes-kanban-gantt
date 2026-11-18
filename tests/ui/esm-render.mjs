@@ -822,7 +822,12 @@ if (typeof pluginModule.WhiteboardView === 'function') {
   check(wb.includes('wb-tape') && wb.includes('wb-card-stamp'), 'notes are taped and stops are stamped, as on whiteboard')
   check(wb.includes('2 11'), 'the road is whiteboard\'s dashed lane')
   check(wb.includes('Kickoff'), 'the milestone stop is named after its card')
-  check(wb.includes('wb-zoom') && wb.includes('wb-layouts'), 'the zoom bar and the layout pills are whiteboard\'s')
+  // The zoom bar is the SHARED one now (ZoomBar): what must survive the swap is its four controls —
+  // the tidy wand, out, the percentage, in and fit — not the whiteboard's own class names.
+  check(
+    wb.includes('wb-layouts') && wb.includes('wbZoomOut') && wb.includes('wbZoomIn') && wb.includes('wbTidy') && wb.includes('wbFit'),
+    'the zoom bar (shared) and the layout pills are on the canvas'
+  )
   check(wb.includes('"data-wb-result"') && wb.includes('wbBrief'), 'a passed milestone shows its brief, postmarked')
   check(wb.includes('Scope approved'), 'the brief is the summary the milestone was closed with')
   const wbActive = JSON.stringify(renderWb({ onHand: () => {}, onPass: () => {} }))
