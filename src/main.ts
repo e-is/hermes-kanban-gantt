@@ -5457,7 +5457,11 @@ export function KanbanGanttPage() {
           // chips keep their width (`shrink-0` above) and whatever does not fit — the zoom slider,
           // the creation verb — takes the next line, right-aligned, instead of colliding.
           jsxs('div', {
-            className: 'flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2',
+            // `ml-auto` and not the row's `justify-between`: when this cluster wraps onto its own
+            // line it is the only flex item there, and `justify-between` aligns a lone item to the
+            // START — which is why the creation verb used to sit against the view chips instead of
+            // the page's right edge. An auto margin keeps it right in both cases.
+            className: 'ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2',
             children: [
               jsx(ViewToggle, { value: viewMode, onChange: handleViewMode }),
               // In graph mode the period selector has nothing to say (there is no time axis), so its
