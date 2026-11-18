@@ -1067,3 +1067,33 @@ test('titleParts styles the prefix or shows it plainly — it never subtracts it
     assert.deepEqual(titleParts('  padded  ', asTags), { prefix: null, text: 'padded' })
   }
 })
+// ---------------------------------------------------------------------------
+// The time window, as a filter for the views that have no axis to scale
+// ---------------------------------------------------------------------------
+
+test('the period window keeps what its bar touches and drops what it does not', () => {
+  const now = 1_800_000_000
+  const H = 3600
+  // Done three days ago: its bar is far to the left of a 6h window.
+  const old = { status: 'done', run_started_at: now - 72 * H, run_ended_at: now - 71 * H }
+  // Running since an hour ago: the bar stretches to now, so it touches every window.
+  const running = { status: 'running', run_started_at: now - H }
+  // Created yesterday, still untouched: a minimal bar in the past, out of a 6h window but in a 3d
+  // one — the window's own span is what decides.
+  const stale = { status: 'todo', created_at: now - 24 * H }
+  // Finished inside the window.
+  const fresh = { status: 'done', run_started_at: now - 2 * H, run_ended_at: now - H }
+  // Created in the future (a scheduled card): it has not happened yet.
+  const future = { status: 'todo', created_at: now + H }
+
+  assert.equal(core.withinPeriod(old, now, 6 * H), false)
+  assert.equal(core.withinPeriod(old, now, 7 * 24 * H), true)
+  assert.equal(core.withinPeriod(running, now, 6 * H), true)
+  assert.equal(core.withinPeriod(stale, now, 6 * H), false)
+  assert.equal(core.withinPeriod(stale, now, 3 * 24 * H), true)
+  assert.equal(core.withinPeriod(fresh, now, 6 * H), true)
+  assert.equal(core.withinPeriod(future, now, 6 * H), false)
+  // No window at all means no filtering — the timeline's own state, where the period IS the zoom.
+  assert.equal(core.withinPeriod(old, now, null), true)
+  assert.equal(core.withinPeriod(old, now, 0), true)
+})

@@ -275,6 +275,12 @@ function barRange(task, now, minBarSec) {
   const c = task.created_at;
   return c ? { t0: c, t1: c + min, kind: "todo", tone: statusTone(task.status) } : null;
 }
+function withinPeriod(task, now, span, minBarSec) {
+  if (!(span > 0) || !Number.isFinite(now)) return true;
+  const bar = barRange(task, now, minBarSec);
+  if (!bar) return false;
+  return bar.t1 >= now - span && bar.t0 <= now;
+}
 function taskBars(task, now, minBarSec) {
   const min = minBarSec || MIN_BAR;
   const runs = Array.isArray(task.runs) ? task.runs : [];
@@ -618,6 +624,7 @@ export {
   visibleWindow,
   wheelIntent,
   wheelZoomFactor,
+  withinPeriod,
   zoomFactorFromPct,
   zoomPctFromFactor
 };

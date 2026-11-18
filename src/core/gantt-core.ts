@@ -404,6 +404,19 @@ export function barRange(task, now, minBarSec) {
   const c = task.created_at;
   return c ? { t0: c, t1: c + min, kind: 'todo', tone: statusTone(task.status) } : null;
 }
+/**
+ * Does a card belong to the window that ends now and reaches `span` seconds back?
+ *
+ * The rule is the one the timeline draws by: a card is in the window when its BAR overlaps it —
+ * created, started, finished or still running inside the range. It is what the period control means
+ * in the views that have no time axis to scale, so a filter there cannot invent a different clock.
+ */
+export function withinPeriod(task, now, span, minBarSec) {
+  if (!(span > 0) || !Number.isFinite(now)) return true
+  const bar = barRange(task, now, minBarSec)
+  if (!bar) return false
+  return bar.t1 >= now - span && bar.t0 <= now
+}
 export function taskBars(task, now, minBarSec) {
   const min = minBarSec || MIN_BAR;
   // If the task carries a list of recorded runs with timestamps, create a bar for each real run

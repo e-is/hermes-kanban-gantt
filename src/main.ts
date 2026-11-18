@@ -110,7 +110,7 @@ const ZOOM_MIN_FACTOR = 0.2
 
 
 import { graphNodes, graphEdges, layoutGraph, lineage as taskLineage, scopeIds, boardScope, scopeCounts, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
-import { barRange, taskBars, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, titleParts, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
+import { barRange, taskBars, withinPeriod, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, titleParts, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -4588,6 +4588,36 @@ export function KanbanGanttPage() {
       }
       visible = allTasks.filter(t => kept.has(t.id))
     }
+    // The time window. In the timeline the period IS the zoom — the whole board stays on the axis,
+    // and filtering there would contradict the control's own meaning. The other views have no axis
+    // to scale, so the same control filters instead: a card is in the window when its bar overlaps
+    // it, which is the rule the timeline already draws by (`barRange`). The lineage modifier brings
+    // the parents back, exactly as it does for the quick scope: ancestry is context, not a match.
+    let periodHidden = 0
+    if (period != null && viewMode !== 'timeline') {
+      const nowS = Date.now() / 1000
+      const kept = new Set()
+      for (const t of visible) {
+        if (withinPeriod(t, nowS, period)) kept.add(t.id)
+      }
+      if (graphLineage) {
+        // Upstream only: what a card waits for is the reason it is not moving, which is what the
+        // lineage switch is for on every other filter in this bar.
+        const byId = new Map(allTasks.map(t => [t.id, t]))
+        const stack = [...kept]
+        while (stack.length) {
+          const cur = byId.get(stack.pop())
+          for (const parent of (cur && cur.parents) || []) {
+            if (!kept.has(parent)) {
+              kept.add(parent)
+              stack.push(parent)
+            }
+          }
+        }
+      }
+      periodHidden = allTasks.filter(t => !kept.has(t.id) && (showArchived || !t.archived)).length
+      visible = allTasks.filter(t => kept.has(t.id) && (showArchived || !t.archived))
+    }
     // The fold state is applied HERE, after every filter: `buildRows` stays the
     // flat projection the tests know, `treeRows` adds the explorer grammar (which
     // levels continue, who has children, what is collapsed).
@@ -4598,8 +4628,8 @@ export function KanbanGanttPage() {
     })
     const domain = computeDomain(visible)
     const allAssignees = Array.from(new Set(data.tasks.map(t => t.assignee).filter(Boolean))).sort()
-    return { rows, domain, total: visible.length, tasks: visible, allAssignees, scopeHidden, scopeCount }
-  }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage])
+    return { rows, domain, total: visible.length, tasks: visible, allAssignees, scopeHidden: scopeHidden + periodHidden, scopeCount }
+  }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage, period])
 
   // The header toggle: if anything the user can collapse is open, collapse it all;
   // otherwise open everything. It walks the rows, so it acts on exactly the set

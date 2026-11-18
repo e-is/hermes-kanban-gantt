@@ -6307,6 +6307,12 @@ function barRange(task, now, minBarSec) {
   const c = task.created_at;
   return c ? { t0: c, t1: c + min, kind: "todo", tone: statusTone(task.status) } : null;
 }
+function withinPeriod(task, now, span, minBarSec) {
+  if (!(span > 0) || !Number.isFinite(now)) return true;
+  const bar = barRange(task, now, minBarSec);
+  if (!bar) return false;
+  return bar.t1 >= now - span && bar.t0 <= now;
+}
 function taskBars(task, now, minBarSec) {
   const min = minBarSec || MIN_BAR;
   const runs = Array.isArray(task.runs) ? task.runs : [];
@@ -12865,6 +12871,29 @@ function KanbanGanttPage() {
       }
       visible = allTasks.filter((t) => kept.has(t.id));
     }
+    let periodHidden = 0;
+    if (period != null && viewMode !== "timeline") {
+      const nowS = Date.now() / 1e3;
+      const kept = /* @__PURE__ */ new Set();
+      for (const t of visible) {
+        if (withinPeriod(t, nowS, period)) kept.add(t.id);
+      }
+      if (graphLineage) {
+        const byId = new Map(allTasks.map((t) => [t.id, t]));
+        const stack = [...kept];
+        while (stack.length) {
+          const cur = byId.get(stack.pop());
+          for (const parent of cur && cur.parents || []) {
+            if (!kept.has(parent)) {
+              kept.add(parent);
+              stack.push(parent);
+            }
+          }
+        }
+      }
+      periodHidden = allTasks.filter((t) => !kept.has(t.id) && (showArchived || !t.archived)).length;
+      visible = allTasks.filter((t) => kept.has(t.id) && (showArchived || !t.archived));
+    }
     const rows2 = treeRows(visible, {
       fold,
       search,
@@ -12872,8 +12901,8 @@ function KanbanGanttPage() {
     });
     const domain2 = computeDomain(visible);
     const allAssignees = Array.from(new Set(data.tasks.map((t) => t.assignee).filter(Boolean))).sort();
-    return { rows: rows2, domain: domain2, total: visible.length, tasks: visible, allAssignees, scopeHidden, scopeCount };
-  }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage]);
+    return { rows: rows2, domain: domain2, total: visible.length, tasks: visible, allAssignees, scopeHidden: scopeHidden + periodHidden, scopeCount };
+  }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage, period]);
   const handleToggleAll = () => {
     const parents = (derived?.rows || []).filter((r) => r.hasChildren);
     if (!parents.length) return;
