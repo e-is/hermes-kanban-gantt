@@ -174,6 +174,7 @@ export const hu = {
     boardsTabs: 'Nyitott táblák',
     graphNoActivityWindow: n => `Az utolsó ${n} órában nincs tevékenység — amint lesz, a sáv kigyullad`,
     graphHiddenByScope: n => `${n} feladat rejtve e hatókör miatt`,
+    graphCardCount: (shown, total) => `${shown} / ${total} kártya`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: 'most', m: 'p', h: 'ó', d: 'n', w: 'hét', mo: 'hó', y: 'é' },
     clickForDetail: 'kattintson a részletekért',

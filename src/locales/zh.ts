@@ -170,6 +170,7 @@ export const zh = {
     boardsTabs: '已打开的看板',
     graphNoActivityWindow: n => `最近 ${n} 小时内无活动 —— 一旦有活动该条带就会亮起`,
     graphHiddenByScope: n => `此筛选隐藏了 ${n} 个任务`,
+    graphCardCount: (shown, total) => `${shown} / ${total} 卡片`,
     relativeUnits: { now: '刚刚', m: '分', h: '小时', d: '天', w: '周', mo: '个月', y: '年' },
     clickForDetail: '点击查看详情',
     legendShow: label => `点击显示 ${label}`,

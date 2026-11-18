@@ -170,6 +170,7 @@ export const uk = {
     boardsTabs: 'Відкриті дошки',
     graphNoActivityWindow: n => `Немає активності за останні ${n} год — смуга засвітиться, щойно вона з’явиться`,
     graphHiddenByScope: n => `Приховано цією областю: ${n} завдань`,
+    graphCardCount: (shown, total) => `${shown} / ${total} картки`,
     relativeUnits: { now: 'зараз', m: 'хв', h: 'год', d: 'д', w: 'тиж', mo: 'міс', y: 'р' },
     clickForDetail: 'натисніть для подробиць',
     legendShow: label => `Натисніть, щоб показати: ${label}`,

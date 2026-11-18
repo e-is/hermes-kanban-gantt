@@ -174,6 +174,7 @@ export const en = {
     boardsTabs: 'Open boards',
     graphNoActivityWindow: n => `No activity in the last ${n} h — the band lights up as soon as there is some`,
     graphHiddenByScope: n => `${n} task${n > 1 ? 's' : ''} hidden by this scope`,
+    graphCardCount: (shown, total) => `${shown} / ${total} cards`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: 'now', m: 'm', h: 'h', d: 'd', w: 'w', mo: 'mo', y: 'y' },
     clickForDetail: 'click for details',

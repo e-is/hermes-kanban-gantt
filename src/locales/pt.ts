@@ -174,6 +174,7 @@ export const pt = {
     boardsTabs: 'Quadros abertos',
     graphNoActivityWindow: n => `Sem atividade nas últimas ${n} h — a faixa acende assim que houver alguma`,
     graphHiddenByScope: n => `${n} tarefa${n > 1 ? 's' : ''} ocultas por este âmbito`,
+    graphCardCount: (shown, total) => `${shown} / ${total} cartões`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: 'agora', m: 'min', h: 'h', d: 'd', w: 'sem', mo: 'mês', y: 'a' },
     clickForDetail: 'clique para ver os detalhes',

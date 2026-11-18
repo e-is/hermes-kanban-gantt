@@ -172,6 +172,7 @@ export const fr = {
     boardsTabs: 'Boards ouverts',
     graphNoActivityWindow: n => `Aucune activité sur les ${n} dernières heures — la bande s'allume dès qu'il y en a`,
     graphHiddenByScope: n => `${n} tâche${n > 1 ? 's' : ''} masquée${n > 1 ? 's' : ''} par ce filtre`,
+    graphCardCount: (shown, total) => `${shown} / ${total} cartes`,
     // Suffixes concaténés au nombre (« 5min », « 2 j »… l'espace est inclus).
     relativeUnits: { now: "à l'instant", m: 'min', h: 'h', d: ' j', w: ' sem', mo: ' mois', y: ' a' },
     clickForDetail: 'cliquer pour le détail',

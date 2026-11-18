@@ -174,6 +174,7 @@ export const ko = {
     boardsTabs: '열린 보드',
     graphNoActivityWindow: n => `최근 ${n}시간 동안 활동 없음 — 활동이 생기면 바로 밴드가 켜집니다`,
     graphHiddenByScope: n => `이 범위로 숨겨진 작업 ${n}개`,
+    graphCardCount: (shown, total) => `${shown} / ${total} 카드`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: '방금', m: '분', h: '시간', d: '일', w: '주', mo: '개월', y: '년' },
     clickForDetail: '클릭하면 상세 보기',

@@ -285,6 +285,7 @@ var en = {
   boardsTabs: "Open boards",
   graphNoActivityWindow: (n) => `No activity in the last ${n} h — the band lights up as soon as there is some`,
   graphHiddenByScope: (n) => `${n} task${n > 1 ? "s" : ""} hidden by this scope`,
+  graphCardCount: (shown, total) => `${shown} / ${total} cards`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "now", m: "m", h: "h", d: "d", w: "w", mo: "mo", y: "y" },
   clickForDetail: "click for details",
@@ -615,6 +616,7 @@ var fr = {
   boardsTabs: "Boards ouverts",
   graphNoActivityWindow: (n) => `Aucune activité sur les ${n} dernières heures — la bande s'allume dès qu'il y en a`,
   graphHiddenByScope: (n) => `${n} tâche${n > 1 ? "s" : ""} masquée${n > 1 ? "s" : ""} par ce filtre`,
+  graphCardCount: (shown, total) => `${shown} / ${total} cartes`,
   // Suffixes concaténés au nombre (« 5min », « 2 j »… l'espace est inclus).
   relativeUnits: { now: "à l'instant", m: "min", h: "h", d: " j", w: " sem", mo: " mois", y: " a" },
   clickForDetail: "cliquer pour le détail",
@@ -943,6 +945,7 @@ var zh = {
   boardsTabs: "已打开的看板",
   graphNoActivityWindow: (n) => `最近 ${n} 小时内无活动 —— 一旦有活动该条带就会亮起`,
   graphHiddenByScope: (n) => `此筛选隐藏了 ${n} 个任务`,
+  graphCardCount: (shown, total) => `${shown} / ${total} 卡片`,
   relativeUnits: { now: "刚刚", m: "分", h: "小时", d: "天", w: "周", mo: "个月", y: "年" },
   clickForDetail: "点击查看详情",
   legendShow: (label) => `点击显示 ${label}`,
@@ -1274,6 +1277,7 @@ var af = {
   boardsTabs: "Oop borde",
   graphNoActivityWindow: (n) => `Geen aktiwiteit in die laaste ${n} u — die balk lig op sodra daar iets is`,
   graphHiddenByScope: (n) => `${n} taak${n > 1 ? "s" : ""} deur hierdie omvang versteek`,
+  graphCardCount: (shown, total) => `${shown} / ${total} kaarte`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "nou", m: "m", h: "u", d: "d", w: "w", mo: "md", y: "j" },
   clickForDetail: "klik vir besonderhede",
@@ -1606,6 +1610,7 @@ var ar = {
   boardsTabs: "اللوحات المفتوحة",
   graphNoActivityWindow: (n) => `لا نشاط خلال آخر ${n} ساعة — يضيء الشريط فور وجوده`,
   graphHiddenByScope: (n) => `${n} مهمة مخفية بهذا النطاق`,
+  graphCardCount: (shown, total) => `${shown} / ${total} بطاقات`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "الآن", m: "د", h: "س", d: "ي", w: "أ", mo: "شهر", y: "سنة" },
   clickForDetail: "انقر للتفاصيل",
@@ -1938,6 +1943,7 @@ var de = {
   boardsTabs: "Geöffnete Boards",
   graphNoActivityWindow: (n) => `Keine Aktivität in den letzten ${n} h – das Band leuchtet auf, sobald es welche gibt`,
   graphHiddenByScope: (n) => `${n} Aufgabe${n > 1 ? "n" : ""} durch diesen Umfang ausgeblendet`,
+  graphCardCount: (shown, total) => `${shown} / ${total} Karten`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "jetzt", m: " Min", h: " Std", d: " T", w: " Wo", mo: " Mon", y: " J" },
   clickForDetail: "für Details klicken",
@@ -2270,6 +2276,7 @@ var es = {
   boardsTabs: "Tableros abiertos",
   graphNoActivityWindow: (n) => `Sin actividad en las últimas ${n} h: la banda se ilumina en cuanto haya alguna`,
   graphHiddenByScope: (n) => `${n} tarea${n > 1 ? "s" : ""} ocultas por este alcance`,
+  graphCardCount: (shown, total) => `${shown} / ${total} tarjetas`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "ahora", m: "min", h: "h", d: "d", w: "sem", mo: "mes", y: "a" },
   clickForDetail: "clic para ver los detalles",
@@ -2602,6 +2609,7 @@ var ga = {
   boardsTabs: "Boird oscailte",
   graphNoActivityWindow: (n) => `Gan ghníomhaíocht le ${n} u anuas — soilsíonn an banda chomh luath agus a bhíonn aon cheann ann`,
   graphHiddenByScope: (n) => `${n} tasc${n > 1 ? "anna" : ""} faoi cheilt ag an raon seo`,
+  graphCardCount: (shown, total) => `${shown} / ${total} cártaí`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "anois", m: "n", h: "u", d: "l", w: "s", mo: "mí", y: "bl" },
   clickForDetail: "cliceáil le haghaidh sonraí",
@@ -2934,6 +2942,7 @@ var hu = {
   boardsTabs: "Nyitott táblák",
   graphNoActivityWindow: (n) => `Az utolsó ${n} órában nincs tevékenység — amint lesz, a sáv kigyullad`,
   graphHiddenByScope: (n) => `${n} feladat rejtve e hatókör miatt`,
+  graphCardCount: (shown, total) => `${shown} / ${total} kártya`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "most", m: "p", h: "ó", d: "n", w: "hét", mo: "hó", y: "é" },
   clickForDetail: "kattintson a részletekért",
@@ -3266,6 +3275,7 @@ var it = {
   boardsTabs: "Board aperte",
   graphNoActivityWindow: (n) => `Nessuna attività nelle ultime ${n} h — la banda si illumina non appena ce n’è`,
   graphHiddenByScope: (n) => `${n} attività nascoste da questo ambito`,
+  graphCardCount: (shown, total) => `${shown} / ${total} schede`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "ora", m: " min", h: " h", d: " g", w: " sett", mo: " mesi", y: " anni" },
   clickForDetail: "clicca per i dettagli",
@@ -3598,6 +3608,7 @@ var ja = {
   boardsTabs: "開いているボード",
   graphNoActivityWindow: (n) => `過去 ${n} 時間にアクティビティはありません — 発生するとすぐに帯が点灯します`,
   graphHiddenByScope: (n) => `このスコープで ${n} 件のタスクを非表示`,
+  graphCardCount: (shown, total) => `${shown} / ${total} カード`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "今", m: "分", h: "時間", d: "日", w: "週", mo: "か月", y: "年" },
   clickForDetail: "クリックで詳細",
@@ -3930,6 +3941,7 @@ var ko = {
   boardsTabs: "열린 보드",
   graphNoActivityWindow: (n) => `최근 ${n}시간 동안 활동 없음 — 활동이 생기면 바로 밴드가 켜집니다`,
   graphHiddenByScope: (n) => `이 범위로 숨겨진 작업 ${n}개`,
+  graphCardCount: (shown, total) => `${shown} / ${total} 카드`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "방금", m: "분", h: "시간", d: "일", w: "주", mo: "개월", y: "년" },
   clickForDetail: "클릭하면 상세 보기",
@@ -4262,6 +4274,7 @@ var pt = {
   boardsTabs: "Quadros abertos",
   graphNoActivityWindow: (n) => `Sem atividade nas últimas ${n} h — a faixa acende assim que houver alguma`,
   graphHiddenByScope: (n) => `${n} tarefa${n > 1 ? "s" : ""} ocultas por este âmbito`,
+  graphCardCount: (shown, total) => `${shown} / ${total} cartões`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "agora", m: "min", h: "h", d: "d", w: "sem", mo: "mês", y: "a" },
   clickForDetail: "clique para ver os detalhes",
@@ -4590,6 +4603,7 @@ var ru = {
   boardsTabs: "Открытые доски",
   graphNoActivityWindow: (n) => `Нет активности за последние ${n} ч — полоса загорится, как только она появится`,
   graphHiddenByScope: (n) => `Скрыто этой областью: ${n} задач`,
+  graphCardCount: (shown, total) => `${shown} / ${total} карточки`,
   relativeUnits: { now: "сейчас", m: "мин", h: "ч", d: "д", w: "нед", mo: "мес", y: "г" },
   clickForDetail: "нажмите для подробностей",
   legendShow: (label) => `Нажмите, чтобы показать: ${label}`,
@@ -4921,6 +4935,7 @@ var tr = {
   boardsTabs: "Açık panolar",
   graphNoActivityWindow: (n) => `Son ${n} sa içinde etkinlik yok — etkinlik başlar başlamaz şerit yanar`,
   graphHiddenByScope: (n) => `bu kapsam tarafından ${n} görev gizlendi`,
+  graphCardCount: (shown, total) => `${shown} / ${total} kart`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "şimdi", m: "dk", h: "sa", d: "g", w: "hf", mo: "ay", y: "yıl" },
   clickForDetail: "ayrıntılar için tıklayın",
@@ -5249,6 +5264,7 @@ var uk = {
   boardsTabs: "Відкриті дошки",
   graphNoActivityWindow: (n) => `Немає активності за останні ${n} год — смуга засвітиться, щойно вона з’явиться`,
   graphHiddenByScope: (n) => `Приховано цією областю: ${n} завдань`,
+  graphCardCount: (shown, total) => `${shown} / ${total} картки`,
   relativeUnits: { now: "зараз", m: "хв", h: "год", d: "д", w: "тиж", mo: "міс", y: "р" },
   clickForDetail: "натисніть для подробиць",
   legendShow: (label) => `Натисніть, щоб показати: ${label}`,
@@ -5580,6 +5596,7 @@ var zhHant = {
   boardsTabs: "已開啟的看板",
   graphNoActivityWindow: (n) => `最近 ${n} 小時內沒有活動 — 一旦有活動該帶狀區就會亮起`,
   graphHiddenByScope: (n) => `此範圍隱藏了 ${n} 個任務`,
+  graphCardCount: (shown, total) => `${shown} / ${total} 卡片`,
   // Suffixes for the list's "updated" cell, concatenated to the number.
   relativeUnits: { now: "剛剛", m: "分", h: "小時", d: "天", w: "週", mo: "個月", y: "年" },
   clickForDetail: "點擊查看詳細資料",
@@ -10176,6 +10193,7 @@ function GraphView({
     return { up: upstream, down: downstream };
   }, [shown, edges, selectedId]);
   const hiddenByScope = scopeHidden === null ? nodes.length - shown.length : scopeHidden;
+  const totalCards = nodes.length + (scopeHidden || 0);
   const groupTally = useMemo3(() => {
     const out = /* @__PURE__ */ new Map();
     const ORDER = ["triage", "todo", "scheduled", "ready", "running", "blocked", "review", "done", "archived"];
@@ -11132,13 +11150,33 @@ function GraphView({
       // implied edges hidden by the reduction, loops the ranks had to band, links that
       // leave the view (a filtered-out parent), and what the scope is holding back.
       jsxs8("div", {
+        style: { paddingRight: "176px" },
         className: "pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-3 px-2 py-1 text-[9.5px] text-(--ui-text-quaternary) bg-gradient-to-t from-(--ui-bg-elevated) to-transparent",
         children: [
           layout.implied ? jsx8("span", { children: i18n.graphImplied(layout.implied) }) : null,
           layout.cyclic.length ? jsx8("span", { className: "text-[#f87171]", children: i18n.graphCyclic(layout.cyclic.length) }) : null,
           layout.dangling ? jsx8("span", { children: i18n.graphDangling(layout.dangling) }) : null,
           hiddenByScope ? jsx8("span", { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
-          jsx8("span", { className: "ml-auto tabular-nums", children: `${shown.length}/${nodes.length}` })
+          // The card count, in the same currency as the scope chips in the header: cards drawn over
+          // cards the scope holds ("6/8" agrees with "Open · 6" and "All"). It gets its own chip and
+          // a stronger ink than the notes beside it — it is a number the reader comes looking for,
+          // not a footnote — and it sits at the end of the row, under the camera bar rather than in
+          // it.
+          jsx8("span", {
+            title: i18n.graphCardCount(shown.length, totalCards),
+            style: {
+              marginLeft: "auto",
+              padding: "1px 6px",
+              borderRadius: "4px",
+              background: "color-mix(in srgb, var(--ui-text-primary) 7%, transparent)",
+              color: "var(--ui-text-secondary)",
+              fontVariantNumeric: "tabular-nums",
+              // The row itself is pointer-events:none (it lies over the canvas); the count takes
+              // its own pointer back so its tooltip can be read.
+              pointerEvents: "auto"
+            },
+            children: `${shown.length}/${totalCards}`
+          })
           // The Fit button that used to close this row is gone: it was a camera control sitting
           // among the counts, and the camera now has its own bar with the state lit on it.
         ]

@@ -168,6 +168,7 @@ export const ar = {
     boardsTabs: 'اللوحات المفتوحة',
     graphNoActivityWindow: n => `لا نشاط خلال آخر ${n} ساعة — يضيء الشريط فور وجوده`,
     graphHiddenByScope: n => `${n} مهمة مخفية بهذا النطاق`,
+    graphCardCount: (shown, total) => `${shown} / ${total} بطاقات`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: 'الآن', m: 'د', h: 'س', d: 'ي', w: 'أ', mo: 'شهر', y: 'سنة' },
     clickForDetail: 'انقر للتفاصيل',

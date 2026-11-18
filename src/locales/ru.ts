@@ -170,6 +170,7 @@ export const ru = {
     boardsTabs: 'Открытые доски',
     graphNoActivityWindow: n => `Нет активности за последние ${n} ч — полоса загорится, как только она появится`,
     graphHiddenByScope: n => `Скрыто этой областью: ${n} задач`,
+    graphCardCount: (shown, total) => `${shown} / ${total} карточки`,
     relativeUnits: { now: 'сейчас', m: 'мин', h: 'ч', d: 'д', w: 'нед', mo: 'мес', y: 'г' },
     clickForDetail: 'нажмите для подробностей',
     legendShow: label => `Нажмите, чтобы показать: ${label}`,

@@ -174,6 +174,7 @@ export const tr = {
     boardsTabs: 'Açık panolar',
     graphNoActivityWindow: n => `Son ${n} sa içinde etkinlik yok — etkinlik başlar başlamaz şerit yanar`,
     graphHiddenByScope: n => `bu kapsam tarafından ${n} görev gizlendi`,
+    graphCardCount: (shown, total) => `${shown} / ${total} kart`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: 'şimdi', m: 'dk', h: 'sa', d: 'g', w: 'hf', mo: 'ay', y: 'yıl' },
     clickForDetail: 'ayrıntılar için tıklayın',

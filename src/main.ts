@@ -1345,6 +1345,10 @@ export function GraphView({
   }, [shown, edges, selectedId])
 
   const hiddenByScope = scopeHidden === null ? nodes.length - shown.length : scopeHidden
+  // What the footer's N/N counts against: cards drawn, over cards the view could draw. The total is
+  // the scope-and-window set plus what the scope and the time window hold back — the same number the
+  // scope chips add up to, so the footer and the header cannot disagree.
+  const totalCards = nodes.length + (scopeHidden || 0)
   // Which board the selected card belongs to: its frame is lit, so a reader in an all-boards
   // graph sees WHERE they are, not just which card.
   // What each frame says under its name: the board's own tally, in the board's own vocabulary
@@ -2424,13 +2428,30 @@ export function GraphView({
       // implied edges hidden by the reduction, loops the ranks had to band, links that
       // leave the view (a filtered-out parent), and what the scope is holding back.
       jsxs('div', {
+        style: { paddingRight: '176px' },
         className: 'pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-3 px-2 py-1 text-[9.5px] text-(--ui-text-quaternary) bg-gradient-to-t from-(--ui-bg-elevated) to-transparent',
         children: [
           layout.implied ? jsx('span', { children: i18n.graphImplied(layout.implied) }) : null,
           layout.cyclic.length ? jsx('span', { className: 'text-[#f87171]', children: i18n.graphCyclic(layout.cyclic.length) }) : null,
           layout.dangling ? jsx('span', { children: i18n.graphDangling(layout.dangling) }) : null,
           hiddenByScope ? jsx('span', { children: i18n.graphHiddenByScope(hiddenByScope) }) : null,
-          jsx('span', { className: 'ml-auto tabular-nums', children: `${shown.length}/${nodes.length}` })
+          // The card count, in the same currency as the scope chips in the header: cards drawn over
+          // cards the scope holds ("6/8" agrees with "Open · 6" and "All"). It gets its own chip and
+          // a stronger ink than the notes beside it — it is a number the reader comes looking for,
+          // not a footnote — and it sits at the end of the row, under the camera bar rather than in
+          // it.
+          jsx('span', {
+            title: i18n.graphCardCount(shown.length, totalCards),
+            style: {
+              marginLeft: 'auto', padding: '1px 6px', borderRadius: '4px',
+              background: 'color-mix(in srgb, var(--ui-text-primary) 7%, transparent)',
+              color: 'var(--ui-text-secondary)', fontVariantNumeric: 'tabular-nums',
+              // The row itself is pointer-events:none (it lies over the canvas); the count takes
+              // its own pointer back so its tooltip can be read.
+              pointerEvents: 'auto'
+            },
+            children: `${shown.length}/${totalCards}`
+          })
           // The Fit button that used to close this row is gone: it was a camera control sitting
           // among the counts, and the camera now has its own bar with the state lit on it.
         ]

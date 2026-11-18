@@ -168,6 +168,7 @@ export const ja = {
     boardsTabs: '開いているボード',
     graphNoActivityWindow: n => `過去 ${n} 時間にアクティビティはありません — 発生するとすぐに帯が点灯します`,
     graphHiddenByScope: n => `このスコープで ${n} 件のタスクを非表示`,
+    graphCardCount: (shown, total) => `${shown} / ${total} カード`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: '今', m: '分', h: '時間', d: '日', w: '週', mo: 'か月', y: '年' },
     clickForDetail: 'クリックで詳細',

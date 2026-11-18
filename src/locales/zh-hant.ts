@@ -174,6 +174,7 @@ export const zhHant = {
     boardsTabs: '已開啟的看板',
     graphNoActivityWindow: n => `最近 ${n} 小時內沒有活動 — 一旦有活動該帶狀區就會亮起`,
     graphHiddenByScope: n => `此範圍隱藏了 ${n} 個任務`,
+    graphCardCount: (shown, total) => `${shown} / ${total} 卡片`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: '剛剛', m: '分', h: '小時', d: '天', w: '週', mo: '個月', y: '年' },
     clickForDetail: '點擊查看詳細資料',

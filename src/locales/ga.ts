@@ -174,6 +174,7 @@ export const ga = {
     boardsTabs: 'Boird oscailte',
     graphNoActivityWindow: n => `Gan ghníomhaíocht le ${n} u anuas — soilsíonn an banda chomh luath agus a bhíonn aon cheann ann`,
     graphHiddenByScope: n => `${n} tasc${n > 1 ? 'anna' : ''} faoi cheilt ag an raon seo`,
+    graphCardCount: (shown, total) => `${shown} / ${total} cártaí`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: 'anois', m: 'n', h: 'u', d: 'l', w: 's', mo: 'mí', y: 'bl' },
     clickForDetail: 'cliceáil le haghaidh sonraí',

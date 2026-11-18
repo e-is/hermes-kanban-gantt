@@ -174,6 +174,7 @@ export const af = {
     boardsTabs: 'Oop borde',
     graphNoActivityWindow: n => `Geen aktiwiteit in die laaste ${n} u — die balk lig op sodra daar iets is`,
     graphHiddenByScope: n => `${n} taak${n > 1 ? 's' : ''} deur hierdie omvang versteek`,
+    graphCardCount: (shown, total) => `${shown} / ${total} kaarte`,
     // Suffixes for the list's "updated" cell, concatenated to the number.
     relativeUnits: { now: 'nou', m: 'm', h: 'u', d: 'd', w: 'w', mo: 'md', y: 'j' },
     clickForDetail: 'klik vir besonderhede',
