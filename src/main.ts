@@ -5449,27 +5449,10 @@ export function KanbanGanttPage() {
               // The view switcher closes the LEFT group: it is how the reader reads this board, not
               // an action on it. Only the actions that write — the creation verb and the menu — live
               // on the right, past the spacer.
-              jsx(ViewToggle, { value: viewMode, onChange: handleViewMode })
-            ]
-          }),
-
-          // Board switcher moved to the desktop titlebar band (titleBar.center)
-          // — see TitlebarBoardSwitcher above.
-
-          // Right: what WRITES — the creation verb and the page menu — with the arrangement and zoom
-          // controls that steer the canvas. The cluster wraps as a whole: the row's single leftover
-          // item keeps `ml-auto`, so it reaches the edge whether it shares the line with the filters
-          // or takes the next one.
-          jsxs('div', {
-            // `ml-auto` and not the row's `justify-between`: when this cluster wraps onto its own
-            // line it is the only flex item there, and `justify-between` aligns a lone item to the
-            // START — which is why the creation verb used to sit against the view chips instead of
-            // the page's right edge. An auto margin keeps it right in both cases.
-            className: 'ml-auto flex min-w-0 flex-wrap shrink-0 items-center justify-end gap-x-3 gap-y-2',
-            children: [
-              // In graph mode the period selector has nothing to say (there is no time axis), so its
-              // slot carries the arrangement menu instead. The period itself moved to the left, with
-              // the other filters.
+              jsx(ViewToggle, { value: viewMode, onChange: handleViewMode }),
+              // The controls that steer the CANVAS follow the view they steer: the arrangement menu
+              // (which exists only for the graph) and the zoom. They used to sit with the actions on
+              // the right, which put a slider between the reader and the one button that writes.
               graphMode
                 ? jsx(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
                 : null,
@@ -5486,7 +5469,23 @@ export function KanbanGanttPage() {
                   'aria-label': graphMode ? i18n.graphZoom : i18n.zoomTimeline
                 }),
                 jsx('span', { className: 'text-[10px] tabular-nums text-(--ui-text-tertiary) w-8 text-right shrink-0', children: `${graphMode ? graphZoomPct : zoomPct}%` })
-              ] }),
+              ] })
+            ]
+          }),
+
+          // Board switcher moved to the desktop titlebar band (titleBar.center)
+          // — see TitlebarBoardSwitcher above.
+
+          // Right: what WRITES — the creation verb and the page menu, nothing else. The controls that
+          // steer the canvas (arrangement, zoom) moved into the left column, after the view they
+          // steer.
+          jsxs('div', {
+            // `ml-auto` and not the row's `justify-between`: when this cluster wraps onto its own
+            // line it is the only flex item there, and `justify-between` aligns a lone item to the
+            // START — which is why the creation verb used to sit against the view chips instead of
+            // the page's right edge. An auto margin keeps it right in both cases.
+            className: 'ml-auto flex min-w-0 flex-wrap shrink-0 items-center justify-end gap-x-3 gap-y-2',
+            children: [
               // The Refresh button is back, but only when the page is KNOWINGLY on
               // the 60 s poll: the push is off (KANBAN_GANTT_WS=0 on the gateway, or
               // this client's `ws` flag) or the socket gave up (it re-arms within
