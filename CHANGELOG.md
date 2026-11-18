@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.13.2 — the catalogue's frames are light again
+
+The screenshots shipped with the catalog entry were captured in a dark shell. `scripts/shots.py` wrote
+`hermes-desktop-mode-v1` into `localStorage` and trusted it, but the shell boots from the per-profile
+map in `~/.hermes/ui-preferences.json`, where the active profile said `"system"` — so the run recorded
+the OS's dark theme and every frame came out dark while the key said "light". The capture now verifies
+what the page PAINTS (class and body colour), falls back to the boot store, and stops instead of
+shipping a dark frame; it puts back what it found when it is done.
+
+Also for the catalog entry:
+
+- the official Whiteboard and Operations plugins are hidden during a capture, so the sidebar
+  advertises only kanban-gantt;
+- a whiteboard frame joins the set (`docs/screenshot-en-09-whiteboard.png`), fitted and then zoomed in
+  twice — at fit the plan reads as a pale map in a catalogue thumbnail;
+- the whiteboard chip is clicked by its group rather than by its text: "Whiteboard" is also the name of
+  a sidebar app, and a text search opened that app instead of the view.
+
 ## 1.13.1 — the band switcher reports itself
 
 `useBandSwitcherPresent` decided whether the desktop's page header band was painting our board

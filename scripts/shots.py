@@ -60,7 +60,7 @@ DEMO_BOARD = "gantt-demo"
 DEMO_TASK = "Provision the analytics cluster"
 # Desktop plugins that must NOT appear in a capture: the sidebar's plugin list is the shell's,
 # not the plugin's, so a catalogue image of kanban-gantt should not advertise its neighbours.
-OTHER_PLUGINS = ("model-leaderboard", "kanban-graph")
+OTHER_PLUGINS = ("model-leaderboard", "kanban-graph", "operations", "whiteboard")
 DECISIONS_KEY = "hermes.desktop.pluginDecisions.v2"
 
 # A detail-rich task to open. (The drag pair that used to live here went with the
@@ -391,16 +391,108 @@ async def ensure_current_board(ui: Desktop):
     # behind: the column width, the view mode, and the SHELL's own light/dark mode
     # (this machine follows the system, and a switch to dark turned every capture
     # dark). Both shell values are put back at the end of the run.
-    RESTORE["mode"] = await ui.ev("(() => localStorage.getItem('hermes-desktop-mode-v1'))")
     RESTORE["sidebar"] = await resize_sidebar(ui)
     await ui.ev("""(() => {
       localStorage.setItem('hermes.plugin.kanban-gantt.labelW', '400');
       localStorage.setItem('hermes.plugin.kanban-gantt.viewMode', '"timeline"');
-      localStorage.setItem('hermes-desktop-mode-v1', 'light');
       return true;
     })()""")
     await ui.call("Page.reload", {"ignoreCache": False})
     await asyncio.sleep(9)
+    await ensure_light(ui)
+
+
+MODE_KEY = "hermes-desktop-mode-v1"
+PROFILE_MODES_KEY = "hermes-desktop-profile-modes-v1"
+# What the shell actually boots from. `localStorage` is a mirror the main process re-seeds, which is
+# how a run once wrote "light" into the renderer and still captured a dark app: the per-PROFILE map
+# said "system", the OS was dark, and the mirror lost the argument at the next reload.
+UI_PREFS = Path.home() / ".hermes" / "ui-preferences.json"
+
+
+async def appearance_is_light(ui: Desktop) -> bool:
+    """Is the shell PAINTING light? The class and the pixels are the truth; the stored key is not."""
+    return bool(await ui.ev("""(() => {
+      const cls = document.documentElement.className || '';
+      if (/(^|\\s)dark(\\s|$)/.test(cls)) return false;
+      const m = (getComputedStyle(document.body).backgroundColor || '').match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
+      if (!m) return true;
+      return (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3 > 140;
+    })()"""))
+
+
+def force_light_in_prefs() -> bool:
+    """Last resort: write the store the shell boots from, then let the reload apply it."""
+    try:
+        prefs = json.loads(UI_PREFS.read_text())
+    except Exception as exc:
+        print(f"  ! ui-preferences.json unreadable: {exc}")
+        return False
+    RESTORE.setdefault("prefs", UI_PREFS.read_text())
+    values = prefs.setdefault("values", {})
+    values[MODE_KEY] = "light"
+    try:
+        modes = json.loads(values.get(PROFILE_MODES_KEY) or "{}")
+    except Exception:
+        modes = {}
+    values[PROFILE_MODES_KEY] = json.dumps({name: "light" for name in (modes or {"default": "light"})})
+    prefs["revision"] = int(prefs.get("revision") or 0) + 1
+    UI_PREFS.write_text(json.dumps(prefs, indent=2))
+    return True
+
+
+async def ensure_light(ui: Desktop):
+    """A catalogue capture must be LIGHT — a dark thumbnail reads as a different product.
+
+    Three rungs, each verified on the PAINTED page rather than on the key that was written, because
+    the key can say "light" while the shell follows the OS: the renderer's own keys, then the boot
+    store, then an honest stop. What it found is remembered in RESTORE and put back at the end.
+    """
+    RESTORE["mode"] = await ui.ev(f"localStorage.getItem({MODE_KEY!r})")
+    RESTORE["profileModes"] = await ui.ev(f"localStorage.getItem({PROFILE_MODES_KEY!r})")
+    if await appearance_is_light(ui):
+        print("  appearance: light ✓")
+        return
+    await ui.ev(f"""(() => {{
+      localStorage.setItem({MODE_KEY!r}, 'light');
+      let modes = {{}};
+      try {{ modes = JSON.parse(localStorage.getItem({PROFILE_MODES_KEY!r}) || '{{}}'); }} catch (e) {{}}
+      if (!Object.keys(modes).length) modes = {{ default: 'light' }};
+      Object.keys(modes).forEach(name => modes[name] = 'light');
+      localStorage.setItem({PROFILE_MODES_KEY!r}, JSON.stringify(modes));
+      return true;
+    }})()""")
+    await ui.call("Page.reload", {"ignoreCache": False})
+    await asyncio.sleep(9)
+    if await appearance_is_light(ui):
+        print("  appearance: light (renderer keys) ✓")
+        return
+    if force_light_in_prefs():
+        await ui.call("Page.reload", {"ignoreCache": False})
+        await asyncio.sleep(9)
+    if not await appearance_is_light(ui):
+        raise Dead("the shell stayed dark — switch the desktop to Light and re-run; the catalogue "
+                   "cannot ship dark frames")
+    print("  appearance: light (ui-preferences.json) ✓")
+
+
+async def restore_appearance(ui: Desktop):
+    """Put the shell back the way the run found it — a capture has no business changing it."""
+    if RESTORE.get("prefs"):
+        try:
+            UI_PREFS.write_text(RESTORE.pop("prefs"))
+        except Exception as exc:
+            print(f"  ! could not restore ui-preferences.json: {exc}")
+    mode, modes = RESTORE.pop("mode", None), RESTORE.pop("profileModes", None)
+    if mode is None and modes is None:
+        return
+    await ui.ev(f"""(() => {{
+      const mode = {json.dumps(mode)}, modes = {json.dumps(modes)};
+      if (mode === null) localStorage.removeItem({MODE_KEY!r}); else localStorage.setItem({MODE_KEY!r}, mode);
+      if (modes === null) localStorage.removeItem({PROFILE_MODES_KEY!r}); else localStorage.setItem({PROFILE_MODES_KEY!r}, modes);
+      return true;
+    }})()""")
+    print("  appearance restored")
 
 
 async def collapse_private_sections(ui: Desktop):
@@ -639,6 +731,22 @@ async def click_exact(ui: Desktop, text: str, *, selector: str = "button") -> bo
     return True
 
 
+async def click_view_chip(ui: Desktop, label: str) -> bool:
+    """Click a view chip inside the plugin's own header — never a same-named sidebar entry.
+
+    "Whiteboard" is both a view of this plugin and the name of the official whiteboard app in the
+    sidebar; a text search matched the app and the capture showed the wrong product.
+    """
+    return bool(await ui.ev(f"""(() => {{
+      for (const group of document.querySelectorAll('[role=group]')) {{
+        const chip = [...group.querySelectorAll('button')]
+          .find(b => (b.innerText || '').trim() === {json.dumps(label)});
+        if (chip) {{ chip.click(); return true; }}
+      }}
+      return false;
+    }})()"""))
+
+
 async def click_attr(ui: Desktop, label: str) -> bool:
     """Click the first on-screen element whose aria-label is exactly `label`, by coordinates."""
     box = await ui.ev(f"""(() => {{
@@ -796,6 +904,24 @@ async def run_scenario(ui: Desktop, *, make_gif: bool):
 
     # ── the graph view: the dependency structure of the same board ───────────
     await capture_graph(ui)
+
+    # ── the whiteboard: the fourth view, and the one a thumbnail loses ────────
+    # Fit alone puts the whole plan on screen at a scale where, in a catalogue card, it reads as a
+    # pale map: the capture fits first (so nothing is cut), then steps the zoom in twice around the
+    # centre. The reader then sees lanes, frames and a milestone arrow instead of grey confetti.
+    # The chip is clicked by its GROUP, not by its text: "Whiteboard" is also the name of a sidebar
+    # entry (the official whiteboard app), and a text search opens that app instead — measured.
+    if await click_view_chip(ui, "Whiteboard"):
+        await asyncio.sleep(2.2)
+        if await click_attr(ui, "Fit"):
+            await asyncio.sleep(1.2)
+        for _ in range(2):
+            if await click_attr(ui, "Zoom in"):
+                await asyncio.sleep(0.7)
+        await asyncio.sleep(0.8)
+        await ui.shot("screenshot-en-09-whiteboard")
+    else:
+        print("  ! whiteboard toggle not found — skipping the whiteboard shot")
 
     # The animation, LAST: Page.captureScreenshot returns no frame while a
     # screencast runs, so every still above has to be taken first.
@@ -1031,11 +1157,8 @@ async def main():
             await restore_plugin_decisions(ui)
             if RESTORE.get("sidebar"):
                 await resize_sidebar(ui, int(RESTORE["sidebar"]))
-            if RESTORE.get("mode") is not None:
-                await ui.ev(f"""(() => {{
-                  localStorage.setItem('hermes-desktop-mode-v1', {json.dumps(str(RESTORE['mode']))});
-                  return true;
-                }})()""")
+            if RESTORE.get("mode") is not None or RESTORE.get("prefs"):
+                await restore_appearance(ui)
                 await ui.call("Page.reload", {"ignoreCache": False})
                 await asyncio.sleep(7)
                 RESTORE.pop("needsReload", None)
