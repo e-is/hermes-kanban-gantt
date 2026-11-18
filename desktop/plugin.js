@@ -42,7 +42,7 @@ import {
   WORKSPACE_PAGE_HEADER_AREA
 } from "@hermes/plugin-sdk";
 import pluginSdk from "@hermes/plugin-sdk";
-import { useMemo as useMemo3, useRef as useRef3, useEffect as useEffect5, useState as useState6 } from "react";
+import { useMemo as useMemo3, useRef as useRef3, useEffect as useEffect5, useState as useState5 } from "react";
 import { jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
 
 // src/state.ts
@@ -53,6 +53,7 @@ var storage = null;
 var socket = null;
 var $baseUrl = atom("");
 var $boardSlug = atom("");
+var $bandSwitcherPresent = atom(false);
 var $connectionScope = atom("");
 var $labelW = atom(LABEL_W);
 var $drawerW = atom(416);
@@ -5958,24 +5959,11 @@ function subscribeGantt(socketDoor, opts) {
 
 // src/ui/TitlebarBoardSwitcher.tsx
 import { Button, cn, Codicon, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, useQuery, useQueryClient, useValue } from "@hermes/plugin-sdk";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 var BAND_SWITCHER_ATTR = "data-kg-band-switcher";
 function useBandSwitcherPresent() {
-  const [present, setPresent] = useState(false);
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const check = () => setPresent(Boolean(document.querySelector(`[${BAND_SWITCHER_ATTR}]`)));
-    check();
-    if (typeof MutationObserver === "undefined") {
-      const timer = setTimeout(check, 400);
-      return () => clearTimeout(timer);
-    }
-    const observer = new MutationObserver(check);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, []);
-  return present;
+  return useValue($bandSwitcherPresent);
 }
 function TitlebarBoardSwitcher({ inline = false } = {}) {
   const board = useValue($boardSlug);
@@ -5994,6 +5982,13 @@ function TitlebarBoardSwitcher({ inline = false } = {}) {
     if (getStorage()) getStorage().set("board", slug);
     void queryClient.invalidateQueries({ queryKey: ["kanban-gantt", "gantt"] });
   };
+  useEffect(() => {
+    if (inline) return;
+    $bandSwitcherPresent.set(true);
+    return () => {
+      $bandSwitcherPresent.set(false);
+    };
+  }, [inline]);
   const switcher = /* @__PURE__ */ jsxs(DropdownMenu, { children: [
     /* @__PURE__ */ jsx(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx(
       Button,
@@ -6033,7 +6028,7 @@ function TitlebarBoardSwitcher({ inline = false } = {}) {
 }
 
 // src/ui/NewTaskDialog.tsx
-import { useEffect as useEffect2, useRef, useState as useState2 } from "react";
+import { useEffect as useEffect2, useRef, useState } from "react";
 import {
   Button as Button2,
   Codicon as Codicon2,
@@ -6642,8 +6637,8 @@ function SearchPicker({
   emptyLabel,
   className
 }) {
-  const [open, setOpen] = useState2(false);
-  const [query, setQuery] = useState2("");
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
   const visible = needle ? options.filter((o) => o.label.toLowerCase().includes(needle) || (o.hint || "").toLowerCase().includes(needle)) : options;
   return /* @__PURE__ */ jsxs2(Popover, { open, onOpenChange: (next) => {
@@ -6710,18 +6705,18 @@ function NewTaskDialog({
   onClose,
   i18n
 }) {
-  const [title, setTitle] = useState2("");
-  const [body, setBody] = useState2("");
-  const [assignee, setAssignee] = useState2("");
-  const [priority, setPriority] = useState2("0");
-  const [parentId, setParentId] = useState2("");
-  const [triage, setTriage] = useState2(false);
-  const [projectId, setProjectId] = useState2("");
-  const [workspaceKind, setWorkspaceKind] = useState2("scratch");
-  const [workspacePath, setWorkspacePath] = useState2("");
-  const [skills, setSkills] = useState2("");
-  const [modelOverride, setModelOverride] = useState2("");
-  const [goalMode, setGoalMode] = useState2(false);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [assignee, setAssignee] = useState("");
+  const [priority, setPriority] = useState("0");
+  const [parentId, setParentId] = useState("");
+  const [triage, setTriage] = useState(false);
+  const [projectId, setProjectId] = useState("");
+  const [workspaceKind, setWorkspaceKind] = useState("scratch");
+  const [workspacePath, setWorkspacePath] = useState("");
+  const [skills, setSkills] = useState("");
+  const [modelOverride, setModelOverride] = useState("");
+  const [goalMode, setGoalMode] = useState(false);
   const keyRef = useRef("");
   useEffect2(() => {
     if (!open) return;
@@ -6907,7 +6902,7 @@ function NewTaskDialog({
 }
 
 // src/ui/MoveTaskDialog.tsx
-import { useEffect as useEffect3, useState as useState3 } from "react";
+import { useEffect as useEffect3, useState as useState2 } from "react";
 import {
   Button as Button3,
   Codicon as Codicon3,
@@ -6924,9 +6919,9 @@ import {
 } from "@hermes/plugin-sdk";
 import { Fragment, jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
 function MoveTaskDialog({ open, task, boards, currentBoard, i18n, onClose, onMove }) {
-  const [target, setTarget] = useState3("");
-  const [error, setError] = useState3(null);
-  const [busy, setBusy] = useState3(false);
+  const [target, setTarget] = useState2("");
+  const [error, setError] = useState2(null);
+  const [busy, setBusy] = useState2(false);
   useEffect3(() => {
     if (open) {
       setTarget("");
@@ -7051,7 +7046,7 @@ function TaskRelations({
 }
 
 // src/ui/ReparentChooser.tsx
-import { useState as useState4 } from "react";
+import { useState as useState3 } from "react";
 import {
   Button as Button4,
   Dialog as Dialog3,
@@ -7121,7 +7116,7 @@ function MoveUnderDialog({
   i18n,
   busy = false
 }) {
-  const [query, setQuery] = useState4("");
+  const [query, setQuery] = useState3("");
   if (!open) return null;
   const visible = candidates.filter((c) => matchesSearch(c.task, query));
   const disabledIds = new Set(visible.filter((c) => !c.allowed).map((c) => c.task.id));
@@ -7161,7 +7156,7 @@ function MoveUnderDialog({
 
 // src/ui/WhiteboardView.tsx
 import { Codicon as Codicon6, icons, Streamdown } from "@hermes/plugin-sdk";
-import { useEffect as useEffect4, useMemo as useMemo2, useRef as useRef2, useState as useState5 } from "react";
+import { useEffect as useEffect4, useMemo as useMemo2, useRef as useRef2, useState as useState4 } from "react";
 import { jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
 
 // src/ui/ZoomBar.tsx
@@ -8119,14 +8114,14 @@ function WhiteboardView({
   const gesture = useRef2(null);
   const undoStack = useRef2([]);
   const redoStack = useRef2([]);
-  const [view, setView] = useState5({ x: 0, y: 0, zoom: 1 });
-  const [glide, setGlide] = useState5(false);
-  const [drag, setDrag] = useState5(null);
-  const [panning, setPanning] = useState5(false);
-  const [selection, setSelection] = useState5([]);
-  const [marquee, setMarquee] = useState5(null);
-  const [wire, setWire] = useState5(null);
-  const [picked, setPicked] = useState5(null);
+  const [view, setView] = useState4({ x: 0, y: 0, zoom: 1 });
+  const [glide, setGlide] = useState4(false);
+  const [drag, setDrag] = useState4(null);
+  const [panning, setPanning] = useState4(false);
+  const [selection, setSelection] = useState4([]);
+  const [marquee, setMarquee] = useState4(null);
+  const [wire, setWire] = useState4(null);
+  const [picked, setPicked] = useState4(null);
   const model = useMemo2(
     () => boardFromTasks(tasks || [], { title: title || "Board", layout, id: board || "board", looseLabel: i18n.wbLoose }),
     [tasks, title, layout, board, i18n]
@@ -10111,7 +10106,7 @@ function GraphView({
 }) {
   const showPrefixTags = useValue2($titlePrefixTags);
   const nowSec = Math.floor(Date.now() / 1e3);
-  const [foldedCols, setFoldedCols] = useState6(() => {
+  const [foldedCols, setFoldedCols] = useState5(() => {
     try {
       const raw = localStorage.getItem("hermes.plugin.kanban-gantt.graphFolded");
       return new Set(raw ? JSON.parse(raw) : []);
@@ -10131,17 +10126,17 @@ function GraphView({
       return next;
     });
   };
-  const [pan, setPan] = useState6({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState6(null);
+  const [pan, setPan] = useState5({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState5(null);
   const NEAR_PX = 64;
-  const [nearTarget, setNearTarget] = useState6(null);
+  const [nearTarget, setNearTarget] = useState5(null);
   const dragRects = useRef3(/* @__PURE__ */ new Map());
   const SLOT_HALO = 34;
-  const [slotFor, setSlotFor] = useState6(null);
-  const [slotNear, setSlotNear] = useState6(false);
-  const [link, setLink] = useState6(null);
-  const [hotEdge, setHotEdge] = useState6(null);
-  const [edgeMenu, setEdgeMenu] = useState6(null);
+  const [slotFor, setSlotFor] = useState5(null);
+  const [slotNear, setSlotNear] = useState5(false);
+  const [link, setLink] = useState5(null);
+  const [hotEdge, setHotEdge] = useState5(null);
+  const [edgeMenu, setEdgeMenu] = useState5(null);
   const hotTimer = useRef3(null);
   const armHotEdge = (key) => {
     if (hotTimer.current) clearTimeout(hotTimer.current);
@@ -10217,7 +10212,7 @@ function GraphView({
   }, [shown, selectedId]);
   const zoomRef = useRef3(zoom);
   zoomRef.current = zoom;
-  const [autoFit, setAutoFit] = useState6(true);
+  const [autoFit, setAutoFit] = useState5(true);
   const autoFitRef = useRef3(true);
   autoFitRef.current = autoFit;
   const fitPctRef = useRef3(null);
@@ -11291,8 +11286,8 @@ function SelectionBar({
   busy = false
 }) {
   const i18n = useGanttI18n();
-  const [menu, setMenu] = useState6(null);
-  const [customAssignee, setCustomAssignee] = useState6("");
+  const [menu, setMenu] = useState5(null);
+  const [customAssignee, setCustomAssignee] = useState5("");
   if (selected.size === 0) return null;
   return jsx8("div", {
     className: "pointer-events-none absolute inset-x-0 bottom-12 z-40 flex justify-center px-4 animate-in fade-in slide-in-from-bottom-2 duration-150",
@@ -11606,7 +11601,7 @@ function AttachmentLine({ taskId, board, att, i18n, onPreview, iconSize, hoverab
   }, att.id);
 }
 function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
-  const [wanted, setWanted] = useState6(false);
+  const [wanted, setWanted] = useState5(false);
   const query = useQuery2({
     queryKey: ["kanban-gantt", "attachments", taskId, board],
     queryFn: () => fetchAttachments(taskId, board),
@@ -11800,7 +11795,7 @@ var overridePatch = (value) => {
   };
 };
 function ModelField({ value, onChange, inheritCopy, clearLabel, label, compact = false }) {
-  const [open, setOpen] = useState6(false);
+  const [open, setOpen] = useState5(false);
   const controller = {
     allowSpeed: false,
     // Picking a model seeds the depth from what the user last used for it, so the board behaves
@@ -11873,8 +11868,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const queryClient = useQueryClient2();
   const scrollContainerRef = useRef3(null);
   const prevTaskIdRef = useRef3(null);
-  const [moveBoardOpen, setMoveBoardOpen] = useState6(false);
-  const [previewAtt, setPreviewAtt] = useState6(null);
+  const [moveBoardOpen, setMoveBoardOpen] = useState5(false);
+  const [previewAtt, setPreviewAtt] = useState5(null);
   const shownBoard = board;
   const moveMutation = useMutation({
     mutationFn: (toBoard) => apiFetch(`/tasks/${encodeURIComponent(shownId)}/move?board=${encodeURIComponent(board || "")}`, {
@@ -11888,8 +11883,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       onClose();
     }
   });
-  const [descOwner, setDescOwner] = useState6(null);
-  const [descDraft, setDescDraft] = useState6("");
+  const [descOwner, setDescOwner] = useState5(null);
+  const [descDraft, setDescDraft] = useState5("");
   const shownId = descOwner || taskId;
   const switchResolvedRef = useRef3(false);
   const { data, isLoading, isError, refetch } = useQuery2({
@@ -11905,16 +11900,16 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       }
     }
   }, [shownId]);
-  const [comment, setComment] = useState6("");
-  const [showAllComments, setShowAllComments] = useState6(false);
-  const [feedTab, setFeedTab] = useState6("comments");
+  const [comment, setComment] = useState5("");
+  const [showAllComments, setShowAllComments] = useState5(false);
+  const [feedTab, setFeedTab] = useState5("comments");
   const logQuery = useQuery2({
     queryKey: ["kanban-gantt", "log", apiBase(), board, shownId],
     queryFn: () => fetchWorkerLog(shownId, board),
     enabled: Boolean(shownId) && feedTab === "log" && Boolean(data?.task?.log_exists)
   });
-  const [cliCopied, setCliCopied] = useState6(false);
-  const [pendingUnlink, setPendingUnlink] = useState6(null);
+  const [cliCopied, setCliCopied] = useState5(false);
+  const [pendingUnlink, setPendingUnlink] = useState5(null);
   const relations = useMemo3(() => relationsOf(tasks, shownId), [tasks, shownId]);
   const statusMutation = useMutation({
     mutationFn: (payload) => apiFetch(
@@ -12724,7 +12719,7 @@ function KanbanGanttPage() {
     staleTime: 6e4
   });
   const wsEnabled = useValue2($wsEnabled);
-  const [wsState, setWsState] = useState6(WS_STATE.off);
+  const [wsState, setWsState] = useState5(WS_STATE.off);
   const socketDoor = getSocket();
   const wsBoard = wsEnabled && !base && canPush(board) ? board : null;
   const { data, isLoading, isError, error } = useQuery2({
@@ -12733,7 +12728,7 @@ function KanbanGanttPage() {
     refetchInterval: wsState === WS_STATE.live ? 3e5 : 6e4
   });
   const foldKey = `fold.${board || "current"}`;
-  const [fold, setFold] = useState6(() => /* @__PURE__ */ new Map());
+  const [fold, setFold] = useState5(() => /* @__PURE__ */ new Map());
   useEffect5(() => {
     let next = /* @__PURE__ */ new Map();
     try {
@@ -12780,24 +12775,24 @@ function KanbanGanttPage() {
       }
     });
   }, [wsBoard, socketDoor, queryClient, scope]);
-  const [nowTick, setNowTick] = useState6(0);
+  const [nowTick, setNowTick] = useState5(0);
   useEffect5(() => {
     if (wsState !== WS_STATE.live) return void 0;
     const id = setInterval(() => setNowTick((t) => t + 1), 3e4);
     return () => clearInterval(id);
   }, [wsState]);
-  const [showArchived, setShowArchived] = useState6(false);
-  const [dragId, setDragId] = useState6(null);
-  const [pendingReparent, setPendingReparent] = useState6(null);
+  const [showArchived, setShowArchived] = useState5(false);
+  const [dragId, setDragId] = useState5(null);
+  const [pendingReparent, setPendingReparent] = useState5(null);
   const allTasks = data?.tasks || [];
-  const [selectedAssignees, setSelectedAssignees] = useState6(() => /* @__PURE__ */ new Set());
-  const [disabledStatuses, setDisabledStatuses] = useState6(() => {
+  const [selectedAssignees, setSelectedAssignees] = useState5(() => /* @__PURE__ */ new Set());
+  const [disabledStatuses, setDisabledStatuses] = useState5(() => {
     const saved = getStorage() ? getStorage().get("disabledStatuses", null) : null;
     return Array.isArray(saved) ? new Set(saved) : /* @__PURE__ */ new Set();
   });
-  const [search, setSearch] = useState6("");
-  const [selectedIds, setSelectedIds] = useState6(() => /* @__PURE__ */ new Set());
-  const [bulkAssignee, setBulkAssignee] = useState6("");
+  const [search, setSearch] = useState5("");
+  const [selectedIds, setSelectedIds] = useState5(() => /* @__PURE__ */ new Set());
+  const [bulkAssignee, setBulkAssignee] = useState5("");
   const lastCheckedIdRef = useRef3(null);
   const prefKey = (k) => board ? `${k}@${board}` : k;
   const readPref = (k, fallback = null) => {
@@ -12811,12 +12806,12 @@ function KanbanGanttPage() {
     if (s) s.set(prefKey(k), v);
   };
   const bandSwitcher = useBandSwitcherPresent();
-  const [viewMode, setViewMode] = useState6(() => {
+  const [viewMode, setViewMode] = useState5(() => {
     const saved = readPref("viewMode");
     return saved === "list" || saved === "graph" || saved === "whiteboard" ? saved : "timeline";
   });
   const graphMode = viewMode === "graph";
-  const [graphZoomPct, setGraphZoomPct] = useState6(() => {
+  const [graphZoomPct, setGraphZoomPct] = useState5(() => {
     const s = getStorage();
     const saved = Number(readPref("graphZoomPct"));
     const lo = Math.round(GRAPH_ZOOM_MIN * 100);
@@ -12830,12 +12825,12 @@ function KanbanGanttPage() {
     setGraphZoomPct(clamped);
     writePref("graphZoomPct", String(clamped));
   };
-  const [cardsTall, setCardsTall] = useState6(() => readPref("cardsTall") !== "0");
+  const [cardsTall, setCardsTall] = useState5(() => readPref("cardsTall") !== "0");
   const handleCardsTall = (next) => {
     setCardsTall(next);
     writePref("cardsTall", next ? "1" : "0");
   };
-  const [arrange, setArrange] = useState6(() => {
+  const [arrange, setArrange] = useState5(() => {
     const v = readPref("arrange");
     return ["down", "flow", "status", "compact"].includes(v) ? v : "down";
   });
@@ -12843,12 +12838,12 @@ function KanbanGanttPage() {
     setArrange(next);
     writePref("arrange", next);
   };
-  const [graphScope, setGraphScope] = useState6(() => {
+  const [graphScope, setGraphScope] = useState5(() => {
     const s = readPref("graphScope");
     if (s === "running-lineage") return "running";
     return SCOPES.includes(s) ? s : "all";
   });
-  const [graphLineage, setGraphLineage] = useState6(
+  const [graphLineage, setGraphLineage] = useState5(
     () => readPref("graphScope") === "running-lineage" || readPref("graphLineage") === "1"
   );
   const handleGraphScope = (next) => {
@@ -12859,7 +12854,7 @@ function KanbanGanttPage() {
     setGraphLineage(next);
     writePref("graphLineage", next ? "1" : "0");
   };
-  const [period, setPeriod] = useState6(() => {
+  const [period, setPeriod] = useState5(() => {
     const span = Number(readPref("period"));
     if (!(span > 0)) return null;
     const zoom = Number(readPref("zoomPct"));
@@ -12873,7 +12868,7 @@ function KanbanGanttPage() {
     setViewMode(mode);
     writePref("viewMode", mode);
   };
-  const [wbLayout, setWbLayout] = useState6(() => {
+  const [wbLayout, setWbLayout] = useState5(() => {
     const v = readPref("wbLayout");
     return v === "columns" || v === "map" ? v : "route";
   });
@@ -12881,7 +12876,7 @@ function KanbanGanttPage() {
     setWbLayout(mode);
     writePref("wbLayout", mode);
   };
-  const [wbPos, setWbPos] = useState6(() => {
+  const [wbPos, setWbPos] = useState5(() => {
     try {
       const raw = readPref("wbPos", "{}");
       const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -12894,7 +12889,7 @@ function KanbanGanttPage() {
     setWbPos(next);
     writePref("wbPos", JSON.stringify(next));
   };
-  const [zoomPct, setZoomPct] = useState6(() => {
+  const [zoomPct, setZoomPct] = useState5(() => {
     const s = getStorage();
     if (!s) return ZOOM_PCT_MIN;
     const pct = readPref("zoomPct");
@@ -12905,7 +12900,7 @@ function KanbanGanttPage() {
   });
   const containerRef = useRef3(null);
   const scrollerRef = useRef3(null);
-  const [trackW, setTrackW] = useState6(0);
+  const [trackW, setTrackW] = useState5(0);
   const handleToggleAssignee = (name) => {
     setSelectedAssignees((prev) => {
       const next = new Set(prev);
@@ -12928,7 +12923,7 @@ function KanbanGanttPage() {
       return next;
     });
   };
-  const [onlyAttachments, setOnlyAttachments] = useState6(() => {
+  const [onlyAttachments, setOnlyAttachments] = useState5(() => {
     const saved = getStorage() ? getStorage().get("onlyAttachments", null) : null;
     return saved === "1" || saved === true;
   });

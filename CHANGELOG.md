@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.13.1 — the band switcher reports itself
+
+`useBandSwitcherPresent` decided whether the desktop's page header band was painting our board
+switcher by watching `document.body` with a `MutationObserver`. That is a read of the host's DOM from
+outside the plugin's own surface, and the catalog's `desktop surface` check fails a plugin that does it
+(`✗ desktop surface — app DOM reach`), which would have blocked the entry at admission.
+
+The fact was never a DOM fact that needed observing: the band copy is our own component, and it runs in
+the same module instance whichever root paints it. It now sets `$bandSwitcherPresent` when it mounts and
+clears it when it unmounts; the inline copy — the fallback that reads the flag — never sets it, or the
+page would believe the band exists because it drew its own. Same behaviour, no host reach.
+
+`hermes plugins validate` on a worktree at this commit: `desktop surface — stays inside the plugin SDK
+surface`. The one remaining `security scan` finding in a local checkout comes from an untracked
+`.agents/skills/` file that is not in the release, and is absent at the pinned commit.
+
+No behaviour change for a reader.
+
 ## 1.13.0 — the toolbar finds its rows, and the camera is one bar
 
 Four things the page had been getting wrong for a while: the top bar could not keep its actions on the

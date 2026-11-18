@@ -14,6 +14,12 @@ let socket = null
 export const $baseUrl = atom('')
 /** Slug of the selected kanban board ('' until chosen). */
 export const $boardSlug = atom('')
+
+/** Whether the desktop's page header band is painting our switcher (see TitlebarBoardSwitcher).
+ *  Set by the band copy on mount, cleared on unmount: the projected component and the page share
+ *  this module, so the page can know the band exists without looking at the host's DOM. */
+export const $bandSwitcherPresent = atom(false)
+
 /** Identity of the gateway/connection the page is bound to.
  *
  *  The remembered board and the push socket are both connection-scoped: when this

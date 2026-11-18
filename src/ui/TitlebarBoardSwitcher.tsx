@@ -1,7 +1,7 @@
 import { Button, cn, Codicon, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, useQuery, useQueryClient, useValue } from '@hermes/plugin-sdk'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
-import { $boardSlug, apiBase, apiFetch, getStorage } from '../state'
+import { $bandSwitcherPresent, $boardSlug, apiBase, apiFetch, getStorage } from '../state'
 import { useGanttI18n } from '../i18n'
 
 /** The band copy carries this marker, so the page can tell whether the host is showing it. */
@@ -12,24 +12,16 @@ export const BAND_SWITCHER_ATTR = 'data-kg-band-switcher'
  *
  * The switcher is projected into the workspace page header (`WORKSPACE_PAGE_HEADER_AREA`), which
  * only the main pane paints: a page opened in a split tile gets no band, hence issue #20 — the board
- * could not be chosen there, and a board with nothing on `default` looked empty. The presence of the
- * band copy is a DOM fact, so the page watches for it and falls back to drawing the switcher itself.
+ * could not be chosen there, and a board with nothing on `default` looked empty.
+ *
+ * The answer used to be read from the DOM — a `MutationObserver` on `document.body` looking for the
+ * band copy's marker — which reaches outside the plugin's own surface (the catalog's `desktop surface`
+ * check fails a plugin that does). The band copy now says so itself: it is our own component, it runs
+ * in the same module instance whichever root paints it, so mounting it sets an atom and unmounting
+ * clears it. No DOM query, no host reach, and the fact is exactly as reliable.
  */
 export function useBandSwitcherPresent(): boolean {
-  const [present, setPresent] = useState(false)
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    const check = () => setPresent(Boolean(document.querySelector(`[${BAND_SWITCHER_ATTR}]`)))
-    check()
-    if (typeof MutationObserver === 'undefined') {
-      const timer = setTimeout(check, 400)
-      return () => clearTimeout(timer)
-    }
-    const observer = new MutationObserver(check)
-    observer.observe(document.body, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [])
-  return present
+  return useValue($bandSwitcherPresent)
 }
 
 /**
@@ -59,6 +51,14 @@ export function TitlebarBoardSwitcher({ inline = false }: { inline?: boolean } =
     if (getStorage()) getStorage().set('board', slug)
     void queryClient.invalidateQueries({ queryKey: ['kanban-gantt', 'gantt'] })
   }
+
+  // The band copy announces itself, and only it: the inline copy is the fallback that READS this, so
+  // letting it set the flag would make the page believe the band exists because it drew its own.
+  useEffect(() => {
+    if (inline) return
+    $bandSwitcherPresent.set(true)
+    return () => { $bandSwitcherPresent.set(false) }
+  }, [inline])
 
   const switcher = (
     <DropdownMenu>
