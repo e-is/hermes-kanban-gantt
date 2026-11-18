@@ -197,31 +197,25 @@ const PERIOD_CHOICES = [
 
 function PeriodSelector({ value, onChange, disabled }) {
   const i18n = useGanttI18n()
-  return jsx('div', {
+  return jsxs('span', {
     role: 'group',
     'aria-label': i18n.periodLabel,
-    className: 'inline-flex shrink-0 items-stretch overflow-hidden rounded-md',
-    style: { border: '1px solid var(--ui-stroke-tertiary)', opacity: disabled ? 0.45 : 1 },
-    children: PERIOD_CHOICES.map(({ span, key }, index) => {
-      const active = value === span
-      return jsx('button', {
-        type: 'button',
-        disabled: Boolean(disabled),
-        'aria-pressed': active,
-        title: `${i18n.periodShow} ${i18n[key]}`,
-        onClick: () => onChange(span),
-        className: cn(
-          'h-5 px-1.5 text-[10px] leading-none tabular-nums whitespace-nowrap border-0 cursor-pointer',
-          active ? 'font-semibold' : 'font-normal'
-        ),
-        style: {
-          backgroundColor: active ? 'var(--ui-accent)' : 'transparent',
-          color: active ? 'var(--ui-bg-chrome)' : 'var(--ui-text-secondary)',
-          borderLeft: index ? '1px solid var(--ui-stroke-tertiary)' : 'none'
-        },
-        children: i18n[key]
-      }, span)
-    })
+    // The same track and the same chips as the scope segments beside it: two segmented controls in
+    // one row should read as one family, not as two designs that happen to be adjacent.
+    className: 'inline-flex shrink-0 items-center gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5',
+    style: { opacity: disabled ? 0.45 : 1 },
+    children: PERIOD_CHOICES.map(({ span, key }) => jsx('button', {
+      type: 'button',
+      disabled: Boolean(disabled),
+      'aria-pressed': value === span,
+      title: `${i18n.periodShow} ${i18n[key]}`,
+      onClick: () => onChange(span),
+      className: cn(
+        'flex min-w-0 items-center justify-center rounded-[3px] px-2 py-0.5 text-[0.6875rem] font-medium tabular-nums whitespace-nowrap transition-colors cursor-pointer border-0',
+        value === span ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+      ),
+      children: i18n[key]
+    }, span))
   })
 }
 
@@ -5387,6 +5381,13 @@ export function KanbanGanttPage() {
                 scope: graphScope,
                 onScopeChange: handleGraphScope
               }),
+              // The time window, between the funnel and the search: it is a filter of the page's
+              // own axis, so it sits with the filters — and it keeps its place in every view.
+              jsx(PeriodSelector, {
+                value: period,
+                onChange: handlePeriod,
+                disabled: false
+              }),
               jsxs('div', {
                 className: 'inline-flex items-center gap-1.5 border-b border-transparent focus-within:border-(--ui-stroke-secondary) px-1 py-0.5 ml-1',
                 children: [
@@ -5411,15 +5412,6 @@ export function KanbanGanttPage() {
                       })
                     : null
                 ]
-              }),
-              // The time window sits with the other filters, right after the search, and in every
-              // view: it is the page's window, not a property of the timeline. In the graph, list
-              // and whiteboard it changes nothing today — those views lay out the whole board — so
-              // what it does there is still the timeline's zoom window when the reader goes back.
-              jsx(PeriodSelector, {
-                value: period,
-                onChange: handlePeriod,
-                disabled: false
               })
             ]
           }),
