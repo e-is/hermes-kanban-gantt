@@ -33,6 +33,7 @@ export const hu = {
     attachmentPosition: (i, n) => `${i} / ${n}`,
     closeWindow: 'Bezárás',
     filterCards: 'Kártyák szűrése…',
+    clearSearch: 'Keresés törlése',
     zoomTimeline: 'Idővonal nagyítása',
     zoomWheelHint: mod => `Idővonal fölött ${mod}+görgő: nagyítás · Görgő önmagában: görgetés · Kattintson duplán a vonalzóra: visszaállítás`,
     nowMarker: 'Most',

@@ -44,6 +44,7 @@ export const zh = {
     attachmentPosition: (i, n) => `第 ${i} / ${n}`,
     closeWindow: '关闭',
     filterCards: '筛选任务…',
+    clearSearch: '清除搜索',
     zoomTimeline: '时间线缩放',
     zoomWheelHint: mod => `${mod}+滚轮：缩放 · 单独滚动：滚动 · 双击标尺：重置`,
     nowMarker: '现在',

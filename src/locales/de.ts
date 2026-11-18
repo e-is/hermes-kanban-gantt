@@ -33,6 +33,7 @@ export const de = {
     attachmentPosition: (i, n) => `${i} von ${n}`,
     closeWindow: 'Schließen',
     filterCards: 'Karten filtern…',
+    clearSearch: 'Suche löschen',
     zoomTimeline: 'Zeitstrahl zoomen',
     zoomWheelHint: mod => `${mod}+Mausrad über dem Zeitstrahl: zoomen · Nur Mausrad: scrollen · Doppelklick auf die Skala: zurücksetzen`,
     nowMarker: 'Jetzt',

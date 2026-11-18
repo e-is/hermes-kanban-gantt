@@ -33,6 +33,7 @@ export const ar = {
     attachmentPosition: (i, n) => `${i} من ${n}`,
     closeWindow: 'إغلاق',
     filterCards: 'تصفية البطاقات…',
+    clearSearch: 'مسح البحث',
     zoomTimeline: 'تكبير المخطط الزمني',
     zoomWheelHint: mod => `${mod}+العجلة فوق المخطط الزمني: تكبير · العجلة وحدها: تمرير · نقر مزدوج على المسطرة: إعادة الضبط`,
     nowMarker: 'الآن',

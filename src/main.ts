@@ -200,7 +200,7 @@ function PeriodSelector({ value, onChange, disabled }) {
   return jsx('div', {
     role: 'group',
     'aria-label': i18n.periodLabel,
-    className: 'inline-flex items-stretch overflow-hidden rounded-md',
+    className: 'inline-flex shrink-0 items-stretch overflow-hidden rounded-md',
     style: { border: '1px solid var(--ui-stroke-tertiary)', opacity: disabled ? 0.45 : 1 },
     children: PERIOD_CHOICES.map(({ span, key }, index) => {
       const active = value === span
@@ -211,7 +211,7 @@ function PeriodSelector({ value, onChange, disabled }) {
         title: `${i18n.periodShow} ${i18n[key]}`,
         onClick: () => onChange(span),
         className: cn(
-          'h-5 px-1.5 text-[10px] leading-none tabular-nums border-0 cursor-pointer',
+          'h-5 px-1.5 text-[10px] leading-none tabular-nums whitespace-nowrap border-0 cursor-pointer',
           active ? 'font-semibold' : 'font-normal'
         ),
         style: {
@@ -1141,7 +1141,7 @@ function ViewToggle({ value, onChange }) {
   return jsxs('span', {
     // The official track: a tinted, inset-looking strip the options sit on. Ours had a border and no
     // background, which is why the buttons had nothing darker around them to sit in.
-    className: 'inline-grid w-fit auto-cols-fr grid-flow-col gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5',
+    className: 'inline-grid w-fit shrink-0 auto-cols-fr grid-flow-col gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5',
     role: 'group',
     children: [
       item('list', 'list-flat', i18n.viewList),
@@ -2541,7 +2541,7 @@ function GraphArrangeSelect({ value, onChange }) {
         children: jsxs(Button, {
           size: 'xs',
           variant: 'ghost',
-          className: 'gap-1 text-[11px] whitespace-nowrap',
+          className: 'shrink-0 gap-1 text-[11px] whitespace-nowrap',
           'aria-label': i18n.arrangeAria,
           title: i18n.arrangeAria,
           children: [
@@ -5331,7 +5331,7 @@ export function KanbanGanttPage() {
         children: [
           // Left: Title + Task Count Badge + Blocked Badge + Filter + Search Field
           jsxs('div', {
-            className: 'inline-flex items-center gap-2 text-sm font-medium',
+            className: 'flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium',
             children: [
               jsx('span', { className: 'font-semibold', children: i18n.title }),
               // The band above the page (WORKSPACE_PAGE_HEADER_AREA) is painted by the MAIN pane
@@ -5397,8 +5397,27 @@ export function KanbanGanttPage() {
                     placeholder: i18n.filterCards,
                     className: 'bg-transparent border-0 text-xs text-(--ui-text-primary) placeholder:text-(--ui-text-quaternary) focus:outline-none w-48',
                     onInput: event => setSearch(event.target.value)
-                  })
+                  }),
+                  // Clearing is a gesture, not four backspaces: the cross appears only when there
+                  // is something to clear, so the field keeps its quiet shape while it is empty.
+                  search
+                    ? jsx(Button, {
+                        size: 'icon-xs',
+                        variant: 'ghost',
+                        'aria-label': i18n.clearSearch,
+                        title: i18n.clearSearch,
+                        onClick: () => setSearch(''),
+                        children: jsx(Codicon, { name: 'close', size: '0.7rem' })
+                      })
+                    : null
                 ]
+              }),
+              // The time window sits with the other filters, right after the search: it slices the
+              // timeline, so it belongs here rather than among the view controls on the right.
+              (graphMode || listMode || whiteboardMode) ? null : jsx(PeriodSelector, {
+                value: period,
+                onChange: handlePeriod,
+                disabled: false
               })
             ]
           }),
@@ -5407,23 +5426,23 @@ export function KanbanGanttPage() {
           // — see TitlebarBoardSwitcher above.
 
           // Right: Refresh button + Zoom control
+          //
+          // The cluster wraps as a whole. Before, it could only be squeezed: the view chips are a
+          // grid of `1fr` columns and their labels are `nowrap`, so a narrow window shrank the
+          // columns under the text and the four mode names drew on top of each other. Now the
+          // chips keep their width (`shrink-0` above) and whatever does not fit — the zoom slider,
+          // the creation verb — takes the next line, right-aligned, instead of colliding.
           jsxs('div', {
-            className: 'inline-flex items-center gap-3',
+            className: 'flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2',
             children: [
               jsx(ViewToggle, { value: viewMode, onChange: handleViewMode }),
-              // In graph mode the period selector has nothing to say (there is no time
-              // axis), so its slot carries the scopes instead — same width, same place.
-              // Scopes in graph mode, the period selector in the timeline: a graph has no time
-              // axis to slice, and since the activity band is gone there is nothing left for a
-              // window to tune.
+              // In graph mode the period selector has nothing to say (there is no time axis), so its
+              // slot carries the arrangement menu instead. The period itself moved to the left, with
+              // the other filters.
               graphMode
                 ? jsx(GraphArrangeSelect, { value: arrange, onChange: handleArrange })
-                : (listMode || whiteboardMode) ? null : jsx(PeriodSelector, {
-                    value: period,
-                    onChange: handlePeriod,
-                    disabled: false
-                  }),
-              (listMode || whiteboardMode) ? null : jsxs('span', { className: 'inline-flex items-center gap-1.5', children: [
+                : null,
+              (listMode || whiteboardMode) ? null : jsxs('span', { className: 'inline-flex shrink-0 items-center gap-1.5', children: [
                 jsx('input', {
                   type: 'range',
                   min: String(graphMode ? Math.round(GRAPH_ZOOM_MIN * 100) : ZOOM_PCT_MIN),

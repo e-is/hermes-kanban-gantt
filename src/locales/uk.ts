@@ -33,6 +33,7 @@ export const uk = {
     attachmentPosition: (i, n) => `${i} з ${n}`,
     closeWindow: 'Закрити',
     filterCards: 'Фільтр карток…',
+    clearSearch: 'Очистити пошук',
     zoomTimeline: 'Масштаб шкали',
     zoomWheelHint: mod => `${mod}+колесо над шкалою: масштаб · Колесо: прокручування · Подвійний клік по лінійці: скидання`,
     nowMarker: 'Зараз',

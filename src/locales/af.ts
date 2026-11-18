@@ -33,6 +33,7 @@ export const af = {
     attachmentPosition: (i, n) => `${i} van ${n}`,
     closeWindow: 'Maak toe',
     filterCards: 'Filtreer kaarte…',
+    clearSearch: 'Vee soektog uit',
     zoomTimeline: 'Zoem tydlyn',
     zoomWheelHint: mod => `${mod}+wiel oor die tydlyn: zoem · Wiel alleen: rol · Dubbelklik die liniaal: herstel`,
     nowMarker: 'Nou',

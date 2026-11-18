@@ -33,6 +33,7 @@ export const ga = {
     attachmentPosition: (i, n) => `${i} as ${n}`,
     closeWindow: 'Dún',
     filterCards: 'Scag na cártaí…',
+    clearSearch: 'Glan an chuardach',
     zoomTimeline: 'Súmáil an amlíne',
     zoomWheelHint: mod => `${mod}+rothar thar an amlíne: súmáil · Rothar amháin: scrollaigh · Cliceáil faoi dhó ar an rialóir: athshocraigh`,
     nowMarker: 'Anois',

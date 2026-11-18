@@ -150,6 +150,7 @@ var en = {
   attachmentPosition: (i, n) => `${i} of ${n}`,
   closeWindow: "Close",
   filterCards: "Filter cards…",
+  clearSearch: "Clear search",
   zoomTimeline: "Zoom timeline",
   zoomWheelHint: (mod) => `${mod}+wheel over the timeline: zoom · Wheel alone: scroll · Double-click the ruler: reset`,
   nowMarker: "Now",
@@ -481,6 +482,7 @@ var fr = {
   attachmentPosition: (i, n) => `${i} sur ${n}`,
   closeWindow: "Fermer",
   filterCards: "Filtrer les tâches…",
+  clearSearch: "Effacer la recherche",
   zoomTimeline: "Zoom timeline",
   zoomWheelHint: (mod) => `${mod}+molette sur la chronologie : zoom · Molette seule : défilement · Double-clic sur la règle : réinitialiser`,
   nowMarker: "Maintenant",
@@ -821,6 +823,7 @@ var zh = {
   attachmentPosition: (i, n) => `第 ${i} / ${n}`,
   closeWindow: "关闭",
   filterCards: "筛选任务…",
+  clearSearch: "清除搜索",
   zoomTimeline: "时间线缩放",
   zoomWheelHint: (mod) => `${mod}+滚轮：缩放 · 单独滚动：滚动 · 双击标尺：重置`,
   nowMarker: "现在",
@@ -1136,6 +1139,7 @@ var af = {
   attachmentPosition: (i, n) => `${i} van ${n}`,
   closeWindow: "Maak toe",
   filterCards: "Filtreer kaarte…",
+  clearSearch: "Vee soektog uit",
   zoomTimeline: "Zoem tydlyn",
   zoomWheelHint: (mod) => `${mod}+wiel oor die tydlyn: zoem · Wiel alleen: rol · Dubbelklik die liniaal: herstel`,
   nowMarker: "Nou",
@@ -1467,6 +1471,7 @@ var ar = {
   attachmentPosition: (i, n) => `${i} من ${n}`,
   closeWindow: "إغلاق",
   filterCards: "تصفية البطاقات…",
+  clearSearch: "مسح البحث",
   zoomTimeline: "تكبير المخطط الزمني",
   zoomWheelHint: (mod) => `${mod}+العجلة فوق المخطط الزمني: تكبير · العجلة وحدها: تمرير · نقر مزدوج على المسطرة: إعادة الضبط`,
   nowMarker: "الآن",
@@ -1798,6 +1803,7 @@ var de = {
   attachmentPosition: (i, n) => `${i} von ${n}`,
   closeWindow: "Schließen",
   filterCards: "Karten filtern…",
+  clearSearch: "Suche löschen",
   zoomTimeline: "Zeitstrahl zoomen",
   zoomWheelHint: (mod) => `${mod}+Mausrad über dem Zeitstrahl: zoomen · Nur Mausrad: scrollen · Doppelklick auf die Skala: zurücksetzen`,
   nowMarker: "Jetzt",
@@ -2129,6 +2135,7 @@ var es = {
   attachmentPosition: (i, n) => `${i} de ${n}`,
   closeWindow: "Cerrar",
   filterCards: "Filtrar tarjetas…",
+  clearSearch: "Borrar la búsqueda",
   zoomTimeline: "Zoom de la cronología",
   zoomWheelHint: (mod) => `${mod}+rueda sobre la cronología: zoom · Rueda sola: desplazar · Doble clic en la regla: restablecer`,
   nowMarker: "Ahora",
@@ -2460,6 +2467,7 @@ var ga = {
   attachmentPosition: (i, n) => `${i} as ${n}`,
   closeWindow: "Dún",
   filterCards: "Scag na cártaí…",
+  clearSearch: "Glan an chuardach",
   zoomTimeline: "Súmáil an amlíne",
   zoomWheelHint: (mod) => `${mod}+rothar thar an amlíne: súmáil · Rothar amháin: scrollaigh · Cliceáil faoi dhó ar an rialóir: athshocraigh`,
   nowMarker: "Anois",
@@ -2791,6 +2799,7 @@ var hu = {
   attachmentPosition: (i, n) => `${i} / ${n}`,
   closeWindow: "Bezárás",
   filterCards: "Kártyák szűrése…",
+  clearSearch: "Keresés törlése",
   zoomTimeline: "Idővonal nagyítása",
   zoomWheelHint: (mod) => `Idővonal fölött ${mod}+görgő: nagyítás · Görgő önmagában: görgetés · Kattintson duplán a vonalzóra: visszaállítás`,
   nowMarker: "Most",
@@ -3122,6 +3131,7 @@ var it = {
   attachmentPosition: (i, n) => `${i} di ${n}`,
   closeWindow: "Chiudi",
   filterCards: "Filtra le schede…",
+  clearSearch: "Cancella la ricerca",
   zoomTimeline: "Zoom della timeline",
   zoomWheelHint: (mod) => `${mod}+rotella sopra la timeline: zoom · Rotella da sola: scorrimento · Doppio clic sul righello: ripristino`,
   nowMarker: "Adesso",
@@ -3453,6 +3463,7 @@ var ja = {
   attachmentPosition: (i, n) => `${i} / ${n}`,
   closeWindow: "閉じる",
   filterCards: "カードを絞り込む…",
+  clearSearch: "検索をクリア",
   zoomTimeline: "タイムラインのズーム",
   zoomWheelHint: (mod) => `${mod}+ホイールでタイムライン上をズーム · ホイールのみでスクロール · ルーラーをダブルクリックでリセット`,
   nowMarker: "現在",
@@ -3784,6 +3795,7 @@ var ko = {
   attachmentPosition: (i, n) => `${n}개 중 ${i}`,
   closeWindow: "닫기",
   filterCards: "카드 필터…",
+  clearSearch: "검색 지우기",
   zoomTimeline: "타임라인 확대/축소",
   zoomWheelHint: (mod) => `타임라인 위에서 ${mod}+휠: 확대/축소 · 휠만: 스크롤 · 눈금자 두 번 클릭: 초기화`,
   nowMarker: "지금",
@@ -4115,6 +4127,7 @@ var pt = {
   attachmentPosition: (i, n) => `${i} de ${n}`,
   closeWindow: "Fechar",
   filterCards: "Filtrar cartões…",
+  clearSearch: "Limpar a pesquisa",
   zoomTimeline: "Zoom da cronologia",
   zoomWheelHint: (mod) => `${mod}+roda sobre a cronologia: zoom · Roda sozinha: deslocar · Duplo clique na régua: repor`,
   nowMarker: "Agora",
@@ -4446,6 +4459,7 @@ var ru = {
   attachmentPosition: (i, n) => `${i} из ${n}`,
   closeWindow: "Закрыть",
   filterCards: "Фильтр карточек…",
+  clearSearch: "Очистить поиск",
   zoomTimeline: "Масштаб шкалы",
   zoomWheelHint: (mod) => `${mod}+колесо над шкалой: масштаб · Колесо: прокрутка · Двойной щелчок по линейке: сброс`,
   nowMarker: "Сейчас",
@@ -4772,6 +4786,7 @@ var tr = {
   attachmentPosition: (i, n) => `${n} içinden ${i}`,
   closeWindow: "Kapat",
   filterCards: "Kartları filtrele…",
+  clearSearch: "Aramayı temizle",
   zoomTimeline: "Zaman çizelgesini yakınlaştır",
   zoomWheelHint: (mod) => `Zaman çizelgesi üzerinde ${mod}+tekerlek: yakınlaştır · Tek başına tekerlek: kaydır · Cetvele çift tıklayın: sıfırla`,
   nowMarker: "Şimdi",
@@ -5103,6 +5118,7 @@ var uk = {
   attachmentPosition: (i, n) => `${i} з ${n}`,
   closeWindow: "Закрити",
   filterCards: "Фільтр карток…",
+  clearSearch: "Очистити пошук",
   zoomTimeline: "Масштаб шкали",
   zoomWheelHint: (mod) => `${mod}+колесо над шкалою: масштаб · Колесо: прокручування · Подвійний клік по лінійці: скидання`,
   nowMarker: "Зараз",
@@ -5429,6 +5445,7 @@ var zhHant = {
   attachmentPosition: (i, n) => `第 ${i} / ${n}`,
   closeWindow: "關閉",
   filterCards: "篩選卡片…",
+  clearSearch: "清除搜尋",
   zoomTimeline: "時間軸縮放",
   zoomWheelHint: (mod) => `${mod}+滾輪：縮放 · 僅滾輪：捲動 · 雙擊尺規：重設`,
   nowMarker: "現在",
@@ -9155,7 +9172,7 @@ function PeriodSelector({ value, onChange, disabled }) {
   return jsx7("div", {
     role: "group",
     "aria-label": i18n.periodLabel,
-    className: "inline-flex items-stretch overflow-hidden rounded-md",
+    className: "inline-flex shrink-0 items-stretch overflow-hidden rounded-md",
     style: { border: "1px solid var(--ui-stroke-tertiary)", opacity: disabled ? 0.45 : 1 },
     children: PERIOD_CHOICES.map(({ span, key }, index2) => {
       const active = value === span;
@@ -9166,7 +9183,7 @@ function PeriodSelector({ value, onChange, disabled }) {
         title: `${i18n.periodShow} ${i18n[key]}`,
         onClick: () => onChange(span),
         className: cn3(
-          "h-5 px-1.5 text-[10px] leading-none tabular-nums border-0 cursor-pointer",
+          "h-5 px-1.5 text-[10px] leading-none tabular-nums whitespace-nowrap border-0 cursor-pointer",
           active ? "font-semibold" : "font-normal"
         ),
         style: {
@@ -9955,7 +9972,7 @@ function ViewToggle({ value, onChange }) {
   return jsxs7("span", {
     // The official track: a tinted, inset-looking strip the options sit on. Ours had a border and no
     // background, which is why the buttons had nothing darker around them to sit in.
-    className: "inline-grid w-fit auto-cols-fr grid-flow-col gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5",
+    className: "inline-grid w-fit shrink-0 auto-cols-fr grid-flow-col gap-0.5 rounded-[5px] bg-(--ui-bg-tertiary) p-0.5",
     role: "group",
     children: [
       item("list", "list-flat", i18n.viewList),
@@ -11147,7 +11164,7 @@ function GraphArrangeSelect({ value, onChange }) {
         children: jsxs7(Button5, {
           size: "xs",
           variant: "ghost",
-          className: "gap-1 text-[11px] whitespace-nowrap",
+          className: "shrink-0 gap-1 text-[11px] whitespace-nowrap",
           "aria-label": i18n.arrangeAria,
           title: i18n.arrangeAria,
           children: [
@@ -13417,7 +13434,7 @@ function KanbanGanttPage() {
             children: [
               // Left: Title + Task Count Badge + Blocked Badge + Filter + Search Field
               jsxs7("div", {
-                className: "inline-flex items-center gap-2 text-sm font-medium",
+                className: "flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium",
                 children: [
                   jsx7("span", { className: "font-semibold", children: i18n.title }),
                   // The band above the page (WORKSPACE_PAGE_HEADER_AREA) is painted by the MAIN pane
@@ -13481,29 +13498,46 @@ function KanbanGanttPage() {
                         placeholder: i18n.filterCards,
                         className: "bg-transparent border-0 text-xs text-(--ui-text-primary) placeholder:text-(--ui-text-quaternary) focus:outline-none w-48",
                         onInput: (event) => setSearch(event.target.value)
-                      })
+                      }),
+                      // Clearing is a gesture, not four backspaces: the cross appears only when there
+                      // is something to clear, so the field keeps its quiet shape while it is empty.
+                      search ? jsx7(Button5, {
+                        size: "icon-xs",
+                        variant: "ghost",
+                        "aria-label": i18n.clearSearch,
+                        title: i18n.clearSearch,
+                        onClick: () => setSearch(""),
+                        children: jsx7(Codicon6, { name: "close", size: "0.7rem" })
+                      }) : null
                     ]
+                  }),
+                  // The time window sits with the other filters, right after the search: it slices the
+                  // timeline, so it belongs here rather than among the view controls on the right.
+                  graphMode || listMode || whiteboardMode ? null : jsx7(PeriodSelector, {
+                    value: period,
+                    onChange: handlePeriod,
+                    disabled: false
                   })
                 ]
               }),
               // Board switcher moved to the desktop titlebar band (titleBar.center)
               // — see TitlebarBoardSwitcher above.
               // Right: Refresh button + Zoom control
+              //
+              // The cluster wraps as a whole. Before, it could only be squeezed: the view chips are a
+              // grid of `1fr` columns and their labels are `nowrap`, so a narrow window shrank the
+              // columns under the text and the four mode names drew on top of each other. Now the
+              // chips keep their width (`shrink-0` above) and whatever does not fit — the zoom slider,
+              // the creation verb — takes the next line, right-aligned, instead of colliding.
               jsxs7("div", {
-                className: "inline-flex items-center gap-3",
+                className: "flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2",
                 children: [
                   jsx7(ViewToggle, { value: viewMode, onChange: handleViewMode }),
-                  // In graph mode the period selector has nothing to say (there is no time
-                  // axis), so its slot carries the scopes instead — same width, same place.
-                  // Scopes in graph mode, the period selector in the timeline: a graph has no time
-                  // axis to slice, and since the activity band is gone there is nothing left for a
-                  // window to tune.
-                  graphMode ? jsx7(GraphArrangeSelect, { value: arrange, onChange: handleArrange }) : listMode || whiteboardMode ? null : jsx7(PeriodSelector, {
-                    value: period,
-                    onChange: handlePeriod,
-                    disabled: false
-                  }),
-                  listMode || whiteboardMode ? null : jsxs7("span", { className: "inline-flex items-center gap-1.5", children: [
+                  // In graph mode the period selector has nothing to say (there is no time axis), so its
+                  // slot carries the arrangement menu instead. The period itself moved to the left, with
+                  // the other filters.
+                  graphMode ? jsx7(GraphArrangeSelect, { value: arrange, onChange: handleArrange }) : null,
+                  listMode || whiteboardMode ? null : jsxs7("span", { className: "inline-flex shrink-0 items-center gap-1.5", children: [
                     jsx7("input", {
                       type: "range",
                       min: String(graphMode ? Math.round(GRAPH_ZOOM_MIN * 100) : ZOOM_PCT_MIN),

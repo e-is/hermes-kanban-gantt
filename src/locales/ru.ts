@@ -33,6 +33,7 @@ export const ru = {
     attachmentPosition: (i, n) => `${i} из ${n}`,
     closeWindow: 'Закрыть',
     filterCards: 'Фильтр карточек…',
+    clearSearch: 'Очистить поиск',
     zoomTimeline: 'Масштаб шкалы',
     zoomWheelHint: mod => `${mod}+колесо над шкалой: масштаб · Колесо: прокрутка · Двойной щелчок по линейке: сброс`,
     nowMarker: 'Сейчас',

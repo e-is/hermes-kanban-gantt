@@ -33,6 +33,7 @@ export const pt = {
     attachmentPosition: (i, n) => `${i} de ${n}`,
     closeWindow: 'Fechar',
     filterCards: 'Filtrar cartões…',
+    clearSearch: 'Limpar a pesquisa',
     zoomTimeline: 'Zoom da cronologia',
     zoomWheelHint: mod => `${mod}+roda sobre a cronologia: zoom · Roda sozinha: deslocar · Duplo clique na régua: repor`,
     nowMarker: 'Agora',

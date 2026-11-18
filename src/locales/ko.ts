@@ -33,6 +33,7 @@ export const ko = {
     attachmentPosition: (i, n) => `${n}개 중 ${i}`,
     closeWindow: '닫기',
     filterCards: '카드 필터…',
+    clearSearch: '검색 지우기',
     zoomTimeline: '타임라인 확대/축소',
     zoomWheelHint: mod => `타임라인 위에서 ${mod}+휠: 확대/축소 · 휠만: 스크롤 · 눈금자 두 번 클릭: 초기화`,
     nowMarker: '지금',

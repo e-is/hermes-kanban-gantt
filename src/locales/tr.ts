@@ -33,6 +33,7 @@ export const tr = {
     attachmentPosition: (i, n) => `${n} içinden ${i}`,
     closeWindow: 'Kapat',
     filterCards: 'Kartları filtrele…',
+    clearSearch: 'Aramayı temizle',
     zoomTimeline: 'Zaman çizelgesini yakınlaştır',
     zoomWheelHint: mod => `Zaman çizelgesi üzerinde ${mod}+tekerlek: yakınlaştır · Tek başına tekerlek: kaydır · Cetvele çift tıklayın: sıfırla`,
     nowMarker: 'Şimdi',

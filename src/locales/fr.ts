@@ -33,6 +33,7 @@ export const fr = {
     attachmentPosition: (i, n) => `${i} sur ${n}`,
     closeWindow: 'Fermer',
     filterCards: 'Filtrer les tâches…',
+    clearSearch: 'Effacer la recherche',
     zoomTimeline: 'Zoom timeline',
     zoomWheelHint: mod => `${mod}+molette sur la chronologie : zoom · Molette seule : défilement · Double-clic sur la règle : réinitialiser`,
     nowMarker: 'Maintenant',

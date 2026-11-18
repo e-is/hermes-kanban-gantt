@@ -33,6 +33,7 @@ export const ja = {
     attachmentPosition: (i, n) => `${i} / ${n}`,
     closeWindow: '閉じる',
     filterCards: 'カードを絞り込む…',
+    clearSearch: '検索をクリア',
     zoomTimeline: 'タイムラインのズーム',
     zoomWheelHint: mod => `${mod}+ホイールでタイムライン上をズーム · ホイールのみでスクロール · ルーラーをダブルクリックでリセット`,
     nowMarker: '現在',

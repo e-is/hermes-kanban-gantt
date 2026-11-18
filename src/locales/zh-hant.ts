@@ -33,6 +33,7 @@ export const zhHant = {
     attachmentPosition: (i, n) => `第 ${i} / ${n}`,
     closeWindow: '關閉',
     filterCards: '篩選卡片…',
+    clearSearch: '清除搜尋',
     zoomTimeline: '時間軸縮放',
     zoomWheelHint: mod => `${mod}+滾輪：縮放 · 僅滾輪：捲動 · 雙擊尺規：重設`,
     nowMarker: '現在',

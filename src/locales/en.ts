@@ -33,6 +33,7 @@ export const en = {
     attachmentPosition: (i, n) => `${i} of ${n}`,
     closeWindow: 'Close',
     filterCards: 'Filter cards…',
+    clearSearch: 'Clear search',
     zoomTimeline: 'Zoom timeline',
     zoomWheelHint: mod => `${mod}+wheel over the timeline: zoom · Wheel alone: scroll · Double-click the ruler: reset`,
     nowMarker: 'Now',
