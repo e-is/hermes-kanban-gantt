@@ -13511,9 +13511,11 @@ function KanbanGanttPage() {
                       }) : null
                     ]
                   }),
-                  // The time window sits with the other filters, right after the search: it slices the
-                  // timeline, so it belongs here rather than among the view controls on the right.
-                  graphMode || listMode || whiteboardMode ? null : jsx7(PeriodSelector, {
+                  // The time window sits with the other filters, right after the search, and in every
+                  // view: it is the page's window, not a property of the timeline. In the graph, list
+                  // and whiteboard it changes nothing today — those views lay out the whole board — so
+                  // what it does there is still the timeline's zoom window when the reader goes back.
+                  jsx7(PeriodSelector, {
                     value: period,
                     onChange: handlePeriod,
                     disabled: false
