@@ -13540,18 +13540,22 @@ function KanbanGanttPage() {
                         children: jsx7(Codicon6, { name: "close", size: "0.7rem" })
                       }) : null
                     ]
-                  })
+                  }),
+                  // The view switcher closes the LEFT group: it is how the reader reads this board, not
+                  // an action on it. Only the actions that write — the creation verb and the menu — live
+                  // on the right, past the spacer.
+                  jsx7(ViewToggle, { value: viewMode, onChange: handleViewMode })
                 ]
               }),
+              // The spacer: whatever width is left over goes here, so the actions that write are pinned
+              // to the page's edge instead of trailing the filters.
+              jsx7("div", { className: "flex-1" }),
               // Board switcher moved to the desktop titlebar band (titleBar.center)
               // — see TitlebarBoardSwitcher above.
-              // Right: Refresh button + Zoom control
-              //
-              // The cluster wraps as a whole. Before, it could only be squeezed: the view chips are a
-              // grid of `1fr` columns and their labels are `nowrap`, so a narrow window shrank the
-              // columns under the text and the four mode names drew on top of each other. Now the
-              // chips keep their width (`shrink-0` above) and whatever does not fit — the zoom slider,
-              // the creation verb — takes the next line, right-aligned, instead of colliding.
+              // Right: what WRITES — the creation verb and the page menu — with the arrangement and zoom
+              // controls that steer the canvas. The cluster wraps as a whole: the row's single leftover
+              // item keeps `ml-auto`, so it reaches the edge whether it shares the line with the filters
+              // or takes the next one.
               jsxs7("div", {
                 // `ml-auto` and not the row's `justify-between`: when this cluster wraps onto its own
                 // line it is the only flex item there, and `justify-between` aligns a lone item to the
@@ -13559,7 +13563,6 @@ function KanbanGanttPage() {
                 // the page's right edge. An auto margin keeps it right in both cases.
                 className: "ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2",
                 children: [
-                  jsx7(ViewToggle, { value: viewMode, onChange: handleViewMode }),
                   // In graph mode the period selector has nothing to say (there is no time axis), so its
                   // slot carries the arrangement menu instead. The period itself moved to the left, with
                   // the other filters.
