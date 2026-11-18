@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.13.0 — the toolbar finds its rows, and the camera is one bar
+
+Four things the page had been getting wrong for a while: the top bar could not keep its actions on the
+first line, the time window belonged to one view out of four, the zoom lived in three different
+shapes, and the graph's card count was a footnote hidden under the new camera bar.
+
+**The top bar is two columns.** It used to be one wrapping flex row, and the left group — scopes,
+lineage, funnel, window, search, view switcher — took the whole line, so `New task` and the `...` menu
+fell to a second line with 760 px still free. The row is now `items-start` with a `flex-1` left column
+that may wrap and a `shrink-0` right column that does not: the writing actions stay at the page's
+right edge, on the first line, whatever the width. The view switcher closes the left group, because it
+is a reading control like the filters beside it, not an action.
+
+**The time window is the page's, not the timeline's.** `6h · 12h · 24h · 3j · 7j` is visible in all
+four modes — it is the window you are looking at, not a property of an axis. In the timeline it still
+zooms. Everywhere else it FILTERS: a card is in the window when its bar overlaps `[now - span, now]`,
+and with lineage on, whatever leads to those cards comes along. The chips are a segmented control on
+the scope chips' track, one line, labels compacted to `6h`/`3j`/`3T` — no space before the unit. The
+search field grew the `x` it was missing, shown only when there is something to clear.
+
+**One zoom bar, on every canvas.** The zoom existed as a slider in the header, another in the graph,
+and the whiteboard's floating bar — the only one that could say "fit". There is now one bar, the
+whiteboard's, on the canvas it scales: `−`, the percentage, `+`, fit; and in the whiteboard, the tidy
+wand at its head. The two header sliders are gone: a slider and the same percentage on the canvas were
+two controls for one number. Fit is the one thing a slider cannot express — the timeline picks the
+scale where the whole domain fills the pane and starts at its left edge, the graph computes it from the
+layout and centres it. The bar's Fit turns accent blue while the view sits at that scale; in the graph
+that state IS auto-fit, so it arms on Fit and disarms the moment the reader takes the camera. The
+values are the whiteboard's own (12 px container radius, 8 px buttons, 28 px squares) and are written
+as CSS, not utility classes: the host's Tailwind build does not compile all of them, and a dropped
+`rounded-xl` left the box square.
+
+**The graph's card count says N/N of the scope.** The footer carried a `shown/total` span as a 9.5 px
+quaternary footnote at the end of the row — hidden under the camera bar that now shares the corner. It
+is a chip in secondary ink with a tooltip ("16 / 16 cards", 17 bundles), and its total is `nodes +
+scopeHidden`: cards drawn over the cards the view could draw, the same number the scope chips add up
+to. Before, the graph could say `5/5` while the header said 16.
+
+The Fit button that used to close the graph's counts row is gone — a camera control sitting among the
+numbers, duplicating the bar's.
+
 ## 1.12.0 — the drawer catches up, and the whiteboard can be extended
 
 Two features the drawer was missing against the official board, two fixes reported by SebastienM4j,
