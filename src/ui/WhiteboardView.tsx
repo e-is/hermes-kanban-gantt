@@ -981,7 +981,7 @@ export function WhiteboardView({
               title: i18n.wbTidy,
               'aria-label': i18n.wbTidy,
               onClick: () => commit(withoutLayout(positions, layout)),
-              className: 'grid h-7 w-7 place-items-center rounded-md border-0 bg-transparent text-(--ui-text-secondary) cursor-pointer hover:bg-(--ui-bg-tertiary) hover:text-foreground',
+              className: 'kb-zbtn',
               children: jsx(Line, { name: 'wand' })
             }, 'tidy')
           }, 'zoom')

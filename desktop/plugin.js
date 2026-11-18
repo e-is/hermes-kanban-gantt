@@ -7150,6 +7150,21 @@ import { jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
 // src/ui/ZoomBar.tsx
 import { Codicon as Codicon5 } from "@hermes/plugin-sdk";
 import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
+var CSS = `
+.kb-zoom { position: absolute; z-index: 10; right: 14px; bottom: 16px; display: flex; align-items: center;
+  gap: 2px; padding: 4px; border-radius: 12px; background: var(--ui-surface-background);
+  border: 1px solid var(--ui-stroke-secondary); }
+.kb-zoom > span { min-width: 42px; text-align: center; font: 500 11px var(--font-sans, system-ui);
+  font-variant-numeric: tabular-nums; color: var(--ui-text-secondary); }
+.kb-zoom .kb-zbtn { display: inline-flex; align-items: center; justify-content: center; width: 28px;
+  height: 28px; padding: 0; border-radius: 8px; border: 1px solid transparent; background: transparent;
+  color: var(--ui-text-secondary); cursor: pointer; transition: background .15s, color .15s; }
+.kb-zoom .kb-zbtn:hover { background: color-mix(in srgb, var(--ui-text-primary) 6%, transparent);
+  color: var(--ui-text-primary); }
+.kb-zoom .kb-zbtn svg { width: 15px; height: 15px; flex-shrink: 0; }
+.kb-zoom .kb-zbtn[aria-pressed='true'] { color: var(--ui-accent);
+  background: color-mix(in srgb, var(--ui-accent) 16%, transparent); }
+`;
 function ZoomBar({ percent, onIn, onOut, onFit, i18n, fitted = false, leading = null }) {
   const icon = (key, title, name, onClick, active = false) => jsx6("button", {
     type: "button",
@@ -7157,22 +7172,18 @@ function ZoomBar({ percent, onIn, onOut, onFit, i18n, fitted = false, leading = 
     "aria-label": title,
     "aria-pressed": active ? "true" : "false",
     onClick,
-    style: active ? { color: "var(--ui-accent)", backgroundColor: "color-mix(in srgb, var(--ui-accent) 16%, transparent)" } : void 0,
-    className: "grid h-7 w-7 place-items-center rounded-md border-0 bg-transparent text-(--ui-text-secondary) cursor-pointer hover:bg-(--ui-bg-tertiary) hover:text-foreground",
-    children: jsx6(Codicon5, { name, size: "0.8rem" })
+    className: "kb-zbtn",
+    children: jsx6(Codicon5, { name, size: "0.9375rem" })
   }, key);
   return jsxs6("div", {
     role: "group",
     "aria-label": i18n.wbZoomIn,
-    style: { position: "absolute", right: "12px", bottom: "20px", zIndex: 10 },
-    className: "flex items-center gap-0.5 rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-surface-background) p-1 shadow-sm",
+    className: "kb-zoom",
     children: [
+      jsx6("style", { children: CSS }, "css"),
       leading,
       icon("out", i18n.wbZoomOut, "zoom-out", onOut),
-      jsx6("span", {
-        className: "min-w-[42px] text-center text-[11px] font-medium tabular-nums text-(--ui-text-secondary)",
-        children: `${Math.round(percent)}%`
-      }, "pct"),
+      jsx6("span", { children: `${Math.round(percent)}%` }, "pct"),
       icon("in", i18n.wbZoomIn, "zoom-in", onIn),
       icon("fit", fitted ? i18n.graphFitOn : i18n.wbFit, "screen-full", onFit, fitted)
     ]
@@ -7654,7 +7665,7 @@ var TONES = {
   lilac: { paper: "hsl(266 72% 90%)", edge: "hsl(266 46% 76%)" },
   paper: { paper: "hsl(40 40% 98%)", edge: "hsl(36 18% 80%)" }
 };
-var CSS = `
+var CSS2 = `
 .wb-page { --wb-line: hsl(232 26% 17%); position: relative; display: flex; flex: 1; height: 100%; min-height: 0; flex-direction: column; overflow: hidden; color: var(--ui-text-primary); }
 .wb-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--ui-text-secondary); font: 500 12px var(--font-sans, system-ui); cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
 .wb-btn:hover { background: color-mix(in srgb, var(--ui-text-primary) 6%, transparent); color: var(--ui-text-primary); }
@@ -7756,7 +7767,7 @@ function installStyles() {
   if (document.getElementById(STYLE_ID)) return;
   const node = document.createElement("style");
   node.id = STYLE_ID;
-  node.textContent = CSS;
+  node.textContent = CSS2;
   document.head.append(node);
 }
 var STICKERS = {
@@ -8476,7 +8487,7 @@ function WhiteboardView({
               title: i18n.wbTidy,
               "aria-label": i18n.wbTidy,
               onClick: () => commit(withoutLayout(positions, layout)),
-              className: "grid h-7 w-7 place-items-center rounded-md border-0 bg-transparent text-(--ui-text-secondary) cursor-pointer hover:bg-(--ui-bg-tertiary) hover:text-foreground",
+              className: "kb-zbtn",
               children: jsx7(Line, { name: "wand" })
             }, "tidy")
           }, "zoom")
