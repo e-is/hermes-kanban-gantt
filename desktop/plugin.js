@@ -13453,11 +13453,14 @@ function KanbanGanttPage() {
         children: [
           // Top header row: Left title + task count badge + blocked badge + filter + search, Center board switcher, Right zoom + new task
           jsxs7("div", {
-            className: "flex flex-wrap items-center justify-between gap-2 mb-2",
+            // Two columns, not two wrapping clusters: the row itself never wraps, so the actions stay on
+            // the first line. The left column is the one that flexes and wraps its own contents — which
+            // is what "there is room" actually means here.
+            className: "flex items-start gap-2 mb-2",
             children: [
               // Left: Title + Task Count Badge + Blocked Badge + Filter + Search Field
               jsxs7("div", {
-                className: "flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium",
+                className: "flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm font-medium",
                 children: [
                   jsx7("span", { className: "font-semibold", children: i18n.title }),
                   // The band above the page (WORKSPACE_PAGE_HEADER_AREA) is painted by the MAIN pane
@@ -13547,9 +13550,6 @@ function KanbanGanttPage() {
                   jsx7(ViewToggle, { value: viewMode, onChange: handleViewMode })
                 ]
               }),
-              // The spacer: whatever width is left over goes here, so the actions that write are pinned
-              // to the page's edge instead of trailing the filters.
-              jsx7("div", { className: "flex-1" }),
               // Board switcher moved to the desktop titlebar band (titleBar.center)
               // — see TitlebarBoardSwitcher above.
               // Right: what WRITES — the creation verb and the page menu — with the arrangement and zoom
@@ -13561,7 +13561,7 @@ function KanbanGanttPage() {
                 // line it is the only flex item there, and `justify-between` aligns a lone item to the
                 // START — which is why the creation verb used to sit against the view chips instead of
                 // the page's right edge. An auto margin keeps it right in both cases.
-                className: "ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2",
+                className: "ml-auto flex min-w-0 flex-wrap shrink-0 items-center justify-end gap-x-3 gap-y-2",
                 children: [
                   // In graph mode the period selector has nothing to say (there is no time axis), so its
                   // slot carries the arrangement menu instead. The period itself moved to the left, with
