@@ -246,6 +246,11 @@ var en = {
   assigneeColumn: "Assignee",
   statusColumn: "Status",
   lastActivityColumn: "Updated",
+  showCost: "Show cost",
+  costColumn: "Cost",
+  costOwn: "This task",
+  costLineage: "Lineage (this task included)",
+  costSortHint: "Sort by lineage cost",
   viewList: "List",
   viewTimeline: "Timeline",
   // The third view: dependency structure rather than time.
@@ -578,6 +583,11 @@ var fr = {
   assigneeColumn: "Assigné à",
   statusColumn: "Statut",
   lastActivityColumn: "Mis à jour",
+  showCost: "Afficher le coût",
+  costColumn: "Coût",
+  costOwn: "Cette tâche",
+  costLineage: "Lignée (cette tâche incluse)",
+  costSortHint: "Trier par coût de la lignée",
   viewList: "Liste",
   viewTimeline: "Chronologie",
   viewGraph: "Graphe",
@@ -907,6 +917,11 @@ var zh = {
   assigneeColumn: "负责人",
   statusColumn: "状态：",
   lastActivityColumn: "已更新",
+  showCost: "显示费用",
+  costColumn: "费用",
+  costOwn: "此任务",
+  costLineage: "下游（含此任务）",
+  costSortHint: "按下游费用排序",
   viewList: "列表",
   viewTimeline: "时间线",
   viewGraph: "关系图",
@@ -1238,6 +1253,11 @@ var af = {
   assigneeColumn: "Toegewysde",
   statusColumn: "Status",
   lastActivityColumn: "Opgedateer",
+  showCost: "Wys koste",
+  costColumn: "Koste",
+  costOwn: "Hierdie taak",
+  costLineage: "Afstamming (hierdie taak ingesluit)",
+  costSortHint: "Sorteer volgens afstammingskoste",
   viewList: "Lys",
   viewTimeline: "Tydlyn",
   // The third view: dependency structure rather than time.
@@ -1571,6 +1591,11 @@ var ar = {
   assigneeColumn: "المكلّف",
   statusColumn: "الحالة",
   lastActivityColumn: "آخر تحديث",
+  showCost: "إظهار التكلفة",
+  costColumn: "التكلفة",
+  costOwn: "هذه المهمة",
+  costLineage: "السلالة (تشمل هذه المهمة)",
+  costSortHint: "الترتيب حسب تكلفة السلالة",
   viewList: "قائمة",
   viewTimeline: "مخطط زمني",
   // The third view: dependency structure rather than time.
@@ -1904,6 +1929,11 @@ var de = {
   assigneeColumn: "Zugewiesen an",
   statusColumn: "Status",
   lastActivityColumn: "Aktualisiert",
+  showCost: "Kosten anzeigen",
+  costColumn: "Kosten",
+  costOwn: "Diese Aufgabe",
+  costLineage: "Linie (diese Aufgabe eingeschlossen)",
+  costSortHint: "Nach Kosten der Linie sortieren",
   viewList: "Liste",
   viewTimeline: "Zeitstrahl",
   // The third view: dependency structure rather than time.
@@ -2237,6 +2267,11 @@ var es = {
   assigneeColumn: "Asignada a",
   statusColumn: "Estado",
   lastActivityColumn: "Actualizada",
+  showCost: "Mostrar coste",
+  costColumn: "Coste",
+  costOwn: "Esta tarea",
+  costLineage: "Linaje (esta tarea incluida)",
+  costSortHint: "Ordenar por coste del linaje",
   viewList: "Lista",
   viewTimeline: "Cronología",
   // The third view: dependency structure rather than time.
@@ -2570,6 +2605,11 @@ var ga = {
   assigneeColumn: "Sanntóir",
   statusColumn: "Staid",
   lastActivityColumn: "Nuashonraithe",
+  showCost: "Taispeáin costas",
+  costColumn: "Costas",
+  costOwn: "An tasc seo",
+  costLineage: "Síolrach (an tasc seo san áireamh)",
+  costSortHint: "Sórtáil de réir costas síolraigh",
   viewList: "Liosta",
   viewTimeline: "Amlíne",
   // The third view: dependency structure rather than time.
@@ -2903,6 +2943,11 @@ var hu = {
   assigneeColumn: "Felelős",
   statusColumn: "Állapot",
   lastActivityColumn: "Frissítve",
+  showCost: "Költség megjelenítése",
+  costColumn: "Költség",
+  costOwn: "Ez a feladat",
+  costLineage: "Leszármazás (ezzel a feladattal)",
+  costSortHint: "Rendezés leszármazási költség szerint",
   viewList: "Lista",
   viewTimeline: "Idővonal",
   // The third view: dependency structure rather than time.
@@ -3236,6 +3281,11 @@ var it = {
   assigneeColumn: "Assegnatario",
   statusColumn: "Stato",
   lastActivityColumn: "Aggiornata",
+  showCost: "Mostra costo",
+  costColumn: "Costo",
+  costOwn: "Questa attività",
+  costLineage: "Discendenza (questa attività inclusa)",
+  costSortHint: "Ordina per costo della discendenza",
   viewList: "Elenco",
   viewTimeline: "Timeline",
   // The third view: dependency structure rather than time.
@@ -3569,6 +3619,11 @@ var ja = {
   assigneeColumn: "担当者",
   statusColumn: "ステータス",
   lastActivityColumn: "更新",
+  showCost: "コストを表示",
+  costColumn: "コスト",
+  costOwn: "このタスク",
+  costLineage: "系統（このタスクを含む）",
+  costSortHint: "系統のコスト順に並べ替え",
   viewList: "リスト",
   viewTimeline: "タイムライン",
   // The third view: dependency structure rather than time.
@@ -3902,6 +3957,11 @@ var ko = {
   assigneeColumn: "담당자",
   statusColumn: "상태",
   lastActivityColumn: "업데이트됨",
+  showCost: "비용 표시",
+  costColumn: "비용",
+  costOwn: "이 작업",
+  costLineage: "계보(이 작업 포함)",
+  costSortHint: "계보 비용순 정렬",
   viewList: "목록",
   viewTimeline: "타임라인",
   // The third view: dependency structure rather than time.
@@ -4235,6 +4295,11 @@ var pt = {
   assigneeColumn: "Atribuída a",
   statusColumn: "Estado",
   lastActivityColumn: "Atualizada",
+  showCost: "Mostrar custo",
+  costColumn: "Custo",
+  costOwn: "Esta tarefa",
+  costLineage: "Linhagem (esta tarefa incluída)",
+  costSortHint: "Ordenar por custo da linhagem",
   viewList: "Lista",
   viewTimeline: "Cronologia",
   // The third view: dependency structure rather than time.
@@ -4565,6 +4630,11 @@ var ru = {
   assigneeColumn: "Исполнитель",
   statusColumn: "Статус",
   lastActivityColumn: "Обновлено",
+  showCost: "Показать стоимость",
+  costColumn: "Стоимость",
+  costOwn: "Эта задача",
+  costLineage: "Линия (включая эту задачу)",
+  costSortHint: "Сортировать по стоимости линии",
   viewList: "Список",
   viewTimeline: "Шкала",
   viewGraph: "Граф",
@@ -4896,6 +4966,11 @@ var tr = {
   assigneeColumn: "Atanan",
   statusColumn: "Durum",
   lastActivityColumn: "Güncellendi",
+  showCost: "Maliyeti göster",
+  costColumn: "Maliyet",
+  costOwn: "Bu görev",
+  costLineage: "Soy (bu görev dahil)",
+  costSortHint: "Soy maliyetine göre sırala",
   viewList: "Liste",
   viewTimeline: "Zaman çizelgesi",
   // The third view: dependency structure rather than time.
@@ -5226,6 +5301,11 @@ var uk = {
   assigneeColumn: "Виконавець",
   statusColumn: "Статус",
   lastActivityColumn: "Оновлено",
+  showCost: "Показати вартість",
+  costColumn: "Вартість",
+  costOwn: "Це завдання",
+  costLineage: "Лінія (включно з цим завданням)",
+  costSortHint: "Сортувати за вартістю лінії",
   viewList: "Список",
   viewTimeline: "Шкала",
   viewGraph: "Граф",
@@ -5557,6 +5637,11 @@ var zhHant = {
   assigneeColumn: "負責人",
   statusColumn: "狀態",
   lastActivityColumn: "已更新",
+  showCost: "顯示費用",
+  costColumn: "費用",
+  costOwn: "此任務",
+  costLineage: "下游（含此任務）",
+  costSortHint: "按下游費用排序",
   viewList: "清單",
   viewTimeline: "時間軸",
   // The third view: dependency structure rather than time.
@@ -6589,6 +6674,57 @@ function ticks(min, max, unit) {
     t += step;
   }
   return out;
+}
+function lineageCosts(tasks, costs = {}) {
+  const byId = new Map((tasks || []).map((t) => [t.id, t]));
+  const memo = /* @__PURE__ */ new Map();
+  const sum = (ids) => {
+    let total = null;
+    const kinds = /* @__PURE__ */ new Set();
+    for (const id of ids) {
+      const entry = costs[id];
+      if (!entry || entry.own == null) continue;
+      total = (total || 0) + entry.own;
+      if (entry.status) kinds.add(entry.status);
+    }
+    return {
+      lineage: total,
+      status: kinds.size > 1 ? "mixed" : kinds.size === 1 ? [...kinds][0] : "unknown"
+    };
+  };
+  const walk = (id, stack) => {
+    if (memo.has(id)) return memo.get(id);
+    const seen = /* @__PURE__ */ new Set();
+    const queue = [id];
+    while (queue.length) {
+      const current = queue.pop();
+      if (seen.has(current) || stack.has(current)) continue;
+      seen.add(current);
+      const task = byId.get(current);
+      for (const child of task && task.children || []) {
+        if (!stack.has(child)) queue.push(child);
+      }
+    }
+    const result = sum(seen);
+    memo.set(id, result);
+    return result;
+  };
+  const out = {};
+  for (const task of tasks || []) {
+    const agg = walk(task.id, /* @__PURE__ */ new Set());
+    out[task.id] = {
+      own: costs[task.id]?.own ?? null,
+      ownStatus: costs[task.id]?.status ?? "unknown",
+      lineage: agg.lineage,
+      status: agg.status
+    };
+  }
+  return out;
+}
+function formatCost(value, status) {
+  if (value == null) return "—";
+  const money = value > 0 && value < 0.01 ? "<$0.01" : `$${value.toFixed(2)}`;
+  return status === "estimated" || status === "mixed" ? `~${money}` : money;
 }
 
 // src/ui/NewTaskDialog.tsx
@@ -9452,7 +9588,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
     ] })
   });
 }
-function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn, hasChildren, collapsed, secondary, secondaryOnly, continuation = [], lastSibling, hiddenCount = 0, matched, descendantOfSelected, onToggleFold, listMode }) {
+function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, listCols, cost, costEnabled, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn, hasChildren, collapsed, secondary, secondaryOnly, continuation = [], lastSibling, hiddenCount = 0, matched, descendantOfSelected, onToggleFold, listMode }) {
   const i18n = useGanttI18n();
   const labelW = useValue2($labelW);
   const bars = taskBars(task, now);
@@ -9538,7 +9674,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     // is docked, and `focus()` needs both a handle and a `tabIndex`.
     "data-row-id": task.id,
     tabIndex: -1,
-    style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
+    style: { gridTemplateColumns: listMode ? listCols : `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
     onClick: (e) => {
       if (e.target.tagName === "INPUT" && e.target.type === "checkbox") return;
       if (e.shiftKey || e.ctrlKey || e.metaKey) {
@@ -9667,7 +9803,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
           })
         ]
       }),
-      listMode ? jsx8(ListCells, { task, now, statusTitle, dotColor }) : jsxs8("div", {
+      listMode ? jsx8(ListCells, { task, now, statusTitle, dotColor, cost, i18nCosts: costEnabled ? i18n : null }) : jsxs8("div", {
         className: "relative overflow-hidden",
         style: { height: `${ROW_H}px` },
         children: bars.length > 0 ? bars.map((b, idx) => jsx8(Bar, { key: b.runId || idx, task, bar: b, pxPerSec, min, onOpen })) : [jsx8("div", { key: "empty", className: "text-(--ui-text-quaternary) text-[10px]", children: "—" })]
@@ -9675,8 +9811,8 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     ]
   });
 }
-var LIST_COLUMNS = "minmax(0, 1fr) 150px 96px 64px 40px";
-function ListCells({ task, now, statusTitle, dotColor }) {
+var listColumns = (showCost) => showCost ? "minmax(0, 1fr) 150px 96px 78px 64px 40px" : "minmax(0, 1fr) 150px 96px 64px 40px";
+function ListCells({ task, now, statusTitle, dotColor, cost, i18nCosts }) {
   const i18n = useGanttI18n();
   const last = lastActivity(task);
   return [
@@ -9694,6 +9830,18 @@ function ListCells({ task, now, statusTitle, dotColor }) {
       style: { color: dotColor },
       children: statusTitle
     }),
+    // Cost: this card's own runs. The lineage lives in the tooltip, where the number can be
+    // qualified — « this task included » is the whole difference between the two figures.
+    i18nCosts ? jsx8("div", {
+      key: "cost",
+      className: "flex items-center justify-end px-2 text-[10px] tabular-nums",
+      style: { color: cost?.own == null ? "var(--ui-text-quaternary)" : "var(--ui-text-secondary)" },
+      title: [
+        `${i18nCosts.costOwn}: ${formatCost(cost?.own, cost?.ownStatus)}`,
+        `${i18nCosts.costLineage}: ${formatCost(cost?.lineage, cost?.status)}`
+      ].join("\n"),
+      children: formatCost(cost?.own, cost?.ownStatus)
+    }) : null,
     jsx8("div", {
       key: "age",
       className: "px-2 text-[10px] tabular-nums text-right text-(--ui-text-tertiary)",
@@ -9774,6 +9922,8 @@ function FilterDropdown({
   onToggleArchived,
   onlyAttachments,
   onToggleOnlyAttachments,
+  showCost,
+  onToggleCost,
   scope,
   onScopeChange
 }) {
@@ -9866,6 +10016,18 @@ function FilterDropdown({
               jsx8(Codicon7, { name: "attach", size: "0.8rem", className: "shrink-0 text-(--ui-text-tertiary)" }),
               jsx8("span", { className: "flex-1", children: i18n.filterWithAttachments }),
               onlyAttachments ? jsx8(Codicon7, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
+            ]
+          }),
+          jsxs8(DropdownMenuItem3, {
+            // A DISPLAY preference, not a filter: it adds a column and never hides a card.
+            // Hidden by default because it costs a state-database read on a board that does
+            // not need one.
+            onClick: () => onToggleCost(!showCost),
+            className: "flex items-center gap-2 cursor-pointer text-xs py-1.5",
+            children: [
+              jsx8(Codicon7, { name: "credit-card", size: "0.8rem", className: "shrink-0 text-(--ui-text-tertiary)" }),
+              jsx8("span", { className: "flex-1", children: i18n.showCost }),
+              showCost ? jsx8(Codicon7, { name: "check", size: "0.8rem", className: "ml-auto" }) : null
             ]
           })
         ]
@@ -12931,6 +13093,26 @@ function KanbanGanttPage() {
     setOnlyAttachments(Boolean(next));
     if (getStorage()) getStorage().set("onlyAttachments", next ? "1" : "0");
   };
+  const [showCost, setShowCost] = useState5(() => {
+    const saved = getStorage() ? getStorage().get("showCost", null) : null;
+    return saved === "1" || saved === true;
+  });
+  const toggleShowCost = (next) => {
+    setShowCost(Boolean(next));
+    if (getStorage()) getStorage().set("showCost", next ? "1" : "0");
+  };
+  const [costSort, setCostSort] = useState5("off");
+  const costsQuery = useQuery2({
+    queryKey: ["kanban-gantt", "costs", apiBase(), board],
+    queryFn: () => apiFetch(`/costs?board=${encodeURIComponent(board || "")}`),
+    enabled: showCost && viewMode === "list" && board !== "all" && board !== "*",
+    staleTime: 6e4,
+    refetchOnWindowFocus: false
+  });
+  const costRows = useMemo3(
+    () => showCost ? lineageCosts(allTasks, costsQuery.data && costsQuery.data.costs || {}) : {},
+    [showCost, allTasks, costsQuery.data]
+  );
   const derived = useMemo3(() => {
     if (!data || !data.tasks) return null;
     let visible = data.tasks;
@@ -12984,10 +13166,14 @@ function KanbanGanttPage() {
       search,
       selected: openTaskId ? /* @__PURE__ */ new Set([openTaskId]) : /* @__PURE__ */ new Set()
     });
+    if (showCost && costSort !== "off" && listMode) {
+      const pick = (t) => costRows[t.id]?.lineage == null ? -1 : costRows[t.id].lineage;
+      visible = [...visible].sort((a, b) => costSort === "asc" ? pick(a) - pick(b) : pick(b) - pick(a));
+    }
     const domain2 = computeDomain(visible);
     const allAssignees = Array.from(new Set(data.tasks.map((t) => t.assignee).filter(Boolean))).sort();
     return { rows: rows2, domain: domain2, total: visible.length, tasks: visible, allAssignees, scopeHidden: scopeHidden + periodHidden, scopeCount };
-  }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage, period]);
+  }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage, period, showCost, costSort, costRows]);
   const handleToggleAll = () => {
     const parents = (derived?.rows || []).filter((r) => r.hasChildren);
     if (!parents.length) return;
@@ -13501,6 +13687,9 @@ function KanbanGanttPage() {
     min: domain.min,
     timelineW,
     listMode,
+    listCols: listColumns(showCost && listMode),
+    cost: costRows[row.task.id],
+    costEnabled: showCost && listMode,
     onOpen: (id) => $openTaskId.set(id),
     isSelected: openTaskId === row.task.id,
     isChecked: selectedIds.has(row.task.id),
@@ -13611,6 +13800,8 @@ function KanbanGanttPage() {
                     onToggleArchived: setShowArchived,
                     onlyAttachments,
                     onToggleOnlyAttachments: toggleOnlyAttachments,
+                    showCost,
+                    onToggleCost: toggleShowCost,
                     scope: graphScope,
                     onScopeChange: handleGraphScope
                   }),
@@ -13950,7 +14141,7 @@ function KanbanGanttPage() {
                   jsxs8("div", {
                     className: cn3("grid sticky top-0 z-20 bg-(--ui-bg-chrome)", listMode ? "w-full" : "w-max"),
                     "data-glass-opaque": true,
-                    style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px` },
+                    style: { gridTemplateColumns: listMode ? listColumns(showCost && listMode) : `${labelW}px ${timelineW}px` },
                     children: [
                       jsxs8("div", {
                         className: "sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center pr-2 gap-1.5",
@@ -14012,11 +14203,27 @@ function KanbanGanttPage() {
                         ]
                       }),
                       ...listMode ? [
-                        ...[i18n.assigneeColumn, i18n.statusColumn, i18n.lastActivityColumn].map((h, i) => jsx8("div", {
-                          key: h,
-                          className: cn3("flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none", i === 2 && "justify-end"),
+                        ...[
+                          { label: i18n.assigneeColumn },
+                          { label: i18n.statusColumn },
+                          ...showCost ? [{
+                            label: i18n.costColumn + (costSort === "desc" ? " ↓" : costSort === "asc" ? " ↑" : ""),
+                            sort: true
+                          }] : [],
+                          { label: i18n.lastActivityColumn, right: true }
+                        ].map((cell) => jsx8("div", {
+                          key: cell.label,
+                          role: cell.sort ? "button" : void 0,
+                          tabIndex: cell.sort ? 0 : void 0,
+                          title: cell.sort ? i18n.costSortHint : void 0,
+                          onClick: cell.sort ? () => setCostSort(costSort === "off" ? "desc" : costSort === "desc" ? "asc" : "off") : void 0,
+                          className: cn3(
+                            "flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none",
+                            cell.right && "justify-end",
+                            cell.sort && "cursor-pointer hover:text-(--ui-text-secondary)"
+                          ),
                           style: { height: "24px" },
-                          children: h
+                          children: cell.label
                         })),
                         // The attachment column is as narrow as a paperclip, so its header
                         // is the icon rather than a word that would never fit.

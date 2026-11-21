@@ -128,6 +128,11 @@ export const ja = {
     assigneeColumn: '担当者',
     statusColumn: 'ステータス',
     lastActivityColumn: '更新',
+    showCost: 'コストを表示',
+    costColumn: 'コスト',
+    costOwn: 'このタスク',
+    costLineage: '系統（このタスクを含む）',
+    costSortHint: '系統のコスト順に並べ替え',
     viewList: 'リスト',
     viewTimeline: 'タイムライン',
     // The third view: dependency structure rather than time.

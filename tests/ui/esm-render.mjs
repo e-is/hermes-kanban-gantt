@@ -390,6 +390,7 @@ const ctx = {
     if (k === 'board') return 'sumaris-app'
     if (k === 'viewMode' && globalThis.__kgView) return globalThis.__kgView
     if (k === 'onlyAttachments' && globalThis.__kgOnlyAtt) return '1'
+    if (k === 'showCost' && globalThis.__kgShowCost) return '1'
     // The funnel and the quick scope are storage-driven too, so a test can put the reader in the
     // state they reported: a status filtered out, a scope chosen, the lineage modifier on or off.
     if (k === 'disabledStatuses' && globalThis.__kgDisabled) return globalThis.__kgDisabled
@@ -563,6 +564,17 @@ if (pageNode) {
   check(listFlat.includes('minmax(0, 1fr) 150px 96px 64px 40px'),
     'list view declares five tracks, the last 40 px wide, for the attachment column')
   check(listFlat.includes('attachments-header'), 'the attachment column has a header cell of its own')
+  // The cost column is opt-in (issue #11). Off, the grid keeps five tracks and shows no price;
+  // on, a sixth track appears BETWEEN status and last activity, and the paperclip stays last.
+  check(!listFlat.includes('costColumn'), 'no cost column when the preference is off')
+  globalThis.__kgShowCost = true
+  const costFlat = JSON.stringify(page.render())
+  globalThis.__kgShowCost = false
+  check(costFlat.includes('minmax(0, 1fr) 150px 96px 78px 64px 40px'),
+    'turning cost on adds a 78 px track before last activity')
+  check(costFlat.includes('costColumn') && costFlat.includes('costSortHint'),
+    'the cost header carries the sort affordance')
+  check(costFlat.includes('attachments-header'), 'the paperclip is still the last column')
   // The quick scopes are not the graph's private vocabulary: a list can answer "what is in
   // flight, and what does it wait on" just as well, so the control is in the toolbar there too.
   check(listFlat.includes('"aria-label":"graphScopeAria"'), 'list view carries the quick scopes')

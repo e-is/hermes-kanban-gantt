@@ -849,3 +849,75 @@ export function ticks(min, max, unit) {
   while (t <= max) { out.push(t); t += step; }
   return out;
 }
+
+
+/**
+ * What a task cost, and what its whole subtree cost — « its own » and « its lineage ».
+ *
+ * The lineage is the task PLUS every card it spawned, and it is a SET: a diamond
+ * (A→B, A→C, B→D, C→D) must bill D once, and a cycle must terminate. Both are the
+ * reason this walks with a `visited` guard instead of summing per edge — the same
+ * discipline `treeRows` already uses for the same graph.
+ *
+ * A card with no run at all is `null`, never 0: « no data » and « free » are different
+ * claims, and a column that shows `$0.00` for an unknown is lying.
+ *
+ * `status` is 'actual' | 'estimated' | 'mixed' | 'unknown'; a lineage that mixes billed
+ * and estimated runs is 'mixed', because its total is then partly a projection.
+ */
+export function lineageCosts(tasks, costs = {}) {
+  const byId = new Map((tasks || []).map(t => [t.id, t]))
+  const memo = new Map()
+
+  const sum = (ids) => {
+    let total = null
+    const kinds = new Set()
+    for (const id of ids) {
+      const entry = costs[id]
+      if (!entry || entry.own == null) continue
+      total = (total || 0) + entry.own
+      if (entry.status) kinds.add(entry.status)
+    }
+    return {
+      lineage: total,
+      status: kinds.size > 1 ? 'mixed' : (kinds.size === 1 ? [...kinds][0] : 'unknown')
+    }
+  }
+
+  const walk = (id, stack) => {
+    if (memo.has(id)) return memo.get(id)
+    const seen = new Set()
+    const queue = [id]
+    while (queue.length) {
+      const current = queue.pop()
+      if (seen.has(current) || stack.has(current)) continue
+      seen.add(current)
+      const task = byId.get(current)
+      for (const child of (task && task.children) || []) {
+        if (!stack.has(child)) queue.push(child)
+      }
+    }
+    const result = sum(seen)
+    memo.set(id, result)
+    return result
+  }
+
+  const out = {}
+  for (const task of tasks || []) {
+    const agg = walk(task.id, new Set())
+    out[task.id] = {
+      own: costs[task.id]?.own ?? null,
+      ownStatus: costs[task.id]?.status ?? 'unknown',
+      lineage: agg.lineage,
+      status: agg.status
+    }
+  }
+  return out
+}
+
+/** How a cost is written: nothing under a cent, `~` when it is a projection, `—` when unknown. */
+export function formatCost(value, status) {
+  if (value == null) return '—'
+  const money = value > 0 && value < 0.01 ? '<$0.01' : `$${value.toFixed(2)}`
+  return status === 'estimated' || status === 'mixed' ? `~${money}` : money
+}

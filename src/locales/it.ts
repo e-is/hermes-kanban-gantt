@@ -134,6 +134,11 @@ export const it = {
     assigneeColumn: 'Assegnatario',
     statusColumn: 'Stato',
     lastActivityColumn: 'Aggiornata',
+    showCost: 'Mostra costo',
+    costColumn: 'Costo',
+    costOwn: 'Questa attività',
+    costLineage: 'Discendenza (questa attività inclusa)',
+    costSortHint: 'Ordina per costo della discendenza',
     viewList: 'Elenco',
     viewTimeline: 'Timeline',
     // The third view: dependency structure rather than time.

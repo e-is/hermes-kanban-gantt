@@ -134,6 +134,11 @@ export const af = {
     assigneeColumn: 'Toegewysde',
     statusColumn: 'Status',
     lastActivityColumn: 'Opgedateer',
+    showCost: 'Wys koste',
+    costColumn: 'Koste',
+    costOwn: 'Hierdie taak',
+    costLineage: 'Afstamming (hierdie taak ingesluit)',
+    costSortHint: 'Sorteer volgens afstammingskoste',
     viewList: 'Lys',
     viewTimeline: 'Tydlyn',
     // The third view: dependency structure rather than time.

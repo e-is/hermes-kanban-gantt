@@ -134,6 +134,11 @@ export const tr = {
     assigneeColumn: 'Atanan',
     statusColumn: 'Durum',
     lastActivityColumn: 'Güncellendi',
+    showCost: 'Maliyeti göster',
+    costColumn: 'Maliyet',
+    costOwn: 'Bu görev',
+    costLineage: 'Soy (bu görev dahil)',
+    costSortHint: 'Soy maliyetine göre sırala',
     viewList: 'Liste',
     viewTimeline: 'Zaman çizelgesi',
     // The third view: dependency structure rather than time.

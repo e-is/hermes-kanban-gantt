@@ -134,6 +134,11 @@ export const en = {
     assigneeColumn: 'Assignee',
     statusColumn: 'Status',
     lastActivityColumn: 'Updated',
+    showCost: 'Show cost',
+    costColumn: 'Cost',
+    costOwn: 'This task',
+    costLineage: 'Lineage (this task included)',
+    costSortHint: 'Sort by lineage cost',
     viewList: 'List',
     viewTimeline: 'Timeline',
     // The third view: dependency structure rather than time.

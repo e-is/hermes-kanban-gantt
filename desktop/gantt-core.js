@@ -569,6 +569,57 @@ function ticks(min, max, unit) {
   }
   return out;
 }
+function lineageCosts(tasks, costs = {}) {
+  const byId = new Map((tasks || []).map((t) => [t.id, t]));
+  const memo = /* @__PURE__ */ new Map();
+  const sum = (ids) => {
+    let total = null;
+    const kinds = /* @__PURE__ */ new Set();
+    for (const id of ids) {
+      const entry = costs[id];
+      if (!entry || entry.own == null) continue;
+      total = (total || 0) + entry.own;
+      if (entry.status) kinds.add(entry.status);
+    }
+    return {
+      lineage: total,
+      status: kinds.size > 1 ? "mixed" : kinds.size === 1 ? [...kinds][0] : "unknown"
+    };
+  };
+  const walk = (id, stack) => {
+    if (memo.has(id)) return memo.get(id);
+    const seen = /* @__PURE__ */ new Set();
+    const queue = [id];
+    while (queue.length) {
+      const current = queue.pop();
+      if (seen.has(current) || stack.has(current)) continue;
+      seen.add(current);
+      const task = byId.get(current);
+      for (const child of task && task.children || []) {
+        if (!stack.has(child)) queue.push(child);
+      }
+    }
+    const result = sum(seen);
+    memo.set(id, result);
+    return result;
+  };
+  const out = {};
+  for (const task of tasks || []) {
+    const agg = walk(task.id, /* @__PURE__ */ new Set());
+    out[task.id] = {
+      own: costs[task.id]?.own ?? null,
+      ownStatus: costs[task.id]?.status ?? "unknown",
+      lineage: agg.lineage,
+      status: agg.status
+    };
+  }
+  return out;
+}
+function formatCost(value, status) {
+  if (value == null) return "—";
+  const money = value > 0 && value < 0.01 ? "<$0.01" : `$${value.toFixed(2)}`;
+  return status === "estimated" || status === "mixed" ? `~${money}` : money;
+}
 export {
   DAY,
   FAIL_TONE,
@@ -592,12 +643,14 @@ export {
   computeDomain,
   descendantsOf,
   dropCandidates,
+  formatCost,
   hasAttachments,
   hourTickPlan,
   isDescendant,
   isMissingBoardError,
   isTerminal,
   lastActivity,
+  lineageCosts,
   matchPeriod,
   matchesSearch,
   maxZoom,

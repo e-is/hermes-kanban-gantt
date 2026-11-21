@@ -134,6 +134,11 @@ export const de = {
     assigneeColumn: 'Zugewiesen an',
     statusColumn: 'Status',
     lastActivityColumn: 'Aktualisiert',
+    showCost: 'Kosten anzeigen',
+    costColumn: 'Kosten',
+    costOwn: 'Diese Aufgabe',
+    costLineage: 'Linie (diese Aufgabe eingeschlossen)',
+    costSortHint: 'Nach Kosten der Linie sortieren',
     viewList: 'Liste',
     viewTimeline: 'Zeitstrahl',
     // The third view: dependency structure rather than time.

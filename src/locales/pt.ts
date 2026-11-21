@@ -134,6 +134,11 @@ export const pt = {
     assigneeColumn: 'Atribuída a',
     statusColumn: 'Estado',
     lastActivityColumn: 'Atualizada',
+    showCost: 'Mostrar custo',
+    costColumn: 'Custo',
+    costOwn: 'Esta tarefa',
+    costLineage: 'Linhagem (esta tarefa incluída)',
+    costSortHint: 'Ordenar por custo da linhagem',
     viewList: 'Lista',
     viewTimeline: 'Cronologia',
     // The third view: dependency structure rather than time.
