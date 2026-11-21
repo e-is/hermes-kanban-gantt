@@ -240,6 +240,11 @@ var en = {
   taskDetail: "Task detail",
   actionsMenu: "Actions menu",
   close: "Close",
+  viewSession: "Session",
+  sessionTitle: "Worker session",
+  sessionEmpty: "No messages in this session",
+  showEarlierMessages: "Show earlier messages",
+  messageTruncated: "Message truncated",
   selectAll: "Select all",
   selectTask: (name) => `Select ${name}`,
   tasksColumn: "Tasks",
@@ -577,6 +582,11 @@ var fr = {
   taskDetail: "Détail de la tâche",
   actionsMenu: "Menu actions",
   close: "Fermer",
+  viewSession: "Session",
+  sessionTitle: "Session du worker",
+  sessionEmpty: "Aucun message dans cette session",
+  showEarlierMessages: "Afficher les messages précédents",
+  messageTruncated: "Message tronqué",
   selectAll: "Tout sélectionner",
   selectTask: (name) => `Sélectionner ${name}`,
   tasksColumn: "Tâches",
@@ -911,6 +921,11 @@ var zh = {
   taskDetail: "任务详情",
   actionsMenu: "操作菜单",
   close: "关闭",
+  viewSession: "会话",
+  sessionTitle: "工作会话",
+  sessionEmpty: "此会话没有消息",
+  showEarlierMessages: "显示更早的消息",
+  messageTruncated: "消息已截断",
   selectAll: "全选",
   selectTask: (name) => `选择 ${name}`,
   tasksColumn: "任务",
@@ -1247,6 +1262,11 @@ var af = {
   taskDetail: "Taakbesonderhede",
   actionsMenu: "Aksiemenu",
   close: "Maak toe",
+  viewSession: "Sessie",
+  sessionTitle: "Werker-sessie",
+  sessionEmpty: "Geen boodskappe in hierdie sessie nie",
+  showEarlierMessages: "Wys vroeër boodskappe",
+  messageTruncated: "Boodskap afgekap",
   selectAll: "Kies alles",
   selectTask: (name) => `Kies ${name}`,
   tasksColumn: "Take",
@@ -1585,6 +1605,11 @@ var ar = {
   taskDetail: "تفاصيل المهمة",
   actionsMenu: "قائمة الإجراءات",
   close: "إغلاق",
+  viewSession: "الجلسة",
+  sessionTitle: "جلسة العامل",
+  sessionEmpty: "لا رسائل في هذه الجلسة",
+  showEarlierMessages: "إظهار الرسائل الأقدم",
+  messageTruncated: "الرسالة مقتطعة",
   selectAll: "تحديد الكل",
   selectTask: (name) => `تحديد ${name}`,
   tasksColumn: "المهام",
@@ -1923,6 +1948,11 @@ var de = {
   taskDetail: "Aufgabendetails",
   actionsMenu: "Aktionsmenü",
   close: "Schließen",
+  viewSession: "Sitzung",
+  sessionTitle: "Worker-Sitzung",
+  sessionEmpty: "Keine Nachrichten in dieser Sitzung",
+  showEarlierMessages: "Frühere Nachrichten anzeigen",
+  messageTruncated: "Nachricht gekürzt",
   selectAll: "Alle auswählen",
   selectTask: (name) => `${name} auswählen`,
   tasksColumn: "Aufgaben",
@@ -2261,6 +2291,11 @@ var es = {
   taskDetail: "Detalle de la tarea",
   actionsMenu: "Menú de acciones",
   close: "Cerrar",
+  viewSession: "Sesión",
+  sessionTitle: "Sesión del worker",
+  sessionEmpty: "Sin mensajes en esta sesión",
+  showEarlierMessages: "Mostrar mensajes anteriores",
+  messageTruncated: "Mensaje truncado",
   selectAll: "Seleccionar todo",
   selectTask: (name) => `Seleccionar ${name}`,
   tasksColumn: "Tareas",
@@ -2599,6 +2634,11 @@ var ga = {
   taskDetail: "Sonraí an taisc",
   actionsMenu: "Roghchlár gníomhartha",
   close: "Dún",
+  viewSession: "Seisiún",
+  sessionTitle: "Seisiún an oibrí",
+  sessionEmpty: "Níl aon teachtaireacht sa seisiún seo",
+  showEarlierMessages: "Taispeáin teachtaireachtaí níos luaithe",
+  messageTruncated: "Teachtaireacht teasctha",
   selectAll: "Roghnaigh gach rud",
   selectTask: (name) => `Roghnaigh ${name}`,
   tasksColumn: "Tascanna",
@@ -2937,6 +2977,11 @@ var hu = {
   taskDetail: "Feladat részletei",
   actionsMenu: "Műveletek menü",
   close: "Bezárás",
+  viewSession: "Munkamenet",
+  sessionTitle: "Worker munkamenet",
+  sessionEmpty: "Nincs üzenet ebben a munkamenetben",
+  showEarlierMessages: "Korábbi üzenetek megjelenítése",
+  messageTruncated: "Üzenet csonkolva",
   selectAll: "Összes kijelölése",
   selectTask: (name) => `${name} kijelölése`,
   tasksColumn: "Feladatok",
@@ -3275,6 +3320,11 @@ var it = {
   taskDetail: "Dettaglio attività",
   actionsMenu: "Menu azioni",
   close: "Chiudi",
+  viewSession: "Sessione",
+  sessionTitle: "Sessione del worker",
+  sessionEmpty: "Nessun messaggio in questa sessione",
+  showEarlierMessages: "Mostra messaggi precedenti",
+  messageTruncated: "Messaggio troncato",
   selectAll: "Seleziona tutto",
   selectTask: (name) => `Seleziona ${name}`,
   tasksColumn: "Attività",
@@ -3613,6 +3663,11 @@ var ja = {
   taskDetail: "タスクの詳細",
   actionsMenu: "アクションメニュー",
   close: "閉じる",
+  viewSession: "セッション",
+  sessionTitle: "ワーカーのセッション",
+  sessionEmpty: "このセッションにメッセージはありません",
+  showEarlierMessages: "以前のメッセージを表示",
+  messageTruncated: "メッセージは切り詰められています",
   selectAll: "すべて選択",
   selectTask: (name) => `${name} を選択`,
   tasksColumn: "タスク",
@@ -3951,6 +4006,11 @@ var ko = {
   taskDetail: "작업 상세",
   actionsMenu: "동작 메뉴",
   close: "닫기",
+  viewSession: "세션",
+  sessionTitle: "워커 세션",
+  sessionEmpty: "이 세션에 메시지가 없습니다",
+  showEarlierMessages: "이전 메시지 표시",
+  messageTruncated: "메시지가 잘렸습니다",
   selectAll: "전체 선택",
   selectTask: (name) => `${name} 선택`,
   tasksColumn: "작업",
@@ -4289,6 +4349,11 @@ var pt = {
   taskDetail: "Detalhe da tarefa",
   actionsMenu: "Menu de ações",
   close: "Fechar",
+  viewSession: "Sessão",
+  sessionTitle: "Sessão do worker",
+  sessionEmpty: "Sem mensagens nesta sessão",
+  showEarlierMessages: "Mostrar mensagens anteriores",
+  messageTruncated: "Mensagem truncada",
   selectAll: "Selecionar tudo",
   selectTask: (name) => `Selecionar ${name}`,
   tasksColumn: "Tarefas",
@@ -4624,6 +4689,11 @@ var ru = {
   taskDetail: "Детали задачи",
   actionsMenu: "Меню действий",
   close: "Закрыть",
+  viewSession: "Сессия",
+  sessionTitle: "Сессия воркера",
+  sessionEmpty: "В этой сессии нет сообщений",
+  showEarlierMessages: "Показать предыдущие сообщения",
+  messageTruncated: "Сообщение обрезано",
   selectAll: "Выбрать все",
   selectTask: (name) => `Выбрать ${name}`,
   tasksColumn: "Задачи",
@@ -4960,6 +5030,11 @@ var tr = {
   taskDetail: "Görev ayrıntısı",
   actionsMenu: "Eylemler menüsü",
   close: "Kapat",
+  viewSession: "Oturum",
+  sessionTitle: "Worker oturumu",
+  sessionEmpty: "Bu oturumda mesaj yok",
+  showEarlierMessages: "Önceki mesajları göster",
+  messageTruncated: "Mesaj kırpıldı",
   selectAll: "Tümünü seç",
   selectTask: (name) => `${name} öğesini seç`,
   tasksColumn: "Görevler",
@@ -5295,6 +5370,11 @@ var uk = {
   taskDetail: "Подробиці завдання",
   actionsMenu: "Меню дій",
   close: "Закрити",
+  viewSession: "Сесія",
+  sessionTitle: "Сесія воркера",
+  sessionEmpty: "У цій сесії немає повідомлень",
+  showEarlierMessages: "Показати попередні повідомлення",
+  messageTruncated: "Повідомлення обрізано",
   selectAll: "Вибрати всі",
   selectTask: (name) => `Вибрати ${name}`,
   tasksColumn: "Завдання",
@@ -5631,6 +5711,11 @@ var zhHant = {
   taskDetail: "任務詳細資料",
   actionsMenu: "動作選單",
   close: "關閉",
+  viewSession: "會話",
+  sessionTitle: "工作者會話",
+  sessionEmpty: "此會話沒有訊息",
+  showEarlierMessages: "顯示更早的訊息",
+  messageTruncated: "訊息已截斷",
   selectAll: "全選",
   selectTask: (name) => `選取 ${name}`,
   tasksColumn: "任務",
@@ -11825,6 +11910,65 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
     })
   ] });
 }
+function SessionTranscriptDialog({ session, onClose }) {
+  const i18n = useGanttI18n();
+  const [before, setBefore] = useState5(null);
+  const [messages, setMessages] = useState5([]);
+  const [loadedFor, setLoadedFor] = useState5(null);
+  const query = useQuery2({
+    queryKey: ["kanban-gantt", "transcript", session ? session.session_id : "", before],
+    queryFn: () => apiFetch(`/sessions/${encodeURIComponent(session.session_id)}/transcript?limit=120` + (before != null ? `&before_id=${before}` : "")),
+    enabled: Boolean(session)
+  });
+  useEffect5(() => {
+    setMessages([]);
+    setBefore(null);
+    setLoadedFor(null);
+  }, [session ? session.session_id : ""]);
+  useEffect5(() => {
+    if (!query.data) return;
+    const key = before == null ? "newest" : String(before);
+    if (loadedFor === key) return;
+    setLoadedFor(key);
+    const page = query.data.messages || [];
+    setMessages((prev) => before == null ? page : [...page, ...prev]);
+  }, [query.data, before, loadedFor]);
+  return jsx8(Dialog4, {
+    open: Boolean(session),
+    onOpenChange: (open) => {
+      if (!open) onClose();
+    },
+    children: jsxs8(DialogContent4, {
+      className: "max-w-3xl",
+      children: [
+        jsx8(DialogTitle4, { children: i18n.sessionTitle }),
+        session ? jsx8("div", { className: "text-[10px] text-(--ui-text-tertiary) -mt-1 mb-1 font-mono truncate", children: session.session_id }) : null,
+        jsxs8("div", { className: "flex flex-col gap-1.5 max-h-[60vh] overflow-auto pr-1", "data-session-transcript": true, children: [
+          query.data && query.data.has_more ? jsx8("button", {
+            type: "button",
+            className: "self-center text-[10px] text-(--ui-accent) hover:underline cursor-pointer bg-transparent border-0",
+            onClick: () => setBefore(query.data.before_id),
+            children: i18n.showEarlierMessages
+          }) : null,
+          messages.length === 0 && !query.isLoading ? jsx8("div", { className: "text-[10px] text-(--ui-text-tertiary)", children: i18n.sessionEmpty }) : null,
+          ...messages.map((m, i) => jsxs8("div", {
+            key: m.id || i,
+            className: "text-[11px] border border-(--ui-stroke-tertiary)/60 rounded p-1.5 bg-(--ui-bg-subtle, transparent)",
+            children: [
+              jsxs8("div", { className: "flex items-center gap-1.5 text-[9.5px] text-(--ui-text-tertiary) mb-0.5", children: [
+                jsx8("span", { className: "font-medium uppercase", children: m.tool_name || m.role || "?" }),
+                m.timestamp ? jsx8("span", { className: "ml-auto text-(--ui-text-quaternary)", children: new Intl.DateTimeFormat(void 0, { timeStyle: "short" }).format(new Date(m.timestamp * 1e3)) }) : null
+              ] }),
+              jsx8("div", { className: "whitespace-pre-wrap break-words text-(--ui-text-secondary)", children: m.content }),
+              m.truncated ? jsx8("div", { className: "text-[9px] text-(--ui-text-quaternary) mt-0.5", children: i18n.messageTruncated }) : null
+            ]
+          }))
+        ] }),
+        jsx8("div", { className: "flex justify-end", children: jsx8(Button5, { size: "sm", variant: "ghost", onClick: onClose, children: i18n.close }) })
+      ]
+    })
+  });
+}
 function AttachmentPreview({ taskId, board, att, siblings, i18n, onClose, onNavigate }) {
   const query = useQuery2({
     queryKey: ["kanban-gantt", "attachment", taskId, att.id],
@@ -12070,6 +12214,20 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     queryFn: () => fetchWorkerLog(shownId, board),
     enabled: Boolean(shownId) && feedTab === "log" && Boolean(data?.task?.log_exists)
   });
+  const sessionsQuery = useQuery2({
+    queryKey: ["kanban-gantt", "sessions", apiBase(), board, shownId],
+    queryFn: () => apiFetch(`/tasks/${encodeURIComponent(shownId)}/sessions?board=${encodeURIComponent(board || "")}`),
+    enabled: Boolean(shownId) && feedTab === "runs"
+  });
+  const [transcript, setTranscript] = useState5(null);
+  const sessionOfRun = (run) => {
+    const all = sessionsQuery.data && sessionsQuery.data.sessions || [];
+    if (!all.length) return null;
+    if (!run.started_at) return all.length === 1 ? all[0] : null;
+    const from = run.started_at - 120;
+    const to = (run.ended_at || run.started_at) + 120;
+    return all.find((s) => (s.started_at || 0) <= to && (s.ended_at || s.started_at || 0) >= from) || null;
+  };
   const [cliCopied, setCliCopied] = useState5(false);
   const [pendingUnlink, setPendingUnlink] = useState5(null);
   const relations = useMemo3(() => relationsOf(tasks, shownId), [tasks, shownId]);
@@ -12628,6 +12786,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
               return m > 0 ? `${h}h ${m}m` : `${h}h`;
             })();
             const dateStr = r.started_at ? new Intl.DateTimeFormat(void 0, { dateStyle: "medium", timeStyle: "short" }).format(new Date(r.started_at * 1e3)) : "";
+            const runSession = sessionOfRun(r);
             return jsxs8("div", {
               key: r.id || i,
               className: "flex flex-col gap-1 text-[11px] border border-(--ui-stroke-tertiary) rounded p-2 bg-(--ui-bg-subtle, transparent)",
@@ -12642,7 +12801,15 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                   durationStr ? jsx8("span", { className: "text-(--ui-text-tertiary)", children: `⏱ ${durationStr}` }) : null,
                   dateStr ? jsx8("span", { className: "text-(--ui-text-quaternary) ml-auto text-[9.5px]", children: dateStr }) : null
                 ] }),
-                r.summary ? jsx8("div", { className: "mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50", children: jsx8(MessageTextContent, { media: false, text: r.summary }) }) : null
+                r.summary ? jsx8("div", { className: "mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50", children: jsx8(MessageTextContent, { media: false, text: r.summary }) }) : null,
+                runSession ? jsx8("button", {
+                  type: "button",
+                  "data-run-session": r.id || i,
+                  className: "self-start mt-1 inline-flex items-center gap-1 text-[10px] text-(--ui-accent) hover:underline cursor-pointer bg-transparent border-0 p-0",
+                  title: `${runSession.session_id} · ${runSession.message_count || 0}`,
+                  onClick: () => setTranscript(runSession),
+                  children: [jsx8(Codicon7, { name: "comment-discussion", size: "0.75rem" }), i18n.viewSession]
+                }) : null
               ]
             });
           }) }) : null,
@@ -12658,6 +12825,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
         ] });
       })()
     ] }),
+    // The run's conversation, opened from the row that names the run.
+    jsx8(SessionTranscriptDialog, { session: transcript, onClose: () => setTranscript(null) }),
     // Drops a parent link — behind a confirmation, so a stray click on the
     // row's ✕ never silently rewires the tree.
     jsx8(ConfirmDialog, {

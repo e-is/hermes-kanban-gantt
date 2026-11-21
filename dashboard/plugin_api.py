@@ -802,6 +802,37 @@ def get_task(task_id: str, board: Optional[str] = Query(None)):
         conn.close()
 
 
+@router.get("/tasks/{task_id}/sessions")
+def get_task_sessions(task_id: str, board: Optional[str] = Query(None)) -> dict[str, Any]:
+    """The worker transcripts of one card — the conversation, not the stdout log.
+
+    The drawer has always been able to show a run's outcome and the worker's own output, and
+    never the session the agent actually held: recent Hermes stopped exposing it, the official
+    board included. The link is the worker's workspace path, which `sessions.cwd` keeps, so this
+    is an exact read rather than a guess on a time window. Read-only, on demand, and it fails
+    open — a state database that cannot be read costs the reader the section, never the drawer.
+    """
+    slug = _resolve_board(board)
+    if slug in ("all", "*"):
+        raise HTTPException(status_code=400, detail="sessions are read per board")
+    from worker_sessions import task_sessions
+
+    return {"board": slug, "task_id": task_id,
+            "sessions": task_sessions(Path(_board_db_path(slug)).parent, task_id)}
+
+
+@router.get("/sessions/{session_id}/transcript")
+def get_session_transcript(session_id: str, limit: int = Query(120), before_id: Optional[int] = Query(None)) -> dict[str, Any]:
+    """One page of a worker's conversation, oldest first.
+
+    `before_id` pages backwards, so a long run costs a page and not a download. Message bodies
+    are capped and flagged; the panel is a reader, not an export.
+    """
+    from worker_sessions import transcript
+
+    return transcript(session_id, limit=limit, before_id=before_id)
+
+
 # Extensions the drawer will offer to RENDER rather than download. Anything else is
 # still readable through the same route (base64), the client just cannot preview it.
 _TEXT_SUFFIXES = (".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv", ".log",
