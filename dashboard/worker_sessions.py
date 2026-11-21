@@ -147,3 +147,80 @@ def board_costs(board_dir: Path, task_ids: Iterable[str], db: Optional[Path] = N
         # 'mixed' when estimates and actuals meet: the sum is then partly a projection.
         bucket["status"] = "mixed" if len(kinds) > 1 else (kinds.pop() if kinds else "unknown")
     return {"costs": costs, "unattributed": unattributed}
+
+
+def task_sessions(board_dir: Path, task_id: str, db: Optional[Path] = None) -> list[dict[str, Any]]:
+    """Every worker session of one task, newest first.
+
+    A card can be worked more than once (a reclaim, a re-run after a fix), so the answer is
+    a list — and the drawer shows each run its own transcript rather than pretending there is
+    one. Empty when the workspaces convention predates the card: better no transcript than
+    somebody else's.
+    """
+    rows = [r for r in sessions_under(board_dir, db) if r.get("task_id") == task_id]
+    return sorted(rows, key=lambda r: r.get("started_at") or 0, reverse=True)
+
+
+#: A transcript is a conversation, not a data dump: one message body is capped, and the
+#: panel asks for more instead of pulling megabytes.
+MESSAGE_CHARS = 8000
+
+
+def transcript(session_id: str, limit: int = 120, before_id: Optional[int] = None,
+               db: Optional[Path] = None) -> dict[str, Any]:
+    """The messages of one worker session, oldest first, newest page when it is long.
+
+    Read-only, narrow columns (the transcript is what the reader asked for; the system
+    prompt is not), and `before_id` pages backwards so the panel can say « show earlier »
+    without counting everything first.
+    """
+    try:
+        conn = _connect(db)
+    except sqlite3.Error:
+        return {"session_id": session_id, "messages": [], "has_more": False, "error": "state database unavailable"}
+    try:
+        total = conn.execute("SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,)).fetchone()[0]
+        sql = ("SELECT id, role, content, tool_name, timestamp FROM messages "
+               "WHERE session_id = ?")
+        args: list[Any] = [session_id]
+        if before_id is not None:
+            sql += " AND id < ?"
+            args.append(int(before_id))
+        sql += " ORDER BY id DESC LIMIT ?"
+        args.append(max(1, min(int(limit), 500)))
+        rows = conn.execute(sql, args).fetchall()
+        oldest = rows[-1]["id"] if rows else None
+        has_more = False
+        if oldest is not None:
+            has_more = conn.execute(
+                "SELECT 1 FROM messages WHERE session_id = ? AND id < ? LIMIT 1",
+                (session_id, oldest),
+            ).fetchone() is not None
+    except sqlite3.Error:
+        conn.close()
+        return {"session_id": session_id, "messages": [], "has_more": False, "error": "messages unavailable"}
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    messages = []
+    for row in reversed(rows):
+        body = row["content"] or ""
+        clipped = len(body) > MESSAGE_CHARS
+        messages.append({
+            "id": row["id"],
+            "role": row["role"],
+            "tool_name": row["tool_name"],
+            "timestamp": row["timestamp"],
+            "content": body[:MESSAGE_CHARS],
+            "truncated": clipped,
+        })
+    return {
+        "session_id": session_id,
+        "messages": messages,
+        "total": total,
+        "has_more": has_more,
+        # The panel pages with this: everything older than the first message it just got.
+        "before_id": messages[0]["id"] if messages else None,
+    }
