@@ -134,6 +134,11 @@ export const ga = {
     assigneeColumn: 'Sanntóir',
     statusColumn: 'Staid',
     lastActivityColumn: 'Nuashonraithe',
+    showCost: 'Taispeáin costas',
+    costColumn: 'Costas',
+    costOwn: 'An tasc seo',
+    costLineage: 'Síolrach (an tasc seo san áireamh)',
+    costSortHint: 'Sórtáil de réir costas síolraigh',
     viewList: 'Liosta',
     viewTimeline: 'Amlíne',
     // The third view: dependency structure rather than time.

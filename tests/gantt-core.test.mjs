@@ -1097,3 +1097,41 @@ test('the period window keeps what its bar touches and drops what it does not', 
   assert.equal(core.withinPeriod(old, now, null), true)
   assert.equal(core.withinPeriod(old, now, 0), true)
 })
+
+// ── cost: own + complete descending lineage (issue #11) ────────────────────────
+test('a lineage sums the card and everything it spawned, a diamond being billed once', () => {
+  // A→B, A→C, B→D, C→D — D is reachable twice and must be counted once.
+  const tasks = [
+    { id: 'a', children: ['b', 'c'] },
+    { id: 'b', children: ['d'] },
+    { id: 'c', children: ['d'] },
+    { id: 'd', children: [] }
+  ]
+  const costs = { a: { own: 1, status: 'actual' }, b: { own: 2, status: 'actual' },
+                  c: { own: 4, status: 'actual' }, d: { own: 8, status: 'actual' } }
+  const out = core.lineageCosts(tasks, costs)
+  assert.equal(out.a.lineage, 15)
+  assert.equal(out.d.lineage, 8)
+  assert.equal(out.b.lineage, 10)
+})
+
+test('a lineage terminates on a cycle', () => {
+  const tasks = [{ id: 'a', children: ['b'] }, { id: 'b', children: ['a'] }]
+  const out = core.lineageCosts(tasks, { a: { own: 1, status: 'actual' }, b: { own: 2, status: 'actual' } })
+  assert.equal(out.a.lineage, 3)
+  assert.equal(out.b.lineage, 3)
+})
+
+test('a card with no run is unknown, not free — and a mixed lineage says so', () => {
+  const tasks = [{ id: 'a', children: ['b'] }, { id: 'b', children: [] }, { id: 'c', children: [] }]
+  const out = core.lineageCosts(tasks, { a: { own: 0.5, status: 'estimated' }, b: { own: 1, status: 'actual' } })
+  assert.equal(out.c.own, null)
+  assert.equal(out.c.lineage, null)
+  assert.equal(out.c.status, 'unknown')
+  assert.equal(out.a.status, 'mixed')
+  assert.equal(core.formatCost(null, 'unknown'), '—')
+  assert.equal(core.formatCost(1, 'actual'), '$1.00')
+  assert.equal(core.formatCost(0.5, 'estimated'), '~$0.50')
+  assert.equal(core.formatCost(0.5, 'mixed'), '~$0.50')
+  assert.equal(core.formatCost(0.004, 'actual'), '<$0.01')
+})

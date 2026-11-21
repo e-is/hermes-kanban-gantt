@@ -588,6 +588,30 @@ def get_gantt(board: Optional[str] = Query(None)):
     return _read_gantt(slug)
 
 
+@router.get("/costs")
+def get_costs(board: Optional[str] = Query(None)) -> dict[str, Any]:
+    """What each task's worker runs cost — read on demand, never with the board.
+
+    The figures live in the state database, not in kanban: the link is the worker's
+    workspace path (``…/boards/<slug>/workspaces/<task_id>``), which is also what makes
+    the read exact rather than a guess. Deliberately NOT folded into /gantt, which the
+    UI polls: cost only changes when a run ends, so the list pays one extra request and
+    the poll pays nothing.
+    """
+    slug = _resolve_board(board)
+    if slug in ("all", "*"):
+        raise HTTPException(status_code=400, detail="costs are read per board")
+    conn = _connect(slug, ro=True)
+    try:
+        task_ids = [row[0] for row in conn.execute("SELECT id FROM tasks").fetchall()]
+    finally:
+        conn.close()
+    from worker_sessions import board_costs
+
+    data = board_costs(Path(_board_db_path(slug)).parent, task_ids)
+    return {"board": slug, "currency": "USD", "costs": data["costs"], "unattributed": data["unattributed"]}
+
+
 # ---------------------------------------------------------------------------
 # Bulk operations (MUST be declared before /tasks/{task_id} to avoid matching "bulk" as task_id)
 # ---------------------------------------------------------------------------

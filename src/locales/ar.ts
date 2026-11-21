@@ -128,6 +128,11 @@ export const ar = {
     assigneeColumn: 'المكلّف',
     statusColumn: 'الحالة',
     lastActivityColumn: 'آخر تحديث',
+    showCost: 'إظهار التكلفة',
+    costColumn: 'التكلفة',
+    costOwn: 'هذه المهمة',
+    costLineage: 'السلالة (تشمل هذه المهمة)',
+    costSortHint: 'الترتيب حسب تكلفة السلالة',
     viewList: 'قائمة',
     viewTimeline: 'مخطط زمني',
     // The third view: dependency structure rather than time.

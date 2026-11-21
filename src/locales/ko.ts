@@ -134,6 +134,11 @@ export const ko = {
     assigneeColumn: '담당자',
     statusColumn: '상태',
     lastActivityColumn: '업데이트됨',
+    showCost: '비용 표시',
+    costColumn: '비용',
+    costOwn: '이 작업',
+    costLineage: '계보(이 작업 포함)',
+    costSortHint: '계보 비용순 정렬',
     viewList: '목록',
     viewTimeline: '타임라인',
     // The third view: dependency structure rather than time.

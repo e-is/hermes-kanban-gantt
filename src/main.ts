@@ -111,7 +111,7 @@ const ZOOM_MIN_FACTOR = 0.2
 
 
 import { graphNodes, graphEdges, layoutGraph, lineage as taskLineage, scopeIds, boardScope, scopeCounts, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
-import { barRange, taskBars, withinPeriod, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, titleParts, PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments } from './core/gantt-core.ts'
+import { barRange, taskBars, withinPeriod, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, titleParts,  PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments, lineageCosts, formatCost } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -464,7 +464,7 @@ function ResizeHandle({ get, set, min, max, resetTo, storageKey, growDirection =
   })
 }
 
-function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn, hasChildren, collapsed, secondary, secondaryOnly, continuation = [], lastSibling, hiddenCount = 0, matched, descendantOfSelected, onToggleFold, listMode }) {  const i18n = useGanttI18n()
+function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, listCols, cost, costEnabled, onOpen, isSelected, isChecked, onToggleCheck, isEven, showBoardBadge, dragState, onDragStartTask, onDragEndTask, onDropOn, hasChildren, collapsed, secondary, secondaryOnly, continuation = [], lastSibling, hiddenCount = 0, matched, descendantOfSelected, onToggleFold, listMode }) {  const i18n = useGanttI18n()
   const labelW = useValue($labelW)
   const bars = taskBars(task, now)
   const label = task.label ? `[${task.label}]` : ''
@@ -570,7 +570,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
     // is docked, and `focus()` needs both a handle and a `tabIndex`.
     'data-row-id': task.id,
     tabIndex: -1,
-    style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
+    style: { gridTemplateColumns: listMode ? listCols : `${labelW}px ${timelineW}px`, height: `${ROW_H}px` },
     onClick: e => {
       // If clicking inside the checkbox itself, don't trigger row click handler again
       if (e.target.tagName === 'INPUT' && e.target.type === 'checkbox') return
@@ -718,7 +718,7 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
               })
         ]
       }),
-      listMode ? jsx(ListCells, { task, now, statusTitle, dotColor }) : jsxs('div', {
+      listMode ? jsx(ListCells, { task, now, statusTitle, dotColor, cost, i18nCosts: costEnabled ? i18n : null }) : jsxs('div', {
         className: 'relative overflow-hidden',
         style: { height: `${ROW_H}px` },
         children: bars.length > 0
@@ -729,12 +729,16 @@ function TaskRow({ task, depth, isChild, now, pxPerSec, min, timelineW, onOpen, 
   })
 }
 
-/** List view columns: task | assignee | status | last activity | attachments (a paperclip,
- *  or nothing — the column is as narrow as the icon it can hold). */
-const LIST_COLUMNS = 'minmax(0, 1fr) 150px 96px 64px 40px'
+/** List view columns: task | assignee | status | [cost] | last activity | attachments (a
+ *  paperclip, or nothing — the column is as narrow as the icon it can hold, and it stays
+ *  last because the grid string ends with its 40 px). The cost column is opt-in: a board
+ *  should not pay a state-database read to render a list nobody asked to price. */
+const listColumns = (showCost) => showCost
+  ? 'minmax(0, 1fr) 150px 96px 78px 64px 40px'
+  : 'minmax(0, 1fr) 150px 96px 64px 40px'
 
 /** The meta cells a list row shows instead of the timeline bars. */
-function ListCells({ task, now, statusTitle, dotColor }) {
+function ListCells({ task, now, statusTitle, dotColor, cost, i18nCosts }) {
   const i18n = useGanttI18n()
   const last = lastActivity(task)
   return [
@@ -752,6 +756,20 @@ function ListCells({ task, now, statusTitle, dotColor }) {
       style: { color: dotColor },
       children: statusTitle
     }),
+    // Cost: this card's own runs. The lineage lives in the tooltip, where the number can be
+    // qualified — « this task included » is the whole difference between the two figures.
+    i18nCosts
+      ? jsx('div', {
+          key: 'cost',
+          className: 'flex items-center justify-end px-2 text-[10px] tabular-nums',
+          style: { color: cost?.own == null ? 'var(--ui-text-quaternary)' : 'var(--ui-text-secondary)' },
+          title: [
+            `${i18nCosts.costOwn}: ${formatCost(cost?.own, cost?.ownStatus)}`,
+            `${i18nCosts.costLineage}: ${formatCost(cost?.lineage, cost?.status)}`
+          ].join('\n'),
+          children: formatCost(cost?.own, cost?.ownStatus)
+        })
+      : null,
     jsx('div', {
       key: 'age',
       className: 'px-2 text-[10px] tabular-nums text-right text-(--ui-text-tertiary)',
@@ -835,6 +853,8 @@ function FilterDropdown({
   onToggleArchived,
   onlyAttachments,
   onToggleOnlyAttachments,
+  showCost,
+  onToggleCost,
   scope,
   onScopeChange
 }) {
@@ -932,6 +952,18 @@ function FilterDropdown({
               jsx(Codicon, { name: 'attach', size: '0.8rem', className: 'shrink-0 text-(--ui-text-tertiary)' }),
               jsx('span', { className: 'flex-1', children: i18n.filterWithAttachments }),
               onlyAttachments ? jsx(Codicon, { name: 'check', size: '0.8rem', className: 'ml-auto' }) : null
+            ]
+          }),
+          jsxs(DropdownMenuItem, {
+            // A DISPLAY preference, not a filter: it adds a column and never hides a card.
+            // Hidden by default because it costs a state-database read on a board that does
+            // not need one.
+            onClick: () => onToggleCost(!showCost),
+            className: 'flex items-center gap-2 cursor-pointer text-xs py-1.5',
+            children: [
+              jsx(Codicon, { name: 'credit-card', size: '0.8rem', className: 'shrink-0 text-(--ui-text-tertiary)' }),
+              jsx('span', { className: 'flex-1', children: i18n.showCost }),
+              showCost ? jsx(Codicon, { name: 'check', size: '0.8rem', className: 'ml-auto' }) : null
             ]
           })
         ]
@@ -4569,6 +4601,32 @@ export function KanbanGanttPage() {
     if (getStorage()) getStorage().set('onlyAttachments', next ? '1' : '0')
   }
 
+  // « Show cost » — a display preference, hidden by default, persisted like the others. The
+  // figures come from a SEPARATE endpoint, read only while the column is on: /gantt is polled,
+  // and cost changes only when a run ends, so putting it there would pay on every tick.
+  const [showCost, setShowCost] = useState(() => {
+    const saved = getStorage() ? getStorage().get('showCost', null) : null
+    return saved === '1' || saved === true
+  })
+  const toggleShowCost = next => {
+    setShowCost(Boolean(next))
+    if (getStorage()) getStorage().set('showCost', next ? '1' : '0')
+  }
+  // Clicking the column header sorts the board by lineage, largest first — a price column that
+  // cannot sort is half a column. Off by default: board order is the reader's own.
+  const [costSort, setCostSort] = useState('off')
+  const costsQuery = useQuery({
+    queryKey: ['kanban-gantt', 'costs', apiBase(), board],
+    queryFn: () => apiFetch(`/costs?board=${encodeURIComponent(board || '')}`),
+    enabled: showCost && viewMode === 'list' && board !== 'all' && board !== '*',
+    staleTime: 60_000,
+    refetchOnWindowFocus: false
+  })
+  const costRows = useMemo(
+    () => (showCost ? lineageCosts(allTasks, (costsQuery.data && costsQuery.data.costs) || {}) : {}),
+    [showCost, allTasks, costsQuery.data]
+  )
+
   const derived = useMemo(() => {
     if (!data || !data.tasks) return null
     let visible = data.tasks
@@ -4645,10 +4703,16 @@ export function KanbanGanttPage() {
       search,
       selected: openTaskId ? new Set([openTaskId]) : new Set()
     })
+    if (showCost && costSort !== 'off' && listMode) {
+      // Roots first, largest lineage first; children stay behind their parent — the tree is
+      // the structure, the price is only the order of its top level.
+      const pick = t => (costRows[t.id]?.lineage == null ? -1 : costRows[t.id].lineage)
+      visible = [...visible].sort((a, b) => (costSort === 'asc' ? pick(a) - pick(b) : pick(b) - pick(a)))
+    }
     const domain = computeDomain(visible)
     const allAssignees = Array.from(new Set(data.tasks.map(t => t.assignee).filter(Boolean))).sort()
     return { rows, domain, total: visible.length, tasks: visible, allAssignees, scopeHidden: scopeHidden + periodHidden, scopeCount }
-  }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage, period])
+  }, [data, allTasks, showArchived, onlyAttachments, disabledStatuses, selectedAssignees, search, fold, openTaskId, viewMode, graphScope, graphLineage, period, showCost, costSort, costRows])
 
   // The header toggle: if anything the user can collapse is open, collapse it all;
   // otherwise open everything. It walks the rows, so it acts on exactly the set
@@ -5323,6 +5387,9 @@ export function KanbanGanttPage() {
     min: domain.min,
     timelineW,
     listMode,
+    listCols: listColumns(showCost && listMode),
+    cost: costRows[row.task.id],
+    costEnabled: showCost && listMode,
     onOpen: id => $openTaskId.set(id),
     isSelected: openTaskId === row.task.id,
     isChecked: selectedIds.has(row.task.id),
@@ -5450,6 +5517,8 @@ export function KanbanGanttPage() {
                 onToggleArchived: setShowArchived,
                 onlyAttachments,
                 onToggleOnlyAttachments: toggleOnlyAttachments,
+                showCost,
+                onToggleCost: toggleShowCost,
                 scope: graphScope,
                 onScopeChange: handleGraphScope
               }),
@@ -5819,7 +5888,7 @@ export function KanbanGanttPage() {
                   jsxs('div', {
                     className: cn('grid sticky top-0 z-20 bg-(--ui-bg-chrome)', listMode ? 'w-full' : 'w-max'),
                     'data-glass-opaque': true,
-                    style: { gridTemplateColumns: listMode ? LIST_COLUMNS : `${labelW}px ${timelineW}px` },
+                    style: { gridTemplateColumns: listMode ? listColumns(showCost && listMode) : `${labelW}px ${timelineW}px` },
                     children: [
                       jsxs('div', {
                         className: 'sticky left-0 z-30 bg-(--ui-bg-chrome) border-r border-b border-(--ui-stroke-tertiary) flex items-center pr-2 gap-1.5',
@@ -5879,11 +5948,31 @@ export function KanbanGanttPage() {
                       }),
                       ...(listMode
                         ? [
-                            ...[i18n.assigneeColumn, i18n.statusColumn, i18n.lastActivityColumn].map((h, i) => jsx('div', {
-                              key: h,
-                              className: cn('flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none', i === 2 && 'justify-end'),
+                            ...[
+                              { label: i18n.assigneeColumn },
+                              { label: i18n.statusColumn },
+                              ...(showCost
+                                ? [{
+                                    label: i18n.costColumn + (costSort === 'desc' ? ' ↓' : costSort === 'asc' ? ' ↑' : ''),
+                                    sort: true
+                                  }]
+                                : []),
+                              { label: i18n.lastActivityColumn, right: true }
+                            ].map(cell => jsx('div', {
+                              key: cell.label,
+                              role: cell.sort ? 'button' : undefined,
+                              tabIndex: cell.sort ? 0 : undefined,
+                              title: cell.sort ? i18n.costSortHint : undefined,
+                              onClick: cell.sort
+                                ? () => setCostSort(costSort === 'off' ? 'desc' : costSort === 'desc' ? 'asc' : 'off')
+                                : undefined,
+                              className: cn(
+                                'flex items-center px-2 border-b border-(--ui-stroke-tertiary) text-[10px] text-(--ui-text-tertiary) uppercase font-medium select-none',
+                                cell.right && 'justify-end',
+                                cell.sort && 'cursor-pointer hover:text-(--ui-text-secondary)'
+                              ),
                               style: { height: '24px' },
-                              children: h
+                              children: cell.label
                             })),
                             // The attachment column is as narrow as a paperclip, so its header
                             // is the icon rather than a word that would never fit.

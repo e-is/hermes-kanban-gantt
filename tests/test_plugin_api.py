@@ -1372,3 +1372,85 @@ def test_task_log_route_reads_the_log_the_core_writes(client):
 def test_task_log_route_404_for_an_unknown_task(client):
     http, board = client
     assert http.get(f"/tasks/t_nope/log?board={board['slug']}").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Cost read (issue #11): the worker session is found by its workspace path
+# ---------------------------------------------------------------------------
+
+def _write_state_db(sandbox: Path, rows) -> None:
+    """A minimal state.db: only the columns the cost read touches.
+
+    The sandbox HERMES_HOME is the profile root, so ``state_db_path()`` lands here and the
+    real state database is never opened.
+    """
+    import sqlite3 as _sqlite
+
+    db = sandbox / "state.db"
+    conn = _sqlite.connect(db)
+    conn.execute(
+        "CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT, profile_name TEXT, title TEXT, "
+        "started_at REAL, ended_at REAL, message_count INTEGER, estimated_cost_usd REAL, "
+        "actual_cost_usd REAL, cost_status TEXT)"
+    )
+    conn.executemany(
+        "INSERT INTO sessions (id, cwd, profile_name, title, started_at, ended_at, message_count, "
+        "estimated_cost_usd, actual_cost_usd, cost_status) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        rows,
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_costs_are_read_from_the_worker_workspace(client, tmp_path):
+    http, board = client
+    sandbox = Path(os.environ["HERMES_HOME"])
+    workspaces = sandbox / "kanban" / "boards" / board["slug"] / "workspaces"
+    parent, child, solo = board["parent"], board["child"], board["solo"]
+    _write_state_db(sandbox, [
+        # two runs of the parent: one estimated, one billed
+        (f"local-{1}", str(workspaces / parent), "default", "parent", 1.0, 2.0, 4, 0.25, None, "estimated"),
+        (f"local-{2}", str(workspaces / parent), "default", "parent", 3.0, 4.0, 2, None, 0.5, "actual"),
+        # a child run, and a session that belongs to no task of this board
+        (f"local-{3}", str(workspaces / child), "default", "child", 5.0, 6.0, 1, 0.1, None, "estimated"),
+        # a workspace of a task this board does not know, and a session elsewhere entirely
+        (f"local-{4}", str(workspaces / "t_deleted"), "default", "gone", 7.0, 8.0, 1, 9.0, None, "estimated"),
+        (f"local-{5}", "/home/someone/elsewhere", "default", "other", 9.0, 10.0, 1, 99.0, None, "estimated"),
+    ])
+
+    r = http.get(f"/costs?board={board['slug']}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["currency"] == "USD"
+    costs = data["costs"]
+
+    assert costs[parent]["own"] == pytest.approx(0.75)
+    assert costs[parent]["status"] == "mixed", "an estimate and a billed run are not the same number"
+    assert costs[parent]["sessions"] == 2
+    assert costs[child]["own"] == pytest.approx(0.1)
+    assert costs[child]["status"] == "estimated"
+    assert solo not in costs, "a task with no run is absent, never 0 — the column must say « no data »"
+    assert data["unattributed"] == 1, "a workspace whose task the board no longer knows is reported, not guessed"
+
+
+def test_costs_without_a_state_db_are_empty_not_an_error(client):
+    http, board = client
+    Path(os.environ["HERMES_HOME"], "state.db").unlink(missing_ok=True)
+    r = http.get(f"/costs?board={board['slug']}")
+    assert r.status_code == 200
+    assert r.json()["costs"] == {}
+
+
+def test_costs_are_per_board(client, tmp_path):
+    http, board = client
+    r = http.get("/costs?board=all")
+    assert r.status_code == 400, "an aggregate board has no worker workspaces to read"
+
+
+def test_task_of_cwd_reads_the_last_workspace_segment():
+    import worker_sessions
+
+    assert worker_sessions.task_of_cwd("/h/kanban/boards/gantt-demo/workspaces/t_abc123") == "t_abc123"
+    assert worker_sessions.task_of_cwd(r"C:\h\kanban\boards\b\workspaces\t_zz") == "t_zz"
+    assert worker_sessions.task_of_cwd("/home/blavenie/git/hermes-kanban-gantt") is None
+    assert worker_sessions.task_of_cwd(None) is None

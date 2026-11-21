@@ -134,6 +134,11 @@ export const zhHant = {
     assigneeColumn: '負責人',
     statusColumn: '狀態',
     lastActivityColumn: '已更新',
+    showCost: '顯示費用',
+    costColumn: '費用',
+    costOwn: '此任務',
+    costLineage: '下游（含此任務）',
+    costSortHint: '按下游費用排序',
     viewList: '清單',
     viewTimeline: '時間軸',
     // The third view: dependency structure rather than time.

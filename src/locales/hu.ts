@@ -134,6 +134,11 @@ export const hu = {
     assigneeColumn: 'Felelős',
     statusColumn: 'Állapot',
     lastActivityColumn: 'Frissítve',
+    showCost: 'Költség megjelenítése',
+    costColumn: 'Költség',
+    costOwn: 'Ez a feladat',
+    costLineage: 'Leszármazás (ezzel a feladattal)',
+    costSortHint: 'Rendezés leszármazási költség szerint',
     viewList: 'Lista',
     viewTimeline: 'Idővonal',
     // The third view: dependency structure rather than time.
