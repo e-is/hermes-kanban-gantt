@@ -129,6 +129,8 @@ export const zh = {
     sessionTitle: '工作会话',
     sessionEmpty: '此会话没有消息',
     showEarlierMessages: '显示更早的消息',
+    showAll: '显示全部',
+    showLess: '收起',
     messageTruncated: '消息已截断',
     selectAll: '全选',
     selectTask: name => `选择 ${name}`,

@@ -129,6 +129,8 @@ export const uk = {
     sessionTitle: 'Сесія воркера',
     sessionEmpty: 'У цій сесії немає повідомлень',
     showEarlierMessages: 'Показати попередні повідомлення',
+    showAll: 'Показати все',
+    showLess: 'Згорнути',
     messageTruncated: 'Повідомлення обрізано',
     selectAll: 'Вибрати всі',
     selectTask: name => `Вибрати ${name}`,

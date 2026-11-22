@@ -132,6 +132,8 @@ export const ko = {
     sessionTitle: '워커 세션',
     sessionEmpty: '이 세션에 메시지가 없습니다',
     showEarlierMessages: '이전 메시지 표시',
+    showAll: '전체 보기',
+    showLess: '접기',
     messageTruncated: '메시지가 잘렸습니다',
     selectAll: '전체 선택',
     selectTask: name => `${name} 선택`,

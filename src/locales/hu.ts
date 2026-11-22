@@ -132,6 +132,8 @@ export const hu = {
     sessionTitle: 'Worker munkamenet',
     sessionEmpty: 'Nincs üzenet ebben a munkamenetben',
     showEarlierMessages: 'Korábbi üzenetek megjelenítése',
+    showAll: 'Összes megjelenítése',
+    showLess: 'Kevesebb megjelenítése',
     messageTruncated: 'Üzenet csonkolva',
     selectAll: 'Összes kijelölése',
     selectTask: name => `${name} kijelölése`,

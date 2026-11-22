@@ -126,6 +126,8 @@ export const ja = {
     sessionTitle: 'ワーカーのセッション',
     sessionEmpty: 'このセッションにメッセージはありません',
     showEarlierMessages: '以前のメッセージを表示',
+    showAll: 'すべて表示',
+    showLess: '折りたたむ',
     messageTruncated: 'メッセージは切り詰められています',
     selectAll: 'すべて選択',
     selectTask: name => `${name} を選択`,

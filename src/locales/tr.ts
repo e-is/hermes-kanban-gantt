@@ -132,6 +132,8 @@ export const tr = {
     sessionTitle: 'Worker oturumu',
     sessionEmpty: 'Bu oturumda mesaj yok',
     showEarlierMessages: 'Önceki mesajları göster',
+    showAll: 'Tümünü göster',
+    showLess: 'Daha az göster',
     messageTruncated: 'Mesaj kırpıldı',
     selectAll: 'Tümünü seç',
     selectTask: name => `${name} öğesini seç`,

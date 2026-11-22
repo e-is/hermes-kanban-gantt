@@ -244,6 +244,8 @@ var en = {
   sessionTitle: "Worker session",
   sessionEmpty: "No messages in this session",
   showEarlierMessages: "Show earlier messages",
+  showAll: "Show all",
+  showLess: "Show less",
   messageTruncated: "Message truncated",
   selectAll: "Select all",
   selectTask: (name) => `Select ${name}`,
@@ -586,6 +588,8 @@ var fr = {
   sessionTitle: "Session du worker",
   sessionEmpty: "Aucun message dans cette session",
   showEarlierMessages: "Afficher les messages précédents",
+  showAll: "Afficher tout",
+  showLess: "Afficher moins",
   messageTruncated: "Message tronqué",
   selectAll: "Tout sélectionner",
   selectTask: (name) => `Sélectionner ${name}`,
@@ -925,6 +929,8 @@ var zh = {
   sessionTitle: "工作会话",
   sessionEmpty: "此会话没有消息",
   showEarlierMessages: "显示更早的消息",
+  showAll: "显示全部",
+  showLess: "收起",
   messageTruncated: "消息已截断",
   selectAll: "全选",
   selectTask: (name) => `选择 ${name}`,
@@ -1266,6 +1272,8 @@ var af = {
   sessionTitle: "Werker-sessie",
   sessionEmpty: "Geen boodskappe in hierdie sessie nie",
   showEarlierMessages: "Wys vroeër boodskappe",
+  showAll: "Wys alles",
+  showLess: "Wys minder",
   messageTruncated: "Boodskap afgekap",
   selectAll: "Kies alles",
   selectTask: (name) => `Kies ${name}`,
@@ -1609,6 +1617,8 @@ var ar = {
   sessionTitle: "جلسة العامل",
   sessionEmpty: "لا رسائل في هذه الجلسة",
   showEarlierMessages: "إظهار الرسائل الأقدم",
+  showAll: "إظهار الكل",
+  showLess: "إظهار أقل",
   messageTruncated: "الرسالة مقتطعة",
   selectAll: "تحديد الكل",
   selectTask: (name) => `تحديد ${name}`,
@@ -1952,6 +1962,8 @@ var de = {
   sessionTitle: "Worker-Sitzung",
   sessionEmpty: "Keine Nachrichten in dieser Sitzung",
   showEarlierMessages: "Frühere Nachrichten anzeigen",
+  showAll: "Alles anzeigen",
+  showLess: "Weniger anzeigen",
   messageTruncated: "Nachricht gekürzt",
   selectAll: "Alle auswählen",
   selectTask: (name) => `${name} auswählen`,
@@ -2295,6 +2307,8 @@ var es = {
   sessionTitle: "Sesión del worker",
   sessionEmpty: "Sin mensajes en esta sesión",
   showEarlierMessages: "Mostrar mensajes anteriores",
+  showAll: "Mostrar todo",
+  showLess: "Mostrar menos",
   messageTruncated: "Mensaje truncado",
   selectAll: "Seleccionar todo",
   selectTask: (name) => `Seleccionar ${name}`,
@@ -2638,6 +2652,8 @@ var ga = {
   sessionTitle: "Seisiún an oibrí",
   sessionEmpty: "Níl aon teachtaireacht sa seisiún seo",
   showEarlierMessages: "Taispeáin teachtaireachtaí níos luaithe",
+  showAll: "Taispeáin gach rud",
+  showLess: "Taispeáin níos lú",
   messageTruncated: "Teachtaireacht teasctha",
   selectAll: "Roghnaigh gach rud",
   selectTask: (name) => `Roghnaigh ${name}`,
@@ -2981,6 +2997,8 @@ var hu = {
   sessionTitle: "Worker munkamenet",
   sessionEmpty: "Nincs üzenet ebben a munkamenetben",
   showEarlierMessages: "Korábbi üzenetek megjelenítése",
+  showAll: "Összes megjelenítése",
+  showLess: "Kevesebb megjelenítése",
   messageTruncated: "Üzenet csonkolva",
   selectAll: "Összes kijelölése",
   selectTask: (name) => `${name} kijelölése`,
@@ -3324,6 +3342,8 @@ var it = {
   sessionTitle: "Sessione del worker",
   sessionEmpty: "Nessun messaggio in questa sessione",
   showEarlierMessages: "Mostra messaggi precedenti",
+  showAll: "Mostra tutto",
+  showLess: "Mostra meno",
   messageTruncated: "Messaggio troncato",
   selectAll: "Seleziona tutto",
   selectTask: (name) => `Seleziona ${name}`,
@@ -3667,6 +3687,8 @@ var ja = {
   sessionTitle: "ワーカーのセッション",
   sessionEmpty: "このセッションにメッセージはありません",
   showEarlierMessages: "以前のメッセージを表示",
+  showAll: "すべて表示",
+  showLess: "折りたたむ",
   messageTruncated: "メッセージは切り詰められています",
   selectAll: "すべて選択",
   selectTask: (name) => `${name} を選択`,
@@ -4010,6 +4032,8 @@ var ko = {
   sessionTitle: "워커 세션",
   sessionEmpty: "이 세션에 메시지가 없습니다",
   showEarlierMessages: "이전 메시지 표시",
+  showAll: "전체 보기",
+  showLess: "접기",
   messageTruncated: "메시지가 잘렸습니다",
   selectAll: "전체 선택",
   selectTask: (name) => `${name} 선택`,
@@ -4353,6 +4377,8 @@ var pt = {
   sessionTitle: "Sessão do worker",
   sessionEmpty: "Sem mensagens nesta sessão",
   showEarlierMessages: "Mostrar mensagens anteriores",
+  showAll: "Mostrar tudo",
+  showLess: "Mostrar menos",
   messageTruncated: "Mensagem truncada",
   selectAll: "Selecionar tudo",
   selectTask: (name) => `Selecionar ${name}`,
@@ -4693,6 +4719,8 @@ var ru = {
   sessionTitle: "Сессия воркера",
   sessionEmpty: "В этой сессии нет сообщений",
   showEarlierMessages: "Показать предыдущие сообщения",
+  showAll: "Показать всё",
+  showLess: "Свернуть",
   messageTruncated: "Сообщение обрезано",
   selectAll: "Выбрать все",
   selectTask: (name) => `Выбрать ${name}`,
@@ -5034,6 +5062,8 @@ var tr = {
   sessionTitle: "Worker oturumu",
   sessionEmpty: "Bu oturumda mesaj yok",
   showEarlierMessages: "Önceki mesajları göster",
+  showAll: "Tümünü göster",
+  showLess: "Daha az göster",
   messageTruncated: "Mesaj kırpıldı",
   selectAll: "Tümünü seç",
   selectTask: (name) => `${name} öğesini seç`,
@@ -5374,6 +5404,8 @@ var uk = {
   sessionTitle: "Сесія воркера",
   sessionEmpty: "У цій сесії немає повідомлень",
   showEarlierMessages: "Показати попередні повідомлення",
+  showAll: "Показати все",
+  showLess: "Згорнути",
   messageTruncated: "Повідомлення обрізано",
   selectAll: "Вибрати всі",
   selectTask: (name) => `Вибрати ${name}`,
@@ -5715,6 +5747,8 @@ var zhHant = {
   sessionTitle: "工作者會話",
   sessionEmpty: "此會話沒有訊息",
   showEarlierMessages: "顯示更早的訊息",
+  showAll: "顯示全部",
+  showLess: "收合",
   messageTruncated: "訊息已截斷",
   selectAll: "全選",
   selectTask: (name) => `選取 ${name}`,
@@ -6808,8 +6842,21 @@ function lineageCosts(tasks, costs = {}) {
 }
 function formatCost(value, status) {
   if (value == null) return "—";
-  const money = value > 0 && value < 0.01 ? "<$0.01" : `$${value.toFixed(2)}`;
-  return status === "estimated" || status === "mixed" ? `~${money}` : money;
+  if (value > 0 && value < 0.01) return "<$0.01";
+  return status === "estimated" || status === "mixed" ? `~$${value.toFixed(2)}` : `$${value.toFixed(2)}`;
+}
+function transcriptCut(text, limit = 4e3) {
+  const body = text == null ? "" : String(text);
+  if (body.length <= limit) return { text: body, truncated: false };
+  let cut = body.lastIndexOf("\n", limit);
+  if (cut < limit * 0.6) {
+    const space = body.lastIndexOf(" ", limit);
+    cut = space > limit * 0.6 ? space : limit;
+  }
+  let head = body.slice(0, cut);
+  const fences = (head.match(/^```/gm) || []).length;
+  if (fences % 2 === 1) head += "\n```";
+  return { text: head, truncated: true };
 }
 
 // src/ui/NewTaskDialog.tsx
@@ -11910,7 +11957,46 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
     })
   ] });
 }
-function SessionTranscriptDialog({ session, onClose }) {
+function TranscriptMessage({ message, live }) {
+  const i18n = useGanttI18n();
+  const [expanded, setExpanded] = useState5(false);
+  const isTool = Boolean(message.tool_name) || message.role === "tool";
+  const full = message.content || "";
+  const budget = isTool ? expanded ? Infinity : 600 : expanded ? Infinity : 4e3;
+  const body = budget === Infinity ? { text: full, truncated: false } : transcriptCut(full, budget);
+  return jsxs8("div", {
+    "data-transcript-message": isTool ? "tool" : message.role || "message",
+    className: "text-[11px] border border-(--ui-stroke-tertiary)/60 rounded p-1.5 bg-(--ui-bg-subtle, transparent)",
+    children: [
+      jsxs8("div", { className: "flex items-center gap-1.5 text-[9.5px] text-(--ui-text-tertiary) mb-0.5", children: [
+        jsx8("span", { className: "font-medium uppercase", children: message.tool_name || message.role || "?" }),
+        message.timestamp ? jsx8("span", { className: "ml-auto text-(--ui-text-quaternary)", children: new Intl.DateTimeFormat(void 0, { timeStyle: "short" }).format(new Date(message.timestamp * 1e3)) }) : null
+      ] }),
+      // A turn that only calls tools has no prose: show the calls, not an empty box.
+      ...(message.calls || []).map((call, ci) => jsx8("pre", {
+        key: `call-${ci}`,
+        "data-transcript-call": call.name,
+        className: "whitespace-pre-wrap break-words font-mono text-[10px] text-(--ui-text-accent, var(--ui-accent)) m-0 mb-0.5",
+        children: `→ ${call.name}(${call.arguments})`
+      })),
+      !full && !(message.calls || []).length ? null : isTool ? jsx8("pre", { className: "whitespace-pre-wrap break-words font-mono text-[10px] text-(--ui-text-secondary) m-0", children: body.text }) : jsx8("div", { className: "min-w-0", children: jsx8(MessageTextContent, { media: false, text: body.text }) }),
+      message.clipped ? jsx8("div", { className: "text-[9px] text-(--ui-text-quaternary) mt-0.5", children: i18n.messageTruncated }) : null,
+      body.truncated || message.clipped ? jsx8("button", {
+        type: "button",
+        "data-transcript-more": true,
+        className: "mt-1 text-[9.5px] text-(--ui-accent) hover:underline cursor-pointer bg-transparent border-0 p-0",
+        onClick: () => setExpanded(true),
+        children: i18n.showAll
+      }) : expanded && budget === Infinity ? jsx8("button", {
+        type: "button",
+        className: "mt-1 text-[9.5px] text-(--ui-accent) hover:underline cursor-pointer bg-transparent border-0 p-0",
+        onClick: () => setExpanded(false),
+        children: i18n.showLess
+      }) : null
+    ]
+  });
+}
+function SessionTranscriptDialog({ session, onClose, live = false }) {
   const i18n = useGanttI18n();
   const [before, setBefore] = useState5(null);
   const [messages, setMessages] = useState5([]);
@@ -11918,12 +12004,26 @@ function SessionTranscriptDialog({ session, onClose }) {
   const query = useQuery2({
     queryKey: ["kanban-gantt", "transcript", session ? session.session_id : "", before],
     queryFn: () => apiFetch(`/sessions/${encodeURIComponent(session.session_id)}/transcript?limit=120` + (before != null ? `&before_id=${before}` : "")),
-    enabled: Boolean(session)
+    enabled: Boolean(session),
+    // A running worker WRITES to this transcript, so the panel follows it — but only while the
+    // card is running, and only on the newest page: an older page is finished by definition.
+    // The board's own socket pushes task rows, not session rows, so this cannot ride it.
+    refetchInterval: session && live && before == null ? 4e3 : false,
+    refetchIntervalInBackground: false,
+    staleTime: 0
   });
+  const scrollRef = useRef3(null);
+  const pinnedRef = useRef3(true);
+  useEffect5(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (pinnedRef.current) el.scrollTop = el.scrollHeight;
+  }, [messages.length, session && session.session_id]);
   useEffect5(() => {
     setMessages([]);
     setBefore(null);
     setLoadedFor(null);
+    if (session) void query.refetch();
   }, [session ? session.session_id : ""]);
   useEffect5(() => {
     if (!query.data) return;
@@ -11943,27 +12043,25 @@ function SessionTranscriptDialog({ session, onClose }) {
       children: [
         jsx8(DialogTitle4, { children: i18n.sessionTitle }),
         session ? jsx8("div", { className: "text-[10px] text-(--ui-text-tertiary) -mt-1 mb-1 font-mono truncate", children: session.session_id }) : null,
-        jsxs8("div", { className: "flex flex-col gap-1.5 max-h-[60vh] overflow-auto pr-1", "data-session-transcript": true, children: [
-          query.data && query.data.has_more ? jsx8("button", {
-            type: "button",
-            className: "self-center text-[10px] text-(--ui-accent) hover:underline cursor-pointer bg-transparent border-0",
-            onClick: () => setBefore(query.data.before_id),
-            children: i18n.showEarlierMessages
-          }) : null,
-          messages.length === 0 && !query.isLoading ? jsx8("div", { className: "text-[10px] text-(--ui-text-tertiary)", children: i18n.sessionEmpty }) : null,
-          ...messages.map((m, i) => jsxs8("div", {
-            key: m.id || i,
-            className: "text-[11px] border border-(--ui-stroke-tertiary)/60 rounded p-1.5 bg-(--ui-bg-subtle, transparent)",
-            children: [
-              jsxs8("div", { className: "flex items-center gap-1.5 text-[9.5px] text-(--ui-text-tertiary) mb-0.5", children: [
-                jsx8("span", { className: "font-medium uppercase", children: m.tool_name || m.role || "?" }),
-                m.timestamp ? jsx8("span", { className: "ml-auto text-(--ui-text-quaternary)", children: new Intl.DateTimeFormat(void 0, { timeStyle: "short" }).format(new Date(m.timestamp * 1e3)) }) : null
-              ] }),
-              jsx8("div", { className: "whitespace-pre-wrap break-words text-(--ui-text-secondary)", children: m.content }),
-              m.truncated ? jsx8("div", { className: "text-[9px] text-(--ui-text-quaternary) mt-0.5", children: i18n.messageTruncated }) : null
-            ]
-          }))
-        ] }),
+        jsxs8("div", {
+          ref: scrollRef,
+          onScroll: (e) => {
+            const el = e.currentTarget;
+            pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+          },
+          className: "flex flex-col gap-1.5 max-h-[60vh] overflow-auto pr-1",
+          "data-session-transcript": true,
+          children: [
+            query.data && query.data.has_more ? jsx8("button", {
+              type: "button",
+              className: "self-center text-[10px] text-(--ui-accent) hover:underline cursor-pointer bg-transparent border-0",
+              onClick: () => setBefore(query.data.before_id),
+              children: i18n.showEarlierMessages
+            }) : null,
+            messages.length === 0 && !query.isLoading ? jsx8("div", { className: "text-[10px] text-(--ui-text-tertiary)", children: i18n.sessionEmpty }) : null,
+            ...messages.map((m, i) => jsx8(TranscriptMessage, { key: m.id || i, message: m, live }))
+          ]
+        }),
         jsx8("div", { className: "flex justify-end", children: jsx8(Button5, { size: "sm", variant: "ghost", onClick: onClose, children: i18n.close }) })
       ]
     })
@@ -12193,10 +12291,15 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const [descDraft, setDescDraft] = useState5("");
   const shownId = descOwner || taskId;
   const switchResolvedRef = useRef3(false);
+  const runningTask = (tasks || []).some((t) => t.id === shownId && t.status === "running");
   const { data, isLoading, isError, refetch } = useQuery2({
     queryKey: ["kanban-gantt", "task", apiBase(), board, shownId],
     queryFn: () => fetchTask(shownId, board),
-    enabled: Boolean(shownId)
+    enabled: Boolean(shownId),
+    // A running card's detail is a moving target — its runs list gains a row when the run ends.
+    // Only while it runs, and only while the drawer is open: nothing polls a closed drawer.
+    refetchInterval: runningTask ? 5e3 : false,
+    refetchIntervalInBackground: false
   });
   useEffect5(() => {
     if (shownId && prevTaskIdRef.current !== shownId) {
@@ -12217,7 +12320,11 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   const sessionsQuery = useQuery2({
     queryKey: ["kanban-gantt", "sessions", apiBase(), board, shownId],
     queryFn: () => apiFetch(`/tasks/${encodeURIComponent(shownId)}/sessions?board=${encodeURIComponent(board || "")}`),
-    enabled: Boolean(shownId) && feedTab === "runs"
+    enabled: Boolean(shownId) && feedTab === "runs",
+    // A re-run adds a session to the card, so the list follows while the card runs — and only
+    // while the tab is the one on screen.
+    refetchInterval: runningTask ? 1e4 : false,
+    refetchIntervalInBackground: false
   });
   const [transcript, setTranscript] = useState5(null);
   const sessionOfRun = (run) => {
@@ -12826,7 +12933,7 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
       })()
     ] }),
     // The run's conversation, opened from the row that names the run.
-    jsx8(SessionTranscriptDialog, { session: transcript, onClose: () => setTranscript(null) }),
+    jsx8(SessionTranscriptDialog, { session: transcript, onClose: () => setTranscript(null), live: runningTask }),
     // Drops a parent link — behind a confirmation, so a stray click on the
     // row's ✕ never silently rewires the tree.
     jsx8(ConfirmDialog, {

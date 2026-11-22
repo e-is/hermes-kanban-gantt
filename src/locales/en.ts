@@ -132,6 +132,8 @@ export const en = {
     sessionTitle: 'Worker session',
     sessionEmpty: 'No messages in this session',
     showEarlierMessages: 'Show earlier messages',
+    showAll: 'Show all',
+    showLess: 'Show less',
     messageTruncated: 'Message truncated',
     selectAll: 'Select all',
     selectTask: name => `Select ${name}`,

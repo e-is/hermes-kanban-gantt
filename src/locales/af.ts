@@ -132,6 +132,8 @@ export const af = {
     sessionTitle: 'Werker-sessie',
     sessionEmpty: 'Geen boodskappe in hierdie sessie nie',
     showEarlierMessages: 'Wys vroeër boodskappe',
+    showAll: 'Wys alles',
+    showLess: 'Wys minder',
     messageTruncated: 'Boodskap afgekap',
     selectAll: 'Kies alles',
     selectTask: name => `Kies ${name}`,

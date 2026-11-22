@@ -1488,22 +1488,54 @@ def test_transcript_pages_backwards_and_caps_a_message(client):
                  "title TEXT, started_at REAL, ended_at REAL, message_count INTEGER, estimated_cost_usd REAL, "
                  "actual_cost_usd REAL, cost_status TEXT)")
     conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, "
-                 "content TEXT, tool_name TEXT, timestamp REAL)")
+                 "content TEXT, tool_name TEXT, tool_calls TEXT, timestamp REAL)")
     for i in range(1, 6):
         conn.execute("INSERT INTO messages (id, session_id, role, content, tool_name, timestamp) "
                      "VALUES (?,?,?,?,?,?)", (i, "s1", "user" if i % 2 else "assistant", f"m{i}", None, float(i)))
-    conn.execute("INSERT INTO messages (id, session_id, role, content, tool_name, timestamp) VALUES (?,?,?,?,?,?)",
-                 (6, "s1", "tool", "x" * 9000, "terminal", 6.0))
+    conn.execute("INSERT INTO messages (id, session_id, role, content, tool_name, tool_calls, timestamp) "
+                 "VALUES (?,?,?,?,?,?,?)",
+                 (6, "s1", "tool", "x" * 9000, "terminal", None, 6.0))
+    # An assistant turn that only CALLS a tool: empty body, the call in `tool_calls`.
+    conn.execute("INSERT INTO messages (id, session_id, role, content, tool_name, tool_calls, timestamp) "
+                 "VALUES (?,?,?,?,?,?,?)",
+                 (7, "s1", "assistant", "", None,
+                  '[{"call_id":"c1","function":{"name":"kanban_show","arguments":"{}"}}]', 7.0))
     conn.commit(); conn.close()
 
     page = http.get("/sessions/s1/transcript?limit=3").json()
-    assert [m["content"][:2] for m in page["messages"]] == ["m4", "m5", "xx"]
-    assert page["has_more"] is True and page["total"] == 6
-    assert page["messages"][-1]["truncated"] is True, "a long body is capped and flagged"
+    assert [m["content"][:2] for m in page["messages"]] == ["m5", "xx", ""]
+    assert page["has_more"] is True and page["total"] == 7
+    # A 9 000-char body is a NORMAL tool result: shipped whole, and the display cut is the
+    # client's (on a line boundary, so the markdown survives). Only a pathological row is
+    # clipped server-side.
+    long_body = page["messages"][1]
+    assert long_body["length"] == 9000 and long_body["clipped"] is False
+    assert len(long_body["content"]) == 9000
 
     older = http.get(f"/sessions/s1/transcript?limit=10&before_id={page['before_id']}").json()
-    assert [m["content"] for m in older["messages"]] == ["m1", "m2", "m3"]
+    assert [m["content"] for m in older["messages"]] == ["m1", "m2", "m3", "m4"]
     assert older["has_more"] is False
 
     missing = http.get("/sessions/nope/transcript").json()
     assert missing["messages"] == [] and missing["has_more"] is False, "an unknown session is empty, not a 500"
+
+def test_transcript_names_the_tool_calls_of_an_empty_turn(client):
+    http, _board = client
+    sandbox = Path(os.environ["HERMES_HOME"])
+    import sqlite3 as _sqlite
+    db = sandbox / "state.db"
+    conn = _sqlite.connect(db)
+    conn.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, cwd TEXT, profile_name TEXT, "
+                 "title TEXT, started_at REAL, ended_at REAL, message_count INTEGER, estimated_cost_usd REAL, "
+                 "actual_cost_usd REAL, cost_status TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, "
+                 "content TEXT, tool_name TEXT, tool_calls TEXT, timestamp REAL)")
+    conn.execute("INSERT INTO messages (id, session_id, role, content, tool_name, tool_calls, timestamp) "
+                 "VALUES (1,'s2','assistant','', NULL, ?, 1.0)",
+                 ('[{"function":{"name":"kanban_show","arguments":"{\\"task_id\\": \\"t_1\\"}"}}]',))
+    conn.commit(); conn.close()
+
+    page = http.get("/sessions/s2/transcript").json()
+    call = page["messages"][0]["calls"][0]
+    assert call["name"] == "kanban_show"
+    assert 'task_id' in call["arguments"], "the arguments travel: the panel can show what was asked"

@@ -132,6 +132,8 @@ export const zhHant = {
     sessionTitle: '工作者會話',
     sessionEmpty: '此會話沒有訊息',
     showEarlierMessages: '顯示更早的訊息',
+    showAll: '顯示全部',
+    showLess: '收合',
     messageTruncated: '訊息已截斷',
     selectAll: '全選',
     selectTask: name => `選取 ${name}`,

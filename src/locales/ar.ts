@@ -126,6 +126,8 @@ export const ar = {
     sessionTitle: 'جلسة العامل',
     sessionEmpty: 'لا رسائل في هذه الجلسة',
     showEarlierMessages: 'إظهار الرسائل الأقدم',
+    showAll: 'إظهار الكل',
+    showLess: 'إظهار أقل',
     messageTruncated: 'الرسالة مقتطعة',
     selectAll: 'تحديد الكل',
     selectTask: name => `تحديد ${name}`,

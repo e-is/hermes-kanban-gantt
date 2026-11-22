@@ -617,8 +617,21 @@ function lineageCosts(tasks, costs = {}) {
 }
 function formatCost(value, status) {
   if (value == null) return "—";
-  const money = value > 0 && value < 0.01 ? "<$0.01" : `$${value.toFixed(2)}`;
-  return status === "estimated" || status === "mixed" ? `~${money}` : money;
+  if (value > 0 && value < 0.01) return "<$0.01";
+  return status === "estimated" || status === "mixed" ? `~$${value.toFixed(2)}` : `$${value.toFixed(2)}`;
+}
+function transcriptCut(text, limit = 4e3) {
+  const body = text == null ? "" : String(text);
+  if (body.length <= limit) return { text: body, truncated: false };
+  let cut = body.lastIndexOf("\n", limit);
+  if (cut < limit * 0.6) {
+    const space = body.lastIndexOf(" ", limit);
+    cut = space > limit * 0.6 ? space : limit;
+  }
+  let head = body.slice(0, cut);
+  const fences = (head.match(/^```/gm) || []).length;
+  if (fences % 2 === 1) head += "\n```";
+  return { text: head, truncated: true };
 }
 export {
   DAY,
@@ -672,6 +685,7 @@ export {
   tickUnit,
   ticks,
   titleParts,
+  transcriptCut,
   treeMarks,
   treeRows,
   visibleWindow,

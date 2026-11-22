@@ -918,6 +918,36 @@ export function lineageCosts(tasks, costs = {}) {
 /** How a cost is written: nothing under a cent, `~` when it is a projection, `—` when unknown. */
 export function formatCost(value, status) {
   if (value == null) return '—'
-  const money = value > 0 && value < 0.01 ? '<$0.01' : `$${value.toFixed(2)}`
-  return status === 'estimated' || status === 'mixed' ? `~${money}` : money
+  // Under a cent is already an approximation — a tilde on top of a `<` reads like a typo.
+  if (value > 0 && value < 0.01) return '<$0.01'
+  return status === 'estimated' || status === 'mixed' ? `~$${value.toFixed(2)}` : `$${value.toFixed(2)}`
+}
+
+/**
+ * Cut a transcript body at a boundary the renderer can survive.
+ *
+ * A transcript is markdown, so cutting at a character count can slice a fenced block in
+ * half — and then the *whole* message renders wrong, not just its tail: an unterminated
+ * fence swallows the rest of the panel. So the cut lands on a line break, as late as
+ * possible, and an odd number of opened fences is closed before the marker. Tool output
+ * gets the same treatment through the same function: it is raw text, but a cut mid-line
+ * still reads like corruption.
+ *
+ * The unit that is never cut is the message itself: paging is per message (`limit` +
+ * `before_id`), so a turn is always whole.
+ */
+export function transcriptCut(text, limit = 4000) {
+  const body = text == null ? '' : String(text)
+  if (body.length <= limit) return { text: body, truncated: false }
+  // The latest line break that still leaves most of the budget used: a long paragraph
+  // with no newline still gets cut, but at a word boundary rather than mid-word.
+  let cut = body.lastIndexOf('\n', limit)
+  if (cut < limit * 0.6) {
+    const space = body.lastIndexOf(' ', limit)
+    cut = space > limit * 0.6 ? space : limit
+  }
+  let head = body.slice(0, cut)
+  const fences = (head.match(/^```/gm) || []).length
+  if (fences % 2 === 1) head += '\n```'
+  return { text: head, truncated: true }
 }

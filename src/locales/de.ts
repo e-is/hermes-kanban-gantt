@@ -132,6 +132,8 @@ export const de = {
     sessionTitle: 'Worker-Sitzung',
     sessionEmpty: 'Keine Nachrichten in dieser Sitzung',
     showEarlierMessages: 'Frühere Nachrichten anzeigen',
+    showAll: 'Alles anzeigen',
+    showLess: 'Weniger anzeigen',
     messageTruncated: 'Nachricht gekürzt',
     selectAll: 'Alle auswählen',
     selectTask: name => `${name} auswählen`,

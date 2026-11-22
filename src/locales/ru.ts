@@ -129,6 +129,8 @@ export const ru = {
     sessionTitle: 'Сессия воркера',
     sessionEmpty: 'В этой сессии нет сообщений',
     showEarlierMessages: 'Показать предыдущие сообщения',
+    showAll: 'Показать всё',
+    showLess: 'Свернуть',
     messageTruncated: 'Сообщение обрезано',
     selectAll: 'Выбрать все',
     selectTask: name => `Выбрать ${name}`,

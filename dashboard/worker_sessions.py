@@ -14,6 +14,7 @@ card is worse than no cost.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sqlite3
@@ -161,9 +162,10 @@ def task_sessions(board_dir: Path, task_id: str, db: Optional[Path] = None) -> l
     return sorted(rows, key=lambda r: r.get("started_at") or 0, reverse=True)
 
 
-#: A transcript is a conversation, not a data dump: one message body is capped, and the
-#: panel asks for more instead of pulling megabytes.
-MESSAGE_CHARS = 8000
+#: A hard SAFETY cap, not a display policy: display cuts happen in the client, where the
+#: renderer can cut on a boundary it survives (`transcriptCut` in the core). This one only
+#: refuses to ship a pathological row — a tool result that is a whole file — and says so.
+HARD_MESSAGE_CAP = 200_000
 
 
 def transcript(session_id: str, limit: int = 120, before_id: Optional[int] = None,
@@ -180,7 +182,7 @@ def transcript(session_id: str, limit: int = 120, before_id: Optional[int] = Non
         return {"session_id": session_id, "messages": [], "has_more": False, "error": "state database unavailable"}
     try:
         total = conn.execute("SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,)).fetchone()[0]
-        sql = ("SELECT id, role, content, tool_name, timestamp FROM messages "
+        sql = ("SELECT id, role, content, tool_name, tool_calls, timestamp FROM messages "
                "WHERE session_id = ?")
         args: list[Any] = [session_id]
         if before_id is not None:
@@ -207,14 +209,31 @@ def transcript(session_id: str, limit: int = 120, before_id: Optional[int] = Non
     messages = []
     for row in reversed(rows):
         body = row["content"] or ""
-        clipped = len(body) > MESSAGE_CHARS
+        clipped = len(body) > HARD_MESSAGE_CAP
+        # An assistant turn that only CALLS a tool has an empty body: the names and arguments
+        # live in `tool_calls`. Without them the panel shows empty bubbles and the reader cannot
+        # see what the worker did — which is the whole point of the transcript.
+        calls = []
+        try:
+            for call in json.loads(row["tool_calls"] or "[]") or []:
+                fn = (call or {}).get("function") or {}
+                calls.append({
+                    "name": fn.get("name") or "",
+                    "arguments": str(fn.get("arguments") or "")[:400],
+                })
+        except (ValueError, TypeError, AttributeError):
+            calls = []
         messages.append({
             "id": row["id"],
             "role": row["role"],
             "tool_name": row["tool_name"],
+            "calls": calls,
             "timestamp": row["timestamp"],
-            "content": body[:MESSAGE_CHARS],
-            "truncated": clipped,
+            "content": body[:HARD_MESSAGE_CAP],
+            # `clipped` is the pathological case; the ordinary cut is the client's, and it
+            # lands on a line boundary so the markdown still renders.
+            "clipped": clipped,
+            "length": len(body),
         })
     return {
         "session_id": session_id,

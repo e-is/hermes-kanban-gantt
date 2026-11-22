@@ -132,6 +132,8 @@ export const ga = {
     sessionTitle: 'Seisiún an oibrí',
     sessionEmpty: 'Níl aon teachtaireacht sa seisiún seo',
     showEarlierMessages: 'Taispeáin teachtaireachtaí níos luaithe',
+    showAll: 'Taispeáin gach rud',
+    showLess: 'Taispeáin níos lú',
     messageTruncated: 'Teachtaireacht teasctha',
     selectAll: 'Roghnaigh gach rud',
     selectTask: name => `Roghnaigh ${name}`,
