@@ -111,7 +111,7 @@ const ZOOM_MIN_FACTOR = 0.2
 
 
 import { graphNodes, graphEdges, layoutGraph, lineage as taskLineage, scopeIds, boardScope, scopeCounts, nearestInHalo, SCOPES, NODE_H, NODE_W } from './core/graph-core.ts'
-import { barRange, taskBars, withinPeriod, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, titleParts,  PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments, lineageCosts, formatCost } from './core/gantt-core.ts'
+import { barRange, taskBars, withinPeriod, shortId, matchesSearch, buildRows, treeRows, treeMarks, TREE_INSET, computeDomain, ticks, tickUnit, statusTone, statusIcon, relationsOf, dropCandidates, resolveBoardSlug, isMissingBoardError, DAY, MIN_BAR, lastActivity, relativeAge, hourTickPlan, nowOffset, nowLineX, wheelZoomFactor, maxZoom, clampZoom, runTone, titleParts,  PERIOD_TOLERANCE, periodPxPerSec, periodScrollLeft, visibleWindow, matchPeriod, ZOOM_PCT_MIN, ZOOM_PCT_MAX, clampZoomPct, zoomFactorFromPct, zoomPctFromFactor, previewKind, attachmentMime, wheelIntent, neighbourId, hasAttachments, lineageCosts, formatCost, transcriptCut } from './core/gantt-core.ts'
 
 /** Turn a refused re-parent into a sentence. The bridge may only carry the HTTP
  *  status, so the domain's wording is matched when present and a generic
@@ -3068,6 +3068,156 @@ function AttachmentMenu({ taskId, board, count, i18n, onPreview, className }) {
 /**
  * The markdown viewer: its own dialog, dismissed like every other overlay here.
  */
+
+/** A worker's conversation — read-only, one page at a time.
+ *
+ * The drawer could always show a run's outcome and the worker's stdout, never the session the
+ * agent actually held. That is where the *why* lives: the reasoning, the tool calls and their
+ * output. `GET /tasks/{id}/sessions` resolves the sessions (the worker's cwd is the card's
+ * workspace), and this panel pages backwards so a long run costs a page, not a download.
+ */
+/** One message of a worker conversation.
+ *
+ * Assistant and user prose is MARKDOWN, rendered by the drawer's own component — cutting it at
+ * a character count would break the renderer (an unterminated fence swallows the rest of the
+ * panel), so the cut goes through `transcriptCut`, which lands on a line and closes the fence.
+ * Tool output is the opposite: raw, huge, and the reason a transcript needs collapsing at all,
+ * so it opens truncated and a click shows it whole.
+ */
+function TranscriptMessage({ message, live }) {
+  const i18n = useGanttI18n()
+  const [expanded, setExpanded] = useState(false)
+  const isTool = Boolean(message.tool_name) || message.role === 'tool'
+  const full = message.content || ''
+  const budget = isTool ? (expanded ? Infinity : 600) : (expanded ? Infinity : 4000)
+  const body = budget === Infinity ? { text: full, truncated: false } : transcriptCut(full, budget)
+
+  return jsxs('div', {
+    'data-transcript-message': isTool ? 'tool' : (message.role || 'message'),
+    className: 'text-[11px] border border-(--ui-stroke-tertiary)/60 rounded p-1.5 bg-(--ui-bg-subtle, transparent)',
+    children: [
+      jsxs('div', { className: 'flex items-center gap-1.5 text-[9.5px] text-(--ui-text-tertiary) mb-0.5', children: [
+        jsx('span', { className: 'font-medium uppercase', children: message.tool_name || message.role || '?' }),
+        message.timestamp
+          ? jsx('span', { className: 'ml-auto text-(--ui-text-quaternary)', children: new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(new Date(message.timestamp * 1000)) })
+          : null
+      ] }),
+      // A turn that only calls tools has no prose: show the calls, not an empty box.
+      ...(message.calls || []).map((call, ci) => jsx('pre', {
+        key: `call-${ci}`,
+        'data-transcript-call': call.name,
+        className: 'whitespace-pre-wrap break-words font-mono text-[10px] text-(--ui-text-accent, var(--ui-accent)) m-0 mb-0.5',
+        children: `→ ${call.name}(${call.arguments})`
+      })),
+      !full && !(message.calls || []).length
+        ? null
+        : isTool
+          ? jsx('pre', { className: 'whitespace-pre-wrap break-words font-mono text-[10px] text-(--ui-text-secondary) m-0', children: body.text })
+          : jsx('div', { className: 'min-w-0', children: jsx(MessageTextContent, { media: false, text: body.text }) }),
+      message.clipped
+        ? jsx('div', { className: 'text-[9px] text-(--ui-text-quaternary) mt-0.5', children: i18n.messageTruncated })
+        : null,
+      body.truncated || message.clipped
+        ? jsx('button', {
+            type: 'button',
+            'data-transcript-more': true,
+            className: 'mt-1 text-[9.5px] text-(--ui-accent) hover:underline cursor-pointer bg-transparent border-0 p-0',
+            onClick: () => setExpanded(true),
+            children: i18n.showAll
+          })
+        : expanded && budget === Infinity
+          ? jsx('button', {
+              type: 'button',
+              className: 'mt-1 text-[9.5px] text-(--ui-accent) hover:underline cursor-pointer bg-transparent border-0 p-0',
+              onClick: () => setExpanded(false),
+              children: i18n.showLess
+            })
+          : null
+    ]
+  })
+}
+
+function SessionTranscriptDialog({ session, onClose, live = false }) {
+  const i18n = useGanttI18n()
+  const [before, setBefore] = useState(null)
+  const [messages, setMessages] = useState([])
+  const [loadedFor, setLoadedFor] = useState(null)
+  const query = useQuery({
+    queryKey: ['kanban-gantt', 'transcript', session ? session.session_id : '', before],
+    queryFn: () => apiFetch(`/sessions/${encodeURIComponent(session.session_id)}/transcript?limit=120`
+      + (before != null ? `&before_id=${before}` : '')),
+    enabled: Boolean(session),
+    // A running worker WRITES to this transcript, so the panel follows it — but only while the
+    // card is running, and only on the newest page: an older page is finished by definition.
+    // The board's own socket pushes task rows, not session rows, so this cannot ride it.
+    refetchInterval: session && live && before == null ? 4000 : false,
+    refetchIntervalInBackground: false,
+    staleTime: 0
+  })
+  // Follow the tail while the reader is at the tail: scrolling up must not be undone by a push.
+  const scrollRef = useRef(null)
+  const pinnedRef = useRef(true)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    if (pinnedRef.current) el.scrollTop = el.scrollHeight
+  }, [messages.length, session && session.session_id])
+  // Opening a session READS it: the dialog stays mounted between runs, so a cached page from a
+  // previous open would otherwise be what the reader sees — and a finished run never changes,
+  // but a worker that ran again does.
+  useEffect(() => {
+    setMessages([])
+    setBefore(null)
+    setLoadedFor(null)
+    if (session) void query.refetch()
+  }, [session ? session.session_id : ''])
+  useEffect(() => {
+    if (!query.data) return
+    const key = before == null ? 'newest' : String(before)
+    if (loadedFor === key) return
+    setLoadedFor(key)
+    const page = query.data.messages || []
+    setMessages(prev => (before == null ? page : [...page, ...prev]))
+  }, [query.data, before, loadedFor])
+
+  return jsx(Dialog, {
+    open: Boolean(session),
+    onOpenChange: open => { if (!open) onClose() },
+    children: jsxs(DialogContent, {
+      className: 'max-w-3xl',
+      children: [
+        jsx(DialogTitle, { children: i18n.sessionTitle }),
+        session
+          ? jsx('div', { className: 'text-[10px] text-(--ui-text-tertiary) -mt-1 mb-1 font-mono truncate', children: session.session_id })
+          : null,
+        jsxs('div', {
+          ref: scrollRef,
+          onScroll: e => {
+            const el = e.currentTarget
+            pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+          },
+          className: 'flex flex-col gap-1.5 max-h-[60vh] overflow-auto pr-1',
+          'data-session-transcript': true,
+          children: [
+          query.data && query.data.has_more
+            ? jsx('button', {
+                type: 'button',
+                className: 'self-center text-[10px] text-(--ui-accent) hover:underline cursor-pointer bg-transparent border-0',
+                onClick: () => setBefore(query.data.before_id),
+                children: i18n.showEarlierMessages
+              })
+            : null,
+          messages.length === 0 && !query.isLoading
+            ? jsx('div', { className: 'text-[10px] text-(--ui-text-tertiary)', children: i18n.sessionEmpty })
+            : null,
+          ...messages.map((m, i) => jsx(TranscriptMessage, { key: m.id || i, message: m, live }))
+        ] }),
+        jsx('div', { className: 'flex justify-end', children: jsx(Button, { size: 'sm', variant: 'ghost', onClick: onClose, children: i18n.close }) })
+      ]
+    })
+  })
+}
+
 function AttachmentPreview({ taskId, board, att, siblings, i18n, onClose, onNavigate }) {
   const query = useQuery({
     queryKey: ['kanban-gantt', 'attachment', taskId, att.id],
@@ -3337,10 +3487,19 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
   // and undo the switch the user just approved.
   const switchResolvedRef = useRef(false)
 
+  // Is this card running? Read from the BOARD snapshot, which the socket pushes (or the poll
+  // refreshes), not from the drawer's own one-shot fetch: the drawer must learn that the run
+  // started and that it ended, and only the board knows.
+  const runningTask = (tasks || []).some(t => t.id === shownId && t.status === 'running')
+
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['kanban-gantt', 'task', apiBase(), board, shownId],
     queryFn: () => fetchTask(shownId, board),
-    enabled: Boolean(shownId)
+    enabled: Boolean(shownId),
+    // A running card's detail is a moving target — its runs list gains a row when the run ends.
+    // Only while it runs, and only while the drawer is open: nothing polls a closed drawer.
+    refetchInterval: runningTask ? 5000 : false,
+    refetchIntervalInBackground: false
   })
 
   // Reset scroll to top when opening a DIFFERENT task
@@ -3366,6 +3525,29 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
     queryFn: () => fetchWorkerLog(shownId, board),
     enabled: Boolean(shownId) && feedTab === 'log' && Boolean(data?.task?.log_exists)
   })
+  // The card's worker sessions. Read only when the runs tab is open: the panel is where a run
+  // can be explained, so nothing is fetched for a drawer somebody opened to read the title.
+  const sessionsQuery = useQuery({
+    queryKey: ['kanban-gantt', 'sessions', apiBase(), board, shownId],
+    queryFn: () => apiFetch(`/tasks/${encodeURIComponent(shownId)}/sessions?board=${encodeURIComponent(board || '')}`),
+    enabled: Boolean(shownId) && feedTab === 'runs',
+    // A re-run adds a session to the card, so the list follows while the card runs — and only
+    // while the tab is the one on screen.
+    refetchInterval: runningTask ? 10_000 : false,
+    refetchIntervalInBackground: false
+  })
+  // The session the reader asked to read, and which run it came from.
+  const [transcript, setTranscript] = useState(null)
+  // A run keeps its own session: the windows are what tie a row to its transcript, and a card
+  // worked twice has two. Falls back to the only session there is when the run carries no window.
+  const sessionOfRun = run => {
+    const all = (sessionsQuery.data && sessionsQuery.data.sessions) || []
+    if (!all.length) return null
+    if (!run.started_at) return all.length === 1 ? all[0] : null
+    const from = run.started_at - 120
+    const to = (run.ended_at || run.started_at) + 120
+    return all.find(s => (s.started_at || 0) <= to && (s.ended_at || s.started_at || 0) >= from) || null
+  }
   // The CLI block's copy button confirms itself for a moment, then goes quiet.
   const [cliCopied, setCliCopied] = useState(false)
   // Parent link awaiting confirmation (the click that asked to remove it).
@@ -4017,6 +4199,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                         const dateStr = r.started_at
                           ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(r.started_at * 1000))
                           : ''
+                        // The transcript of THIS run — the conversation, where the log is only output.
+                        const runSession = sessionOfRun(r)
 
                         return jsxs('div', {
                           key: r.id || i,
@@ -4032,6 +4216,16 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                             ] }),
                             r.summary
                               ? jsx('div', { className: 'mt-1 pt-1 border-t border-(--ui-stroke-tertiary)/50', children: jsx(MessageTextContent, { media: false, text: r.summary }) })
+                              : null,
+                            runSession
+                              ? jsx('button', {
+                                  type: 'button',
+                                  'data-run-session': r.id || i,
+                                  className: 'self-start mt-1 inline-flex items-center gap-1 text-[10px] text-(--ui-accent) hover:underline cursor-pointer bg-transparent border-0 p-0',
+                                  title: `${runSession.session_id} · ${runSession.message_count || 0}`,
+                                  onClick: () => setTranscript(runSession),
+                                  children: [jsx(Codicon, { name: 'comment-discussion', size: '0.75rem' }), i18n.viewSession]
+                                })
                               : null
                           ]
                         })
@@ -4057,6 +4251,8 @@ function TaskDrawer({ taskId, board, onClose, assignees = [], tasks = [], docked
                 ] })
               })(),
             ] }),
+      // The run's conversation, opened from the row that names the run.
+      jsx(SessionTranscriptDialog, { session: transcript, onClose: () => setTranscript(null), live: runningTask }),
       // Drops a parent link — behind a confirmation, so a stray click on the
       // row's ✕ never silently rewires the tree.
       jsx(ConfirmDialog, {

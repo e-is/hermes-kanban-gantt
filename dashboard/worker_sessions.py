@@ -14,6 +14,7 @@ card is worse than no cost.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sqlite3
@@ -147,3 +148,98 @@ def board_costs(board_dir: Path, task_ids: Iterable[str], db: Optional[Path] = N
         # 'mixed' when estimates and actuals meet: the sum is then partly a projection.
         bucket["status"] = "mixed" if len(kinds) > 1 else (kinds.pop() if kinds else "unknown")
     return {"costs": costs, "unattributed": unattributed}
+
+
+def task_sessions(board_dir: Path, task_id: str, db: Optional[Path] = None) -> list[dict[str, Any]]:
+    """Every worker session of one task, newest first.
+
+    A card can be worked more than once (a reclaim, a re-run after a fix), so the answer is
+    a list — and the drawer shows each run its own transcript rather than pretending there is
+    one. Empty when the workspaces convention predates the card: better no transcript than
+    somebody else's.
+    """
+    rows = [r for r in sessions_under(board_dir, db) if r.get("task_id") == task_id]
+    return sorted(rows, key=lambda r: r.get("started_at") or 0, reverse=True)
+
+
+#: A hard SAFETY cap, not a display policy: display cuts happen in the client, where the
+#: renderer can cut on a boundary it survives (`transcriptCut` in the core). This one only
+#: refuses to ship a pathological row — a tool result that is a whole file — and says so.
+HARD_MESSAGE_CAP = 200_000
+
+
+def transcript(session_id: str, limit: int = 120, before_id: Optional[int] = None,
+               db: Optional[Path] = None) -> dict[str, Any]:
+    """The messages of one worker session, oldest first, newest page when it is long.
+
+    Read-only, narrow columns (the transcript is what the reader asked for; the system
+    prompt is not), and `before_id` pages backwards so the panel can say « show earlier »
+    without counting everything first.
+    """
+    try:
+        conn = _connect(db)
+    except sqlite3.Error:
+        return {"session_id": session_id, "messages": [], "has_more": False, "error": "state database unavailable"}
+    try:
+        total = conn.execute("SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,)).fetchone()[0]
+        sql = ("SELECT id, role, content, tool_name, tool_calls, timestamp FROM messages "
+               "WHERE session_id = ?")
+        args: list[Any] = [session_id]
+        if before_id is not None:
+            sql += " AND id < ?"
+            args.append(int(before_id))
+        sql += " ORDER BY id DESC LIMIT ?"
+        args.append(max(1, min(int(limit), 500)))
+        rows = conn.execute(sql, args).fetchall()
+        oldest = rows[-1]["id"] if rows else None
+        has_more = False
+        if oldest is not None:
+            has_more = conn.execute(
+                "SELECT 1 FROM messages WHERE session_id = ? AND id < ? LIMIT 1",
+                (session_id, oldest),
+            ).fetchone() is not None
+    except sqlite3.Error:
+        conn.close()
+        return {"session_id": session_id, "messages": [], "has_more": False, "error": "messages unavailable"}
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    messages = []
+    for row in reversed(rows):
+        body = row["content"] or ""
+        clipped = len(body) > HARD_MESSAGE_CAP
+        # An assistant turn that only CALLS a tool has an empty body: the names and arguments
+        # live in `tool_calls`. Without them the panel shows empty bubbles and the reader cannot
+        # see what the worker did — which is the whole point of the transcript.
+        calls = []
+        try:
+            for call in json.loads(row["tool_calls"] or "[]") or []:
+                fn = (call or {}).get("function") or {}
+                calls.append({
+                    "name": fn.get("name") or "",
+                    "arguments": str(fn.get("arguments") or "")[:400],
+                })
+        except (ValueError, TypeError, AttributeError):
+            calls = []
+        messages.append({
+            "id": row["id"],
+            "role": row["role"],
+            "tool_name": row["tool_name"],
+            "calls": calls,
+            "timestamp": row["timestamp"],
+            "content": body[:HARD_MESSAGE_CAP],
+            # `clipped` is the pathological case; the ordinary cut is the client's, and it
+            # lands on a line boundary so the markdown still renders.
+            "clipped": clipped,
+            "length": len(body),
+        })
+    return {
+        "session_id": session_id,
+        "messages": messages,
+        "total": total,
+        "has_more": has_more,
+        # The panel pages with this: everything older than the first message it just got.
+        "before_id": messages[0]["id"] if messages else None,
+    }

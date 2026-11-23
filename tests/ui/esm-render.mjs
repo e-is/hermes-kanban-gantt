@@ -464,6 +464,12 @@ if (pageNode) {
     'docked by default: the modal column (its "Information" heading) is not rendered')
   check(!detailFlat.includes('Cannot access') && !detailFlat.includes('renderError'),
     'the detail renders without throwing')
+  // The worker transcript (issue #25): the panel is part of the drawer even before a session is
+  // chosen, so a run row can open it without the drawer having to grow a second branch.
+  check(detailFlat.includes('data-session-transcript'),
+    'the drawer carries the worker-transcript panel')
+  check(detailFlat.includes('sessionTitle') && detailFlat.includes('sessionEmpty'),
+    'the transcript panel is labelled, and says when a session has nothing to show')
 
   // The modal branch, which the panel never exercises.
   pluginModule.$detailModal.set(true)

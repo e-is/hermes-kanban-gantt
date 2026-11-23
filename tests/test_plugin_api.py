@@ -1454,3 +1454,88 @@ def test_task_of_cwd_reads_the_last_workspace_segment():
     assert worker_sessions.task_of_cwd(r"C:\h\kanban\boards\b\workspaces\t_zz") == "t_zz"
     assert worker_sessions.task_of_cwd("/home/blavenie/git/hermes-kanban-gantt") is None
     assert worker_sessions.task_of_cwd(None) is None
+
+def test_task_sessions_are_the_workers_of_the_card(client):
+    http, board = client
+    sandbox = Path(os.environ["HERMES_HOME"])
+    workspaces = sandbox / "kanban" / "boards" / board["slug"] / "workspaces"
+    parent, child = board["parent"], board["child"]
+    _write_state_db(sandbox, [
+        ("local-a", str(workspaces / parent), "default", "parent", 10.0, 20.0, 6, 0.2, None, "estimated"),
+        ("local-b", str(workspaces / parent), "default", "parent", 30.0, 40.0, 3, None, 0.4, "actual"),
+        ("local-c", str(workspaces / child), "default", "child", 50.0, 60.0, 1, None, 0.1, "actual"),
+    ])
+
+    r = http.get(f"/tasks/{parent}/sessions?board={board['slug']}")
+    assert r.status_code == 200
+    sessions = r.json()["sessions"]
+    assert [s["session_id"] for s in sessions] == ["local-b", "local-a"], "newest first: a re-run is the top row"
+    assert sessions[1]["message_count"] == 6
+    assert sessions[0]["cost_status"] == "actual"
+
+    other = http.get(f"/tasks/{child}/sessions?board={board['slug']}").json()["sessions"]
+    assert [s["session_id"] for s in other] == ["local-c"], "a card only ever sees its own workspaces"
+    assert http.get("/tasks/x/sessions?board=all").status_code == 400
+
+
+def test_transcript_pages_backwards_and_caps_a_message(client):
+    http, board = client
+    sandbox = Path(os.environ["HERMES_HOME"])
+    import sqlite3 as _sqlite
+    db = sandbox / "state.db"
+    conn = _sqlite.connect(db)
+    conn.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, cwd TEXT, profile_name TEXT, "
+                 "title TEXT, started_at REAL, ended_at REAL, message_count INTEGER, estimated_cost_usd REAL, "
+                 "actual_cost_usd REAL, cost_status TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, "
+                 "content TEXT, tool_name TEXT, tool_calls TEXT, timestamp REAL)")
+    for i in range(1, 6):
+        conn.execute("INSERT INTO messages (id, session_id, role, content, tool_name, timestamp) "
+                     "VALUES (?,?,?,?,?,?)", (i, "s1", "user" if i % 2 else "assistant", f"m{i}", None, float(i)))
+    conn.execute("INSERT INTO messages (id, session_id, role, content, tool_name, tool_calls, timestamp) "
+                 "VALUES (?,?,?,?,?,?,?)",
+                 (6, "s1", "tool", "x" * 9000, "terminal", None, 6.0))
+    # An assistant turn that only CALLS a tool: empty body, the call in `tool_calls`.
+    conn.execute("INSERT INTO messages (id, session_id, role, content, tool_name, tool_calls, timestamp) "
+                 "VALUES (?,?,?,?,?,?,?)",
+                 (7, "s1", "assistant", "", None,
+                  '[{"call_id":"c1","function":{"name":"kanban_show","arguments":"{}"}}]', 7.0))
+    conn.commit(); conn.close()
+
+    page = http.get("/sessions/s1/transcript?limit=3").json()
+    assert [m["content"][:2] for m in page["messages"]] == ["m5", "xx", ""]
+    assert page["has_more"] is True and page["total"] == 7
+    # A 9 000-char body is a NORMAL tool result: shipped whole, and the display cut is the
+    # client's (on a line boundary, so the markdown survives). Only a pathological row is
+    # clipped server-side.
+    long_body = page["messages"][1]
+    assert long_body["length"] == 9000 and long_body["clipped"] is False
+    assert len(long_body["content"]) == 9000
+
+    older = http.get(f"/sessions/s1/transcript?limit=10&before_id={page['before_id']}").json()
+    assert [m["content"] for m in older["messages"]] == ["m1", "m2", "m3", "m4"]
+    assert older["has_more"] is False
+
+    missing = http.get("/sessions/nope/transcript").json()
+    assert missing["messages"] == [] and missing["has_more"] is False, "an unknown session is empty, not a 500"
+
+def test_transcript_names_the_tool_calls_of_an_empty_turn(client):
+    http, _board = client
+    sandbox = Path(os.environ["HERMES_HOME"])
+    import sqlite3 as _sqlite
+    db = sandbox / "state.db"
+    conn = _sqlite.connect(db)
+    conn.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, cwd TEXT, profile_name TEXT, "
+                 "title TEXT, started_at REAL, ended_at REAL, message_count INTEGER, estimated_cost_usd REAL, "
+                 "actual_cost_usd REAL, cost_status TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, "
+                 "content TEXT, tool_name TEXT, tool_calls TEXT, timestamp REAL)")
+    conn.execute("INSERT INTO messages (id, session_id, role, content, tool_name, tool_calls, timestamp) "
+                 "VALUES (1,'s2','assistant','', NULL, ?, 1.0)",
+                 ('[{"function":{"name":"kanban_show","arguments":"{\\"task_id\\": \\"t_1\\"}"}}]',))
+    conn.commit(); conn.close()
+
+    page = http.get("/sessions/s2/transcript").json()
+    call = page["messages"][0]["calls"][0]
+    assert call["name"] == "kanban_show"
+    assert 'task_id' in call["arguments"], "the arguments travel: the panel can show what was asked"

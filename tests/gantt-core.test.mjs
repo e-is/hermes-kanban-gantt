@@ -1134,4 +1134,24 @@ test('a card with no run is unknown, not free — and a mixed lineage says so', 
   assert.equal(core.formatCost(0.5, 'estimated'), '~$0.50')
   assert.equal(core.formatCost(0.5, 'mixed'), '~$0.50')
   assert.equal(core.formatCost(0.004, 'actual'), '<$0.01')
+  assert.equal(core.formatCost(0.002, 'estimated'), '<$0.01', 'no tilde on top of a <')
+  assert.equal(core.formatCost(1.239, 'estimated'), '~$1.24')
+})
+
+// ── transcript bodies are cut where markdown survives (issue #25) ──────────────
+test('a transcript body is cut on a line, and an open fence is closed', () => {
+  const open = 'intro\n\n```js\nconst a = 1\nconst b = 2\n' + 'x'.repeat(200)
+  const cut = core.transcriptCut(open, 40)
+  assert.equal(cut.truncated, true)
+  assert.ok(cut.text.endsWith('```'), 'an odd fence is closed before the marker')
+  assert.equal((cut.text.match(/^```/gm) || []).length % 2, 0)
+})
+
+test('a body that fits is returned whole, and a long line still cuts at a word', () => {
+  assert.deepEqual(core.transcriptCut('short', 40), { text: 'short', truncated: false })
+  const words = ('word '.repeat(40)).trim()
+  const cut = core.transcriptCut(words, 50)
+  assert.equal(cut.truncated, true)
+  assert.ok(!/\swor$/.test(cut.text), 'never mid-word when there is a space to cut on')
+  assert.ok(cut.text.length <= 50)
 })
